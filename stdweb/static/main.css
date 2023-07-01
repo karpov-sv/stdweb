@@ -1,0 +1,43 @@
+.stdview-image-container {
+    position: relative;
+}
+
+.stdview-image-overlay {
+    background: white;
+    font-size: 0.8em;
+    display: inline-block;
+    position: absolute;
+    top: 1.5em;
+    left: 50%;
+    /* left: 1em; */
+    transform: translate(-50%, -50%);
+    /* margin: 0.5em; */
+    padding: 0.2em;
+    border-radius: 0.3em;
+    opacity: 0%;
+    transition: .5s ease;
+    white-space: nowrap;
+    z-order: 100;
+}
+
+.stdview-image-container:hover .stdview-image-overlay {
+    opacity: 80%;
+}
+
+.stdview-image-loading {
+    position: relative;
+    /* display: inline-block; */
+}
+
+.stdview-image-loading::after {
+    content: "Loading...";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 1.0;
+    display: block;
+    background: white;
+    padding: 1em;
+    border: 1px dotted red;
+}

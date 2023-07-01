@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Bootstrap5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+
+    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+
+    <!-- jQuery -->
+    <script type="text/javascript">
+     $(document).ready(function(){
+     });
+    </script>
+
+    {% load static %}
+
+    <!-- Custom CSS and JS -->
+    <link rel="stylesheet" href="{% static 'main.css' %}">
+    <script src="{% static 'image_overlay.js' %}"></script>
+
+    <!-- Our own -->
+
+    {% block head %}{% endblock %}
+
+    <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=utf-8" />
+    <meta name="robots" content="index, follow" />
+    <title>{% block ptitle %}STDWeb{% endblock %}</title>
+
+    <!-- Add custom CSS here -->
+    <style>
+    </style>
+
+  </head>
+
+  <body>
+
+    <!-- Navigation bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'index' %}">STDWeb</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'files' %}">Files</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'files' %}">Analysis</a>
+            </li>
+          </ul>
+
+          <ul class="navbar-nav ms-auto me-2">
+            {% if user.is_authenticated %}
+              <li class="nav-item dropdown">
+                <a href="#" class="dropdown-toggle nav-link" data-bs-toggle="dropdown">User: {{ user.username }} <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  {% if user.is_staff %}
+                    <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a></li>
+                  {% endif %}
+
+                  <!-- Logout requires POST -->
+                  <li>
+                    <form id="logout-form" method="post" action="{% url 'logout' %}">
+                      {% csrf_token %}
+                      <button class="button-link dropdown-item" type="submit">Log out</button>
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}"/>
+                    </form>
+                  </li>
+
+                </ul>
+              </li>
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'login' %}?next={{ request.get_full_path }}">Log in</a>
+              </li>
+            {% endif %}
+          </ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <div class="container">
+
+      {% block title_div %}
+        <h1 class="mb-4">{% block title %}{% endblock %}</h1>
+      {% endblock %}
+
+      {% block content %}{% endblock %}
+
+    </div>
+    <!-- /.container -->
+  </body>
+</html>

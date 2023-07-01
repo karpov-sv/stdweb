@@ -1,0 +1,109 @@
+{% extends "template.html" %}
+
+{% load filters %}
+
+{% block title %}File browser{% endblock %}
+
+{% block content %}
+
+  {% if breadcrumb %}
+    <!-- Display breadcrumb with clickable path elements -->
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        {% for bread in breadcrumb %}
+          <li class="breadcrumb-item">
+            {% if bread.path %}
+              <a href="{% url 'files' path=bread.path %}">{{ bread.name }}</a>
+            {% else %}
+              {{ bread.name }}
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    </nav>
+  {% endif %}
+
+  {% if mode == 'list' %}
+    <!-- Display directory listing -->
+
+    {% if not files %}
+      Nothing to list
+    {% else %}
+      <p>
+        {{ files|length }} entries
+      </p>
+
+      <ul class="list-unstyled">
+        {% for file in files %}
+          <li>
+            <a href='{% url 'files' path=file.path %}'>
+              <i class="fa fa-{% if file.type == 'dir' %}folder-open-o{% elif file.type == 'text' %}file-text-o{% elif file.type == 'file' %}file-o{% else %}file-image-o{% endif %}"></i>
+              {{ file.name }}
+            </a>
+            </a>
+          </li>
+
+        {% endfor %}
+      </ul>
+
+    {% endif %}
+
+  {% else %}
+    <ul>
+      <li>Path: <b><a href="{% url 'download' path=path %}"><i class="fa fa-download"></i> {{ path }}</a></b></li>
+      <li>Size: <b>{{ stat.st_size }}</b> bytes</li>
+      <li>Last modified: <b>{{ time.iso }}</b></li>
+      <li><b>{{ mime }}</b> : {{ magic_info }}</li>
+    </ul>
+
+    {% if mode == 'text' %}
+      <!-- Display text file contents -->
+
+      <div class="card">
+        <div class="card-body pr-2 pl-2 pt-2 pb-2">
+          <pre><code>{{ contents }}</code></pre>
+        </div>
+      </div>
+
+    {% elif mode == 'image' %}
+      <!-- Display image inline -->
+
+      <div class="text-center">
+        <img src="{% url 'view' path=path %}" class="img-fluid img-thumbnail" alt="{{ path }}"/>
+      </div>
+
+    {% elif mode == 'fits' %}
+      <!-- Display FITS inline -->
+
+      {% for hdu in fitsfile %}
+        <div>
+          <!-- Full FITS header -->
+          <div class="card">
+            <h5 class="card-header pt-2 pb-2" data-bs-toggle="collapse" data-bs-target="#collapseHeader{{ forloop.counter0 }}"
+                aria-expanded="false"
+                aria-controls="collapseHeader{{ loop.index0 }}">
+              {{ hdu.name }}
+              <span class="float-right"><i class="fa fa-list"></i> </span>
+            </h5>
+
+            <div class="collapse {% if hdu.data is none %}show{% endif %}" id="collapseHeader{{ forloop.counter0 }}">
+              <div class="card-body pr-2 pl-2 pt-2 pb-2">
+                <pre>{{ hdu.header | header_to_string }}</pre>
+              </div>
+            </div>
+          </div>
+
+          {% if hdu.data is not none %}
+            <div class="text-center">
+              <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}" class="img-fluid img-thumbnail stdview-image" data-stretch alt="{{ path }}"/>
+            </div>
+          {% endif %}
+
+        </div>
+      {% endfor %}
+
+    {% endif %}
+
+  {% endif %}
+
+{% endblock %}
