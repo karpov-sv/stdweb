@@ -1,0 +1,68 @@
+{% extends "template.html" %}
+
+{% load filters %}
+
+{% block ptitle %}Queue : STDWeb{% endblock %}
+
+{% block title %}
+  {% if ctask %}
+    Queued task ID
+    {{ ctask.id }}
+  {% else %}
+    Queued tasks
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+  {% if queue %}
+    <div class="list-group mb-2">
+      {% for ctask in queue %}
+        <a href="{% url 'queue' id=ctask.id %}" class="text-decoration-none list-group-item d-flex justify-content-between align-items-start">
+          <div class="ms-2 me-auto">
+            <div>
+            <span class="fw-bold">{{ ctask.shortname }}</span>
+            -
+            <span class="fst-italic">{{ ctask.id }}</span>
+            </div>
+            <small class="me-2">Started: {{ ctask.time_start|time_from_unix|date:"Y-m-d H:i:s" }}</small>
+          </div>
+          <span class="badge bg-{% if ctask.state == 'active' %}primary{% else %}secondary{% endif %} rounded-pill">{{ ctask.state }}</span>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if user.is_staff %}
+      <form action="" method="POST">
+        {% csrf_token %}
+        <button type="submit" name="action" value="terminatealltasks" class="btn btn-danger">Terminate all queued tasks</button>
+      </form>
+    {% endif %}
+
+  {% elif ctask %}
+
+    <div>
+
+      <p>
+        State: <b>{{ ctask.state }}</b>
+        {% if ctask.date_done %}
+          at <b>{{ ctask.date_done|date:"Y-m-d H:i:s" }} UT</b>
+        {% endif %}
+      </p>
+
+    </div>
+
+    {% if user.is_staff %}
+      <form action="" method="POST">
+        {% csrf_token %}
+        <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task</button>
+      </form>
+    {% endif %}
+
+  {% else %}
+    <div class="mb-2">
+    Queue is empty
+    </div>
+  {% endif %}
+
+{% endblock %}

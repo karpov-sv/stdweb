@@ -22,6 +22,7 @@ from django.contrib.auth import views as auth_views
 from . import settings
 from . import views
 from . import views_tasks
+from . import views_celery
 
 urlpatterns = [
     # path('', views.index, name='index'),
@@ -44,6 +45,10 @@ urlpatterns = [
     path('tasks/<int:id>/preview/<path:path>', views_tasks.task_preview, name='task_preview'),
     path('tasks/<int:id>/view/<path:path>', views_tasks.task_download, {'attachment': False}, name='task_view'),
     path('tasks/<int:id>/download/<path:path>', views_tasks.task_download, {'attachment': True}, name='task_download'),
+
+    # Celery queue
+    path('queue/', views_celery.view_queue, {'id': None}, name='queue'),
+    path('queue/<slug:id>', views_celery.view_queue, name='queue'),
 
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),

@@ -61,6 +61,11 @@
             <li class="nav-item">
               <a class="nav-link" href="{% url 'tasks' %}">Tasks</a>
             </li>
+            {% if user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'queue' %}">Queue</a>
+              </li>
+            {% endif %}
           </ul>
 
           <ul class="navbar-nav ms-auto me-2">
