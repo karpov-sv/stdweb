@@ -2,6 +2,8 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
+from django.contrib import messages
+
 from django.contrib.auth.decorators import login_required
 
 import os, io
@@ -243,7 +245,12 @@ def upload_file(request):
             task.state = 'uploaded'
             task.save()
 
+            messages.success(request, "File uploaded as task " + str(task.id))
+
             return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
+
+        else:
+            messages.error(request, "Error uploading file")
 
     form = forms.UploadFileForm()
     context = {'form': form}
@@ -268,6 +275,8 @@ def reuse_file(request, base=settings.DATA_PATH):
 
         task.state = 'copied'
         task.save()
+
+        messages.success(request, "File copied as task " + str(task.id))
 
         return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 

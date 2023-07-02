@@ -96,6 +96,15 @@
     <!-- Main content -->
     <div class="container">
 
+      {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-dismissible {% if message.tags %} alert-{{ message.tags }}{% endif %}" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+      {% endif %}
+
       {% block title_div %}
         <h1 class="mb-4">{% block title %}{% endblock %}</h1>
       {% endblock %}

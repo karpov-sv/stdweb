@@ -140,3 +140,11 @@ LOGOUT_REDIRECT_URL = 'index'
 # Paths for STDWeb
 DATA_PATH = config('DATA_PATH', default='data/', cast=str)
 TASKS_PATH = config('TASKS_PATH', default='tasks/', cast=str)
+
+# Messages
+from django.contrib.messages import constants as messages
+
+MESSAGE_TAGS = {
+    messages.ERROR: "danger",
+    messages.DEBUG: "secondary",
+}
