@@ -1,6 +1,7 @@
 {% extends "template.html" %}
 
 {% load filters %}
+{% load wrapwith %}
 
 {% block ptitle %}Queue : STDWeb{% endblock %}
 
@@ -33,25 +34,15 @@
     </div>
 
     {% if user.is_staff %}
-      <div class="card">
-        <h5 class="card-header collapse-chevron collapsed"
-            data-bs-toggle="collapse" data-bs-target="#collapseManagement"
-            aria-expanded="false" aria-controls="collapseManagement">
-          Management Commands
-        </h5>
+      {% wrapwith "wrapper_management_commands.html" %}
 
-        <div class="collapse" id="collapseManagement">
-          <div class="card-body p-3">
+      <form action="" method="POST">
+        {% csrf_token %}
+        <button type="submit" name="action" value="terminatealltasks" class="btn btn-danger">Terminate all queued tasks</button>
+      </form>
 
-            <form action="" method="POST">
-              {% csrf_token %}
-              <button type="submit" name="action" value="terminatealltasks" class="btn btn-danger">Terminate all queued tasks</button>
-            </form>
-
-          </div>
-        </div>
-      </div>
-    {% endif %}
+      {% endwrapwith %}
+   {% endif %}
 
   {% elif ctask %}
 
@@ -67,24 +58,14 @@
     </div>
 
     {% if user.is_staff %}
-      <div class="card">
-        <h5 class="card-header collapse-chevron collapsed"
-            data-bs-toggle="collapse" data-bs-target="#collapseManagement"
-            aria-expanded="false" aria-controls="collapseManagement">
-          Management Commands
-        </h5>
+      {% wrapwith "wrapper_management_commands.html" %}
 
-        <div class="collapse" id="collapseManagement">
-          <div class="card-body p-3">
+      <form action="" method="POST">
+        {% csrf_token %}
+        <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task</button>
+      </form>
 
-          <form action="" method="POST">
-            {% csrf_token %}
-            <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task</button>
-          </form>
-
-          </div>
-        </div>
-      </div>
+      {% endwrapwith %}
     {% endif %}
 
   {% else %}
