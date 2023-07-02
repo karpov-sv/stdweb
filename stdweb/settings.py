@@ -133,7 +133,9 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 # URL for login form
-LOGIN_URL = '/login/'
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'index'
+LOGOUT_REDIRECT_URL = 'index'
 
 # Paths for STDWeb
 DATA_PATH = config('DATA_PATH', default='data/', cast=str)

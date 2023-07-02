@@ -6,19 +6,27 @@
 
 {% block content %}
 
-  <!-- File upload form -->
-  <form enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
-    {% csrf_token %}
-    <input type="hidden" name="type" value="image"/>
-    <div class="card">
-      <div class="card-header">
-        Upload new FITS file to be processed
+  {% if user.is_authenticated %}
+
+    <!-- File upload form -->
+    <form enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
+      {% csrf_token %}
+      <input type="hidden" name="type" value="image"/>
+      <div class="card">
+        <div class="card-header">
+          Upload new FITS file to be processed
+        </div>
+        <div class="card-body">
+          {{ form|crispy }}
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
       </div>
-      <div class="card-body">
-        {{ form|crispy }}
-        <button type="submit" class="btn btn-primary">Upload</button>
-      </div>
-    </div>
-  </form>
+    </form>
+
+  {% else %}
+
+    Please <a href="{% url 'login' %}">log in</a> to be able to upload files.
+
+  {% endif %}
 
 {% endblock %}

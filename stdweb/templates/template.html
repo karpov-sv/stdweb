@@ -77,7 +77,6 @@
                     <form id="logout-form" method="post" action="{% url 'logout' %}">
                       {% csrf_token %}
                       <button class="button-link dropdown-item" type="submit">Log out</button>
-                      <input type="hidden" name="next" value="{{ request.get_full_path }}"/>
                     </form>
                   </li>
 
