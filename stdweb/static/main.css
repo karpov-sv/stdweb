@@ -41,3 +41,17 @@
     padding: 1em;
     border: 1px dotted red;
 }
+
+.bootbox .modal-body {
+    padding: 2px;
+}
+
+.bootbox .modal-header {
+    padding-top: 0.3em;
+    padding-bottom: 0.3em;
+}
+
+.bootbox .modal-footer {
+    padding-top: 0.3em;
+    padding-bottom: 0.3em;
+}

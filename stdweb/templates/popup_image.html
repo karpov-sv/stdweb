@@ -1,0 +1,40 @@
+<!-- Bootbox -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootbox.js/6.0.0/bootbox.min.js" integrity="sha512-oVbWSv2O4y1UzvExJMHaHcaib4wsBMS5tEP3/YkMP6GmkwRJAa79Jwsv+Y/w7w2Vb/98/Xhvck10LyJweB8Jsw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script language="javascript">
+
+ popupImage = function(event, url, title, ok)
+ {
+   // Fix for Safari CMD-click handled by onclick()
+   if(event.metaKey)
+     return true;
+
+   var body = $("<div/>", {class: ""});
+
+   $("<img/>", {class:"img-fluid center-block stdview-image", src:url, 'data-stretch':1}).appendTo(body);
+
+   params = {
+     title: title,
+     message: body,
+     size: 'large',
+     onEscape: function() {},
+   };
+
+   if(ok){
+     params.buttons = {
+       success: {
+         label: "Ok",
+         className: "btn-primary",
+         callback: function() {}
+       }
+     };
+   }
+
+   bootbox.dialog(params);
+
+   overlay_stdview_images();
+
+   return false;
+ }
+
+</script>

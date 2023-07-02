@@ -2,6 +2,10 @@
 
 {% load filters %}
 
+{% block head %}
+  {% include "popup_image.html" %}
+{% endblock %}
+
 {% block ptitle %}Task {{ task.id }} : STDWeb{% endblock %}
 
 {% block title %}{{ task.original_name }}{% endblock %}
@@ -12,8 +16,12 @@
     Task not found
   {% else %}
 
-
-    {{ task }}
+    {% if 'image.fits' in files %}
+      <div class="card" style="width: 18rem;">
+        <div class="card-header"><a href="{% url 'task_download' task.id 'image.fits' %}">image.fits</a></div>
+        <img src="{% url 'task_preview' task.id 'image.fits' %}?width=256" class="card-img-top" onclick="popupImage(event, '{% url 'task_preview' task.id 'image.fits' %}', 'image.fits', true)"/>
+      </div>
+    {% endif %}
 
   {% endif %}
 

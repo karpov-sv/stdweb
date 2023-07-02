@@ -3,7 +3,7 @@ from django.template.response import TemplateResponse
 
 from django.contrib.auth.decorators import login_required
 
-import os
+import os, glob
 
 from . import settings
 from . import views
@@ -14,8 +14,11 @@ def tasks(request, id=None):
 
     if id:
         task = models.Task.objects.get(id=id)
+        path = task.path()
 
         context['task'] = task
+
+        context['files'] = glob.glob('*', root_dir=path)
 
         return TemplateResponse(request, 'task.html', context=context)
     else:
@@ -27,7 +30,12 @@ def tasks(request, id=None):
 
     return TemplateResponse(request, 'tasks.html', context=context)
 
-def tasks_files(request, id=None, path=''):
+def task_download(request, id=None, path='', **kwargs):
     task = models.Task.objects.get(id=id)
 
-    return views.list_files(request, path, base=os.path.join(settings.TASKS_PATH, str(task.id)))
+    return views.download(request, path, base=task.path(), **kwargs)
+
+def task_preview(request, id=None, path='', **kwargs):
+    task = models.Task.objects.get(id=id)
+
+    return views.preview(request, path, base=task.path(), **kwargs)

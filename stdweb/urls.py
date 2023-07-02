@@ -29,9 +29,8 @@ urlpatterns = [
 
     path('files/', views.list_files, {'path': ''}, name='files'),
     path('files/<path:path>', views.list_files, name='files'),
-    path('view/<path:path>', views.download, {'attachment':False}, name='view'),
-    path('download/<path:path>', views.download, {'attachment':True}, name='download'),
-
+    path('view/<path:path>', views.download, {'attachment': False}, name='view'),
+    path('download/<path:path>', views.download, {'attachment': True}, name='download'),
     path('preview/<path:path>', views.preview, name='preview'),
 
     # Uploads
@@ -42,8 +41,9 @@ urlpatterns = [
     path('tasks/', views_tasks.tasks, {'id':None}, name='tasks'),
     path('tasks/<int:id>', views_tasks.tasks, name='tasks'),
 
-    path('tasks/<int:id>/files/', views_tasks.tasks_files, {'path': ''}, name='tasks_files'),
-    path('tasks/<int:id>/files/<path:path>', views_tasks.tasks_files, name='tasks_files'),
+    path('tasks/<int:id>/preview/<path:path>', views_tasks.task_preview, name='task_preview'),
+    path('tasks/<int:id>/view/<path:path>', views_tasks.task_download, {'attachment': False}, name='task_view'),
+    path('tasks/<int:id>/download/<path:path>', views_tasks.task_download, {'attachment': True}, name='task_download'),
 
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),

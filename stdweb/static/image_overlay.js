@@ -1,5 +1,9 @@
 $(document).ready(function() {
     /* On loading the page, annotate all images having proper class with the overlay */
+    overlay_stdview_images();
+});
+
+overlay_stdview_images = function() {
     $('.stdview-image').each(function(index) {
         var image = $(this);
         var container = image.wrap("<div/>").parent().addClass('stdview-image-container');
@@ -49,8 +53,8 @@ $(document).ready(function() {
 
   	    overlay.append(checkbox);
         }
-    })
-});
+    });
+}
 
 update_image_get_params = function(id, params) {
     /* Show 'loading' overlay */
