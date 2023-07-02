@@ -55,3 +55,14 @@
     padding-top: 0.3em;
     padding-bottom: 0.3em;
 }
+
+.collapse-chevron:after {
+    font-family:Fontawesome;
+    content:'\f077';
+    float:right;
+}
+.collapse-chevron.collapsed:after {
+    font-family:Fontawesome;
+    content:'\f078';
+    float:right;
+}
