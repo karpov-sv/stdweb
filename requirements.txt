@@ -4,3 +4,6 @@ python-magic
 django-crispy-forms
 crispy-bootstrap5
 django-el-pagination
+celery
+django-celery-results
+redis

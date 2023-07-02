@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'el_pagination',
+    'django_celery_results',
     'stdweb',
 ]
 
@@ -148,3 +149,11 @@ MESSAGE_TAGS = {
     messages.ERROR: "danger",
     messages.DEBUG: "secondary",
 }
+
+
+# Celery
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_BROKER_URL = 'redis://localhost/'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_RESULT_BACKEND = 'django-db'
