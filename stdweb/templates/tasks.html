@@ -26,8 +26,9 @@
                   <div class="fst-italic">{{ task.title }}</div>
                 {% endif %}
 
-                <small class="me-2">Created: {{ task.created|date:"Y-m-d H:i:s" }}</small>
-                <small class="me-2">Modified: {{ task.modified|date:"Y-m-d H:i:s" }}</small>
+                <small class="me-2 badge bg-info">{{ task.user|user }}</small>
+                <small class="me-2">Created: <span class="fst-italic">{{ task.created|timestamp }}</span></small>
+                <small class="me-2">Modified: <span class="fst-italic">{{ task.modified|timestamp }}</span></small>
               </div>
               <span class="badge bg-primary rounded-pill">{{ task.state }}</span>
           </a>

@@ -27,10 +27,12 @@ from . import settings
 from . import forms
 from . import models
 
+
 def index(request):
     context = {}
 
     return TemplateResponse(request, 'index.html', context=context)
+
 
 def sanitize_path(path):
     # Prevent escaping from parent folder
@@ -38,6 +40,7 @@ def sanitize_path(path):
         path = ''
 
     return path
+
 
 def make_breadcrumb(path, base='Root', lastlink=False):
     breadcrumb = []
@@ -62,6 +65,7 @@ def make_breadcrumb(path, base='Root', lastlink=False):
 
     return breadcrumb
 
+
 @login_required
 def list_files(request, path='', base=settings.DATA_PATH):
     context = {}
@@ -69,7 +73,7 @@ def list_files(request, path='', base=settings.DATA_PATH):
     path = sanitize_path(path)
 
     context['path'] = path
-    context['breadcrumb'] = make_breadcrumb(path)
+    context['breadcrumb'] = make_breadcrumb(path, base="Files")
 
     fullpath = os.path.join(base, path)
 
@@ -158,6 +162,7 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
     return TemplateResponse(request, 'files.html', context=context)
 
+
 def download(request, path, attachment=True, base=settings.DATA_PATH):
     path = sanitize_path(path)
 
@@ -167,6 +172,7 @@ def download(request, path, attachment=True, base=settings.DATA_PATH):
         return FileResponse(open(os.path.abspath(fullpath), 'rb'), as_attachment=attachment)
     else:
         return "No such file"
+
 
 def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=settings.DATA_PATH):
     """
@@ -220,6 +226,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     return HttpResponse(buf.getvalue(), content_type='image/%s' % fmt)
 
+
 def handle_uploaded_file(upload, filename):
     dirname = os.path.dirname(filename)
     try:
@@ -231,6 +238,7 @@ def handle_uploaded_file(upload, filename):
         for chunk in upload.chunks():
             dest.write(chunk)
 
+
 def upload_file(request):
     if request.method == "POST":
         form = forms.UploadFileForm(request.POST, request.FILES)
@@ -238,6 +246,7 @@ def upload_file(request):
             upload = request.FILES['file']
 
             task = models.Task(title=form.cleaned_data.get('title'), original_name=upload.name)
+            task.user = request.user
             task.save() # to populate task.id
 
             handle_uploaded_file(upload, os.path.join(task.path(), 'image.fits'))
@@ -256,6 +265,7 @@ def upload_file(request):
     context = {'form': form}
     return TemplateResponse(request, 'upload.html', context=context)
 
+
 def reuse_file(request, base=settings.DATA_PATH):
     if request.method == 'POST':
         path = request.POST.get('path')
@@ -264,6 +274,7 @@ def reuse_file(request, base=settings.DATA_PATH):
         fullpath = os.path.join(base, path)
 
         task = models.Task(original_name=os.path.split(path)[-1])
+        task.user = request.user
         task.save() # to populate task.id
 
         try:

@@ -2,9 +2,12 @@ from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
+from django.contrib.auth.models import User
+
 import os, shutil
 
 from . import settings
+
 
 class Task(models.Model):
     # path = models.CharField(max_length=250, blank=False, unique=True, editable=False) # Base dir where task processing will be performed
@@ -12,6 +15,8 @@ class Task(models.Model):
     title = models.CharField(max_length=250, blank=True) # Optional title or comment
 
     state = models.CharField(max_length=50, blank=False, default='initial') # State of the task
+
+    user =  models.ForeignKey(User, on_delete=models.CASCADE)
 
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)

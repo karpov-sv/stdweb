@@ -1,6 +1,7 @@
 {% extends "template.html" %}
 
 {% load filters %}
+{% load wrapwith %}
 
 {% block head %}
   {% include "popup_image.html" %}
@@ -13,8 +14,11 @@
 {% block content %}
 
   {% if not task %}
-    Task not found
+    <p>Task not found</p>
   {% else %}
+    <p>
+      Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }}
+    </p>
 
     {% if 'image.fits' in files %}
       <div class="card" style="width: 18rem;">
@@ -24,5 +28,13 @@
     {% endif %}
 
   {% endif %}
+
+  <!-- Management -->
+  {% wrapwith "wrapper_management_commands.html" %}
+  <form action="" method="POST">
+    {% csrf_token %}
+    <button type="submit" name="action" value="deletetask" class="btn btn-danger">Delete task</button>
+  </form>
+  {% endwrapwith %}
 
 {% endblock %}
