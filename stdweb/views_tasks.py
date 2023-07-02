@@ -18,7 +18,7 @@ def tasks(request, id=None):
 
         context['task'] = task
 
-        context['files'] = glob.glob('*', root_dir=path)
+        context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
         return TemplateResponse(request, 'task.html', context=context)
     else:
