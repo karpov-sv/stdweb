@@ -114,3 +114,7 @@ ENV/
 # Project specific
 tests/
 cutouts/
+data/
+tasks/
+
+db.sqlite3

@@ -1,0 +1,43 @@
+{% extends "template.html" %}
+
+{% load el_pagination_tags %}
+{% load filters %}
+
+{% block ptitle %}Tasks : STDWeb{% endblock %}
+
+{% block title %}Tasks{% endblock %}
+
+{% block content %}
+
+  {% if tasks %}
+
+    {% paginate 10 tasks %}
+
+    <div class="list-group mb-2">
+        {% for task in tasks %}
+          <a href="{% url 'tasks' id=task.id %}" class="text-decoration-none list-group-item d-flex justify-content-between align-items-start">
+              <div class="ms-1 me-2">
+                {{ task.id }}
+              </div>
+              <div class="ms-2 me-auto">
+                <div class="fw-bold">{{ task.original_name }}</div>
+
+                {% if task.title %}
+                  <div class="fst-italic">{{ task.title }}</div>
+                {% endif %}
+
+                <small class="me-2">Created: {{ task.created|date:"Y-m-d H:i:s" }}</small>
+                <small class="me-2">Modified: {{ task.modified|date:"Y-m-d H:i:s" }}</small>
+              </div>
+              <span class="badge bg-primary rounded-pill">{{ task.state }}</span>
+          </a>
+        {% endfor %}
+    </div>
+
+    {% show_pages %}
+
+  {% else %}
+    No tasks submitted
+  {% endif %}
+
+{% endblock %}

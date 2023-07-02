@@ -1,7 +1,34 @@
 {% extends "template.html" %}
 
+{% block title %}STDWeb - STDPipe on the Web{% endblock %}
+
 {% block content %}
 
-  test
+  <!-- File upload form -->
+  <div class="card">
+    <div class="card-header">
+      Upload new FITS file to be processed
+    </div>
+    <div class="card-body">
+
+      <form enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <!-- <label for="fileUpload" class="form-label">File</label> -->
+          <input type="file" class="form-control" name="file" id="fileUpload" aria-describedby="uploadHelp" {% if not user.is_authenticated %}disabled{% endif %}/>
+          <div id="uploadHelp" class="form-text">You may upload FITS files here</div>
+        </div>
+
+        <div class="mb-3">
+          <input type="text" class="form-control" name="title" {% if not user.is_authenticated %}disabled{% endif %} placeholder="File title or description, optional"/>
+        </div>
+
+        <button type="submit" class="btn btn-primary" {% if not user.is_authenticated %}disabled{% endif %}>Upload</button>
+
+      </form>
+
+    </div>
+  </div>
 
 {% endblock %}

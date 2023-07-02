@@ -1,0 +1,20 @@
+{% extends "template.html" %}
+
+{% load filters %}
+
+{% block ptitle %}Task {{ task.id }} : STDWeb{% endblock %}
+
+{% block title %}{{ task.original_name }}{% endblock %}
+
+{% block content %}
+
+  {% if not task %}
+    Task not found
+  {% else %}
+
+
+    {{ task }}
+
+  {% endif %}
+
+{% endblock %}

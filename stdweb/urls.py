@@ -15,22 +15,35 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 
 from django.contrib.auth import views as auth_views
 
 from . import settings
 from . import views
+from . import views_tasks
 
 urlpatterns = [
-    path('', views.index, name='index'),
+    # path('', views.index, name='index'),
+    path('', views.upload_file, name='index'),
 
-    path('files/', views.list_files, {'path': None}, name='files'),
+    path('files/', views.list_files, {'path': ''}, name='files'),
     path('files/<path:path>', views.list_files, name='files'),
     path('view/<path:path>', views.download, {'attachment':False}, name='view'),
     path('download/<path:path>', views.download, {'attachment':True}, name='download'),
 
     path('preview/<path:path>', views.preview, name='preview'),
+
+    # Uploads
+    path('upload/', views.upload_file, name='upload'),
+    path('reuse/', views.reuse_file, name='reuse'),
+
+    # Tasks
+    path('tasks/', views_tasks.tasks, {'id':None}, name='tasks'),
+    path('tasks/<int:id>', views_tasks.tasks, name='tasks'),
+
+    path('tasks/<int:id>/files/', views_tasks.tasks_files, {'path': ''}, name='tasks_files'),
+    path('tasks/<int:id>/files/<path:path>', views_tasks.tasks_files, name='tasks_files'),
 
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),
