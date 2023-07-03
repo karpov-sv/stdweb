@@ -16,15 +16,19 @@
   {% if not task %}
     <p>Task not found</p>
   {% else %}
+
     <p>
       Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }}
+      <br>
+      State: <b>{{ task.state }}</b> on {{ task.modified|timestamp }}
+      {% if task.celery_id %}
+        <br>
+        Queue task: <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
+      {% endif %}
     </p>
 
     {% if 'image.fits' in files %}
-      <div class="card" style="width: 18rem;">
-        <div class="card-header"><a href="{% url 'task_download' task.id 'image.fits' %}">image.fits</a></div>
-        <img src="{% url 'task_preview' task.id 'image.fits' %}?width=256" class="card-img-top" onclick="popupImage(event, '{% url 'task_preview' task.id 'image.fits' %}', 'image.fits', true)"/>
-      </div>
+      {% include "task_block_image.html" with image='image.fits' %}
     {% endif %}
 
   {% endif %}
@@ -33,7 +37,8 @@
   {% wrapwith "wrapper_management_commands.html" %}
   <form action="" method="POST">
     {% csrf_token %}
-    <button type="submit" name="action" value="deletetask" class="btn btn-danger">Delete task</button>
+    <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
+    <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Inspect</button>
   </form>
   {% endwrapwith %}
 

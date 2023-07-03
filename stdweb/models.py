@@ -16,6 +16,8 @@ class Task(models.Model):
 
     state = models.CharField(max_length=50, blank=False, default='initial') # State of the task
 
+    celery_id = models.CharField(max_length=50, blank=True, null=True, default=None, editable=False) # Celery task ID, when running
+
     user =  models.ForeignKey(User, on_delete=models.CASCADE)
 
     created = models.DateTimeField(auto_now_add=True)

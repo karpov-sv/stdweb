@@ -59,7 +59,7 @@
     {% if mode == 'text' %}
       <!-- Display text file contents -->
 
-      <div class="card">
+      <div class="card mb-2">
         <div class="card-body pr-2 pl-2 pt-2 pb-2">
           <pre><code>{{ contents }}</code></pre>
         </div>
@@ -68,7 +68,7 @@
     {% elif mode == 'image' %}
       <!-- Display image inline -->
 
-      <div class="text-center">
+      <div class="text-center mb-2">
         <img src="{% url 'view' path=path %}" class="img-fluid img-thumbnail" alt="{{ path }}"/>
       </div>
 

@@ -1,0 +1,8 @@
+<div class="card mb-2" style="width: 18rem;">
+
+  <div class="card-header">
+    <a href="{% url 'task_download' task.id image %}">{{ image }}</a>
+  </div>
+
+  <img src="{% url 'task_preview' task.id image %}?width=256" class="card-img-top" onclick="popupImage(event, '{% url 'task_preview' task.id image %}', '{{ image }}', true)"/>
+</div>
