@@ -1,12 +1,28 @@
 {% load filters %}
 <figure class="figure mb-2">
 
-  <img src="{% url 'task_preview' task.id image %}?width=256&timestamp={{ task.modified|unix }}"
-       class="figure-img img-fluid rounded"
-       onclick="popupImage(event, '{% url 'task_preview' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true)"/>
+  {% if fits %}
 
-  <figcaption class="figure-caption text-center">
-    <a href="{% url 'task_download' task.id image %}">{{ image }}</a>
-  </figcaption>
+    <!-- FITS files -->
+    <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.modified|unix }}"
+         class="figure-img img-fluid rounded"
+         onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1})"/>
+
+    <figcaption class="figure-caption text-center">
+      <small><a href="{% url 'task_download' task.id fits %}">{{ fits }}</a></small>
+    </figcaption>
+
+  {% elif image %}
+
+    <!-- Normal image -->
+    <img src="{% url 'task_view' task.id image %}"
+         class="figure-img img-fluid rounded" style="max-width: 256px;"
+         onclick="popupImage(event, '{% url 'task_view' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true)"/>
+
+    <figcaption class="figure-caption text-center">
+      <small><a href="{% url 'task_view' task.id image %}">{{ image }}</a></small>
+    </figcaption>
+
+  {% endif %}
 
 </figure>

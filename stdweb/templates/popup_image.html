@@ -3,15 +3,24 @@
 
 <script language="javascript">
 
- popupImage = function(event, url, title, ok)
+ popupImage = function(event, url, title, ok, extraClass, extraKwargs)
  {
    // Fix for Safari CMD-click handled by onclick()
    if(event.metaKey)
      return true;
 
-   var body = $("<div/>", {class: ""});
+   extraClass = extraClass || "";
+   extraKwargs = extraKwargs || {};
 
-   $("<img/>", {class:"img-fluid center-block stdview-image", src:url, 'data-stretch':1}).appendTo(body);
+   var body = $("<div/>", {class: "text-center"});
+   var params = {class:"img-fluid center-block " + extraClass, src:url};
+
+   if(extraKwargs){
+     params = Object.assign({}, params, extraKwargs);
+   }
+
+   // FIXME: data-stretch is only needed for class stdview-image
+   $("<img/>", params).appendTo(body);
 
    params = {
      title: title,
@@ -32,6 +41,7 @@
 
    bootbox.dialog(params);
 
+   // FIXME: prevent updating already created overlays?..
    overlay_stdview_images();
 
    return false;

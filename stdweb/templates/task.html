@@ -95,13 +95,11 @@
 
       {% if 'image.fits' in files %}
         <div class="col">
-          {% include "task_block_image.html" with image='image.fits' %}
-        </div>
-      {% endif %}
+          {% include "task_block_image.html" with fits='image.fits' task=task only %}
 
-      {% if 'mask.fits' in files %}
-        <div class="col">
-          {% include "task_block_image.html" with image='mask.fits' %}
+        {% if 'mask.fits' in files %}
+          {% include "task_block_image.html" with fits='mask.fits' task=task only %}
+        {% endif %}
         </div>
       {% endif %}
     </div>
@@ -119,6 +117,12 @@
         {% if 'photometry.log' in files %}
           <div class="col">
             {% include "task_block_text.html" with file='photometry.log' %}
+          </div>
+        {% endif %}
+
+        {% if 'objects.png' in files %}
+          <div class="col">
+            {% include "task_block_image.html" with image='objects.png' task=task only %}
           </div>
         {% endif %}
       </div>
