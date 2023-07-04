@@ -6,6 +6,8 @@ from django.contrib import messages
 
 from django.contrib.auth.decorators import login_required
 
+from django.views.decorators.cache import cache_page
+
 import os, glob
 
 from . import settings
@@ -44,6 +46,7 @@ def tasks(request, id=None):
 
             if action == 'cleanup_task':
                 task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
+                task.config = {} # should we reset the config on cleanup?..
                 task.state = 'cleaning'
                 task.save()
                 messages.success(request, "Started cleanup for task " + str(id))
@@ -84,7 +87,7 @@ def task_download(request, id=None, path='', **kwargs):
 
     return views.download(request, path, base=task.path(), **kwargs)
 
-
+@cache_page(15 * 60)
 def task_preview(request, id=None, path='', **kwargs):
     task = models.Task.objects.get(id=id)
 

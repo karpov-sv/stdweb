@@ -157,3 +157,15 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BROKER_URL = 'redis://localhost/'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_RESULT_BACKEND = 'django-db'
+
+# Caching
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379",
+    },
+    # "default": {
+    #     "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    #     "LOCATION": "unique-snowflake",
+    # }
+}

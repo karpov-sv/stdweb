@@ -43,6 +43,16 @@ def timestamp(time):
 
     return time.strftime('%Y-%m-%d %H:%M:%S UTC')
 
+
+@register.filter
+def unix(time):
+    """
+    Return UNIX timestamp
+    """
+
+    return time.timestamp()
+
+
 @register.filter
 def make_uuid(x):
     return str(uuid.uuid1())

@@ -1,8 +1,9 @@
+{% load filters %}
 <figure class="figure mb-2">
 
-  <img src="{% url 'task_preview' task.id image %}?width=256"
+  <img src="{% url 'task_preview' task.id image %}?width=256&timestamp={{ task.modified|unix }}"
        class="figure-img img-fluid rounded"
-       onclick="popupImage(event, '{% url 'task_preview' task.id image %}', '{{ image }}', true)"/>
+       onclick="popupImage(event, '{% url 'task_preview' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true)"/>
 
   <figcaption class="figure-caption text-center">
     <a href="{% url 'task_download' task.id image %}">{{ image }}</a>
