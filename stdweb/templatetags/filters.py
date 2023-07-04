@@ -2,6 +2,7 @@ from django import template
 from django.template.defaultfilters import stringfilter
 
 import datetime
+import uuid
 
 register = template.Library()
 
@@ -17,6 +18,7 @@ def time_from_unix(unix):
         return datetime.datetime.utcfromtimestamp(int(unix))
     else:
         return None
+
 
 @register.filter
 def user(user):
@@ -40,3 +42,7 @@ def timestamp(time):
     """
 
     return time.strftime('%Y-%m-%d %H:%M:%S UTC')
+
+@register.filter
+def make_uuid(x):
+    return str(uuid.uuid1())

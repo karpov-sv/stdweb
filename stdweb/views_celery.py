@@ -1,4 +1,4 @@
-from django.http import HttpResponse, FileResponse, HttpResponseRedirect
+from django.http import HttpResponse, JsonResponse, FileResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 
 from django.contrib.auth.decorators import login_required
@@ -56,3 +56,9 @@ def view_queue(request, id=None):
         context['queue'] = queue
 
     return TemplateResponse(request, 'queue.html', context=context)
+
+
+def get_queue(request, id):
+    ctask = celery.app.AsyncResult(id)
+
+    return JsonResponse({'state': ctask.state, 'id': ctask.id})

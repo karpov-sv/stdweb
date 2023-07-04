@@ -1,0 +1,18 @@
+{% load filters %}
+{% with uuid=1|make_uuid %}
+<div class="card mb-2">
+  <h5 class="card-header collapse-chevron collapsed"
+      data-bs-toggle="collapse" data-bs-target="#collapseCard-{{ uuid }}"
+      aria-expanded="false" aria-controls="collapseCard-{{ uuid }}">
+    {{ title }}
+  </h5>
+
+  <div class="collapse" id="collapseCard-{{ uuid }}">
+    <div class="card-body">
+
+      {{ wrapped }}
+
+    </div>
+  </div>
+</div>
+{% endwith %}

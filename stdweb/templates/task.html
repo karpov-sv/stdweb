@@ -1,10 +1,42 @@
 {% extends "template.html" %}
 
+{% load tags %}
 {% load filters %}
 {% load wrapwith %}
 
 {% block head %}
   {% include "popup_image.html" %}
+
+  {% if task.celery_id %}
+    <script language="javascript">
+     var update_timer = 0;
+     var update_timeout = 3000;
+
+     update = function(){
+       $.ajax({
+         url: "{% url 'queue_state' task.celery_id %}",
+         dataType: "json",
+         timeout: 3000,
+
+         success: function(json){
+           if(json.state == 'SUCCESS' || json.state == 'FAILURE' || json.state == 'REVOKED'){
+             location.reload();
+           }
+         },
+
+         complete: function(xhr, status) {
+           setTimeout(update, update_timeout);
+         }
+       });
+     }
+
+     $(function(){
+       setTimeout(update, update_timeout);
+     });
+
+    </script>
+  {% endif %}
+
 {% endblock %}
 
 {% block ptitle %}Task {{ task.id }} : STDWeb{% endblock %}
@@ -17,28 +49,89 @@
     <p>Task not found</p>
   {% else %}
 
+    {% if task.title %}
+    <p class="fst-italic">
+      {{ task.title }}
+    </p>
+    {% endif %}
+
     <p>
       Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }}
       <br>
-      State: <b>{{ task.state }}</b> on {{ task.modified|timestamp }}
+      State:
+      {% if task.celery_id %}
+      <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+      {% endif %}
+      <b class="text-primary">{{ task.state }}</b> on {{ task.modified|timestamp }}
       {% if task.celery_id %}
         <br>
-        Queue task: <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
+        Queue task:
+        <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
       {% endif %}
     </p>
 
+    <!-- Header -->
     {% if 'image.fits' in files %}
-      {% include "task_block_image.html" with image='image.fits' %}
+      {% wrapwith 'wrapper_card_collapsed.html' with title='Original FITS header' %}
+      <pre><code>{% task_fits_header task 'image.fits' %}</code></pre>
+      {% endwrapwith %}
+    {% endif %}
+
+    <hr>
+    <form action="" method="POST" class="mb-2">
+      {% csrf_token %}
+      <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
+      <button type="submit" name="action" value="cleanup_task" class="btn btn-danger">Cleanup</button>
+    </form>
+
+    <!-- Initial inspection -->
+    <hr>
+    <div class="row mb-2">
+      {% if 'inspect.log' in files %}
+        <div class="col">
+          {% include "task_block_text.html" with file='inspect.log' %}
+        </div>
+      {% endif %}
+
+      {% if 'image.fits' in files %}
+        <div class="col">
+          {% include "task_block_image.html" with image='image.fits' %}
+        </div>
+      {% endif %}
+
+      {% if 'mask.fits' in files %}
+        <div class="col">
+          {% include "task_block_image.html" with image='mask.fits' %}
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Photometry and astrometry -->
+    {% if 'inspect.log' in files and 'mask.fits' in files %}
+      <hr>
+      <form action="" method="POST" class="mb-2">
+        {% csrf_token %}
+        <button type="submit" name="action" value="photometry_image" class="btn btn-primary">Run photometry</button>
+      </form>
+
+      <hr>
+      <div class="row mb-2">
+        {% if 'photometry.log' in files %}
+          <div class="col">
+            {% include "task_block_text.html" with file='photometry.log' %}
+          </div>
+        {% endif %}
+      </div>
+
     {% endif %}
 
   {% endif %}
 
   <!-- Management -->
-  {% wrapwith "wrapper_management_commands.html" %}
+  {% wrapwith 'wrapper_card_collapsed.html' with title='Management' %}
   <form action="" method="POST">
     {% csrf_token %}
     <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
-    <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Inspect</button>
   </form>
   {% endwrapwith %}
 

@@ -1,8 +1,11 @@
-<div class="card mb-2" style="width: 18rem;">
+<figure class="figure mb-2">
 
-  <div class="card-header">
+  <img src="{% url 'task_preview' task.id image %}?width=256"
+       class="figure-img img-fluid rounded"
+       onclick="popupImage(event, '{% url 'task_preview' task.id image %}', '{{ image }}', true)"/>
+
+  <figcaption class="figure-caption text-center">
     <a href="{% url 'task_download' task.id image %}">{{ image }}</a>
-  </div>
+  </figcaption>
 
-  <img src="{% url 'task_preview' task.id image %}?width=256" class="card-img-top" onclick="popupImage(event, '{% url 'task_preview' task.id image %}', '{{ image }}', true)"/>
-</div>
+</figure>

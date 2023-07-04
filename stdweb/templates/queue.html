@@ -34,7 +34,7 @@
     </div>
 
     {% if user.is_staff %}
-      {% wrapwith "wrapper_management_commands.html" %}
+      {% wrapwith "wrapper_card_collapsed.html" with title="Management" %}
 
       <form action="" method="POST">
         {% csrf_token %}
@@ -58,7 +58,7 @@
     </div>
 
     {% if user.is_staff %}
-      {% wrapwith "wrapper_management_commands.html" %}
+      {% wrapwith "wrapper_card_collapsed.html" with title="Management" %}
 
       <form action="" method="POST">
         {% csrf_token %}

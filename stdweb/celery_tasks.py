@@ -4,7 +4,7 @@ from celery import shared_task
 from . import models
 
 # Generic science stack
-import os
+import os, glob, shutil
 
 import numpy as np
 from astropy.wcs import WCS
@@ -17,6 +17,7 @@ from astropy import units as u
 from astropy.time import Time
 
 import astroscrappy
+import time
 
 from functools import partial
 
@@ -44,6 +45,24 @@ def print_to_file(*args, clear=False, logname='out.log', **kwargs):
 
 
 @shared_task(bind=True)
+def task_cleanup(self, id):
+    task = models.Task.objects.get(id=id)
+    basepath = task.path()
+
+    for path in glob.glob(os.path.join(basepath, '*')):
+        if os.path.split(path)[-1] != 'image.fits':
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.unlink(path)
+
+    # End processing
+    task.state = 'cleaned'
+    task.celery_id = None
+    task.save()
+
+
+@shared_task(bind=True)
 def task_inspect(self, id):
     task = models.Task.objects.get(id=id)
     basepath = task.path()
@@ -68,9 +87,29 @@ def task_inspect(self, id):
     task.celery_id = None
     task.save()
 
+
+def fix_header(header, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    # Fix PRISM headers
+    if header.get('CTYPE2') == 'DEC---TAN':
+        header['CTYPE2'] = 'DEC--TAN'
+    for _ in ['CDELTM1', 'CDELTM2', 'XPIXELSZ', 'YPIXELSZ']:
+        header.remove(_, ignore_missing=True)
+    if header.get('CTYPE1') == 'RA---TAN':
+        for _ in ['PV1_1', 'PV1_2']:
+            header.remove(_, ignore_missing=True)
+
+    if 'FOCALLEN' in header and not header.get('FOCALLEN'):
+        header.remove('FOCALLEN')
+
+
 def inspect_image(filename, config=None, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
 
     config = config or dict()
     config['sn'] = config.get('sn', 5)
@@ -79,10 +118,141 @@ def inspect_image(filename, config=None, verbose=True):
     config['rel_bkgann'] = config.get('rel_bkgann', None)
     config['bg_size'] = config.get('bg_size', 256)
     config['spatial_order'] = config.get('spatial_order', 2)
+    config['minarea'] = config.get('minarea', 5)
     config['use_color'] = config.get('use_color', True)
+    config['mask_cosmics'] = config.get('mask_cosmics', True)
 
-    log('Inspecting ', filename)
-
+    # Load the image
+    log(f'Inspecting {filename}')
     image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
 
-    log('Image shape is', image.shape)
+    log(f"Image size is {image.shape[1]} x {image.shape[0]}")
+
+    fix_header(header)
+
+    # Guess some parameters from keywords
+    config['gain'] = config.get('gain', header.get('GAIN', 1))
+    log(f"Gain is {config['gain']:.2f}")
+
+    config['filter'] = config.get('filter', header.get('FILTER', 'unknown'))
+    log(f"Filter is {config['filter']}")
+
+    if 'saturation' not in config:
+        satlevel = header.get('SATURATE', header.get('DATAMAX'))
+        if not satlevel:
+            satlevel = 0.95*np.nanmax(image)
+        config['saturation'] = satlevel
+    log(f"Saturation level is {config['saturation']:.1f}")
+
+    # Mask
+    mask = np.isnan(image)
+    mask |= image >= config['saturation']
+
+    # Cosmics
+    if config['mask_cosmics']:
+        cmask, cimage = astroscrappy.detect_cosmics(image, mask, verbose=False,
+                                                    gain=config['gain'],
+                                                    satlevel=config['saturation'],
+                                                    cleantype='medmask')
+        log(f"Done masking cosmics, {np.sum(cmask)} ({100*np.sum(cmask)/cmask.shape[0]/cmask.shape[1]:.1f}%) pixels masked")
+        mask |= cmask
+
+    log(f"{np.sum(mask)} ({100*np.sum(mask)/mask.shape[0]/mask.shape[1]:.1f}%) pixels masked")
+
+    fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), overwrite=True)
+
+    # WCS
+    wcs = WCS(header)
+    if wcs and wcs.is_celestial:
+        ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, width=image.shape[1], height=image.shape[0])
+        pixscale = astrometry.get_pixscale(wcs=wcs)
+
+        log(f"Field center is at {ra0:.3f} {dec0:.3f}, radius {sr0:.2f} deg")
+        log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
+    else:
+        log("No usable WCS found")
+
+    # Target?..
+    if not 'target' in config:
+        config['target'] = header.get('TARGET')
+
+    if config['target']:
+        log(f"Target is {config['target']}")
+        try:
+            target = SkyCoord.from_name(config['target'])
+            config['target_ra'] = target.ra.deg
+            config['target_dec'] = target.dec.deg
+            log(f"Resolved to {config['target_ra']:.3f} {config['target_ra']:.3f}")
+        except:
+            log("Target not resolved")
+
+
+@shared_task(bind=True)
+def task_photometry(self, id):
+    task = models.Task.objects.get(id=id)
+    basepath = task.path()
+
+    config = task.config
+
+    # Start processing
+    log = partial(print_to_file, logname=os.path.join(basepath, 'photometry.log'))
+    log(clear=True)
+
+    try:
+        photometry_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+        task.state = 'photometry'
+    except:
+        import traceback
+        traceback.print_exc()
+
+        task.state = 'failed'
+        task.celery_id = None
+
+    # End processing
+    task.celery_id = None
+    task.save()
+
+
+def photometry_image(filename, config=None, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    config = config or dict()
+
+    # Image
+    image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+
+    fix_header(header)
+
+    # Mask
+    mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+
+    # Extract objects
+    obj = photometry.get_objects_sextractor(image, mask=mask,
+                                            aper=config.get('initial_aper', 3.0),
+                                            gain=config.get('gain', 1.0),
+                                            extra={'BACK_SIZE': config.get('bg_size', 256)},
+                                            minarea=config.get('minarea', 3),
+                                            verbose=verbose)
+
+    log(f"{len(obj)} objects found")
+
+    # FWHM
+    fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
+    log(f"FWHM is {fwhm:.2f} pixels")
+
+    # Forced photometry at objects positions
+    obj = photometry.measure_objects(obj, image, mask=mask,
+                                     fwhm=fwhm,
+                                     aper=config.get('rel_aper', 1.0),
+                                     bkgann=config.get('rel_bkgann', None),
+                                     sn=config.get('sn', 3.0),
+                                     bg_size=config.get('bg_size', 256),
+                                     gain=config.get('gain', 1.0),
+                                     verbose=verbose)
+
+    log(f"{len(obj)} objects properly measured")
+
+    obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)

@@ -49,6 +49,7 @@ urlpatterns = [
     # Celery queue
     path('queue/', views_celery.view_queue, {'id': None}, name='queue'),
     path('queue/<slug:id>', views_celery.view_queue, name='queue'),
+    path('queue/<slug:id>/state', views_celery.get_queue, name='queue_state'),
 
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),
