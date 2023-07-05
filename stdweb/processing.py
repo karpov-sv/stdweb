@@ -25,6 +25,32 @@ warnings.simplefilter(action='ignore', category=FITSFixedWarning)
 warnings.simplefilter(action='ignore', category=VerifyWarning)
 
 
+# Supported filters and their aliases
+supported_filters = {
+    # Johnson-Cousins
+    'U': {'name':'Johnson-Cousins U', 'aliases':[]},
+    'B': {'name':'Johnson-Cousins B', 'aliases':[]},
+    'V': {'name':'Johnson-Cousins V', 'aliases':[]},
+    'R': {'name':'Johnson-Cousins R', 'aliases':["Rc"]},
+    'I': {'name':'Johnson-Cousins I', 'aliases':["Ic"]},
+    # Sloan-like
+    'u': {'name':'Sloan u', 'aliases':["SDSS-u", "SDSS-u'", "Sloan-u"]},
+    'g': {'name':'Sloan g', 'aliases':["SDSS-g", "SDSS-g'", "Sloan-g"]},
+    'r': {'name':'Sloan r', 'aliases':["SDSS-r", "SDSS-r'", "Sloan-r"]},
+    'i': {'name':'Sloan i', 'aliases':["SDSS-i", "SDSS-i'", "Sloan-i"]},
+    'z': {'name':'Sloan z', 'aliases':["SDSS-z", "SDSS-z'", "Sloan-z"]},
+    # Gaia
+    'G': {'name':'Gaia G', 'aliases':[]},
+    'BP': {'name':'Gaia BP', 'aliases':[]},
+    'RP': {'name':'Gaia RP', 'aliases':[]},
+}
+
+supported_catalogs = {
+    'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y']},
+    'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z']},
+    'skymapper': {'name':'SkyMapper DR1.1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z']},
+}
+
 def print_to_file(*args, clear=False, logname='out.log', **kwargs):
     if clear and os.path.exists(logname):
         print('Clearing', logname)
@@ -61,6 +87,7 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     config['sn'] = config.get('sn', 5)
     config['initial_aper'] = config.get('initial_aper', 3)
+    config['initial_r0'] = config.get('initial_r0', 0)
     config['rel_aper'] = config.get('rel_aper', 1)
     config['rel_bkgann'] = config.get('rel_bkgann', None)
     config['bg_size'] = config.get('bg_size', 256)
@@ -71,7 +98,10 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Load the image
     log(f'Inspecting {filename}')
-    image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+    try:
+        image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+    except:
+        raise RuntimeError('Cannot load the image')
 
     log(f"Image size is {image.shape[1]} x {image.shape[0]}")
 
@@ -88,25 +118,16 @@ def inspect_image(filename, config, verbose=True, show=False):
     log(f"Filter is {config['filter']}")
 
     # Normalize filters
-    filter_aliases = {
-        # Johnson-Cousins
-        'B': [],
-        'V': [],
-        'R': ["Rc"],
-        'I': ["Ic"],
-        # Sloan-like
-        'u': ["SDSS-u", "SDSS-u'", "Sloan-u"],
-        'g': ["SDSS-g", "SDSS-g'", "Sloan-g"],
-        'r': ["SDSS-r", "SDSS-r'", "Sloan-r"],
-        'i': ["SDSS-i", "SDSS-i'", "Sloan-i"],
-        'z': ["SDSS-z", "SDSS-z'", "Sloan-z"],
-        }
-
-    for fname in filter_aliases.keys():
-        if config['filter'] in filter_aliases[fname]:
+    for fname in supported_filters.keys():
+        if config['filter'] in supported_filters[fname]['aliases']:
             config['filter'] = fname
             log(f"Filter name normalized to {config['filter']}")
             break
+
+    # Fallback filter
+    if config['filter'] not in supported_filters.keys():
+        log(f"Unknown filter {config['filter']}, falling back to r")
+        config['filter'] = 'r'
 
     # Saturation
     if not config.get('saturation'):
@@ -132,6 +153,9 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     log(f"{np.sum(mask)} ({100*np.sum(mask)/mask.shape[0]/mask.shape[1]:.1f}%) pixels masked")
 
+    if np.sum(mask) > 0.5*mask.shape[0]*mask.shape[1]:
+        raise RuntimeError('More than half of the image is masked')
+
     fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
     log("Mask written to mask.fits")
 
@@ -144,6 +168,7 @@ def inspect_image(filename, config, verbose=True, show=False):
         log(f"Field center is at {ra0:.3f} {dec0:.3f}, radius {sr0:.2f} deg")
         log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
     else:
+        ra0,dec0,sr0 = None,None,None
         log("No usable WCS found")
 
     # Target?..
@@ -159,6 +184,22 @@ def inspect_image(filename, config, verbose=True, show=False):
             log(f"Resolved to {config['target_ra']:.3f} {config['target_ra']:.3f}")
         except:
             log("Target not resolved")
+
+    # Suggested catalogue
+    if not config.get('cat_name'):
+        if config['filter'] in ['U', 'B', 'V', 'R', 'I']:
+            config['cat_name'] = 'gaiadr3syn'
+        else:
+            config['cat_name'] = 'ps1'
+
+            if (dec0 is not None and dec0 < -30) or config.get('target_dec', 0) < -30:
+                config['cat_name'] = 'skymapper'
+
+        log(f"Suggested catalogue is {supported_catalogs[config['cat_name']]['name']}")
+
+    if not config.get('cat_limit'):
+        # Modest limit to restrict getting too faint stars
+        config['cat_limit'] = 20.0
 
 
 def photometry_image(filename, config, verbose=True, show=False):
@@ -191,6 +232,9 @@ def photometry_image(filename, config, verbose=True, show=False):
                                             verbose=verbose)
 
     log(f"{len(obj)} objects found")
+
+    if not len(obj):
+        raise RuntimeError('Cannot detect objects on the image')
 
     # FWHM
     fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
@@ -235,9 +279,6 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
 
     # Catalogue settings
-    # config['cat_name'] = 'gaiadr3syn'
-    config['cat_name'] = 'ps1'
-
     if config['cat_name'] == 'gaiadr3syn':
         config['cat_col_mag'] = config['filter'] + 'mag'
         config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
@@ -269,12 +310,16 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
 
+    if not len(cat):
+        raise RuntimeError('Cannot get catalogue stars')
+
     # Photometric calibration
     m = pipeline.calibrate_photometry(obj, cat, pixscale=pixscale,
                                       cat_col_mag=config['cat_col_mag'],
                                       cat_col_mag_err=config['cat_col_mag_err'],
                                       cat_col_mag1=config.get('cat_col_color_mag1'),
                                       cat_col_mag2=config.get('cat_col_color_mag2'),
+                                      use_color=config.get('use_color', True),
                                       order=config['spatial_order'],
                                       robust=True, scale_noise=True,
                                       accept_flags=0x02, max_intrinsic_rms=0.01,
@@ -299,6 +344,18 @@ def photometry_image(filename, config, verbose=True, show=False):
     with plots.figure_saver(os.path.join(basepath, 'photometry_zeropoint.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
         plots.plot_photometric_match(m, mode='zero', show_dots=True, bins=8, ax=ax)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])
+
+    with plots.figure_saver(os.path.join(basepath, 'photometry_model.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.plot_photometric_match(m, mode='model', show_dots=True, bins=8, ax=ax)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])
+
+    with plots.figure_saver(os.path.join(basepath, 'photometry_residuals.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.plot_photometric_match(m, mode='residuals', show_dots=True, bins=8, ax=ax)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 

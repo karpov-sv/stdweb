@@ -58,7 +58,6 @@ def make_list(parser, token):
 
 class MakeListNode(template.Node):
     def __init__(self, items, varname):
-        print("__init__")
         self.items = items
         self.varname = varname
 

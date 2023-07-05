@@ -20,6 +20,7 @@
          timeout: 3000,
 
          success: function(json){
+           $('#celery_state').html(json.state);
            if(json.state == 'SUCCESS' || json.state == 'FAILURE' || json.state == 'REVOKED'){
              location.reload();
            }
@@ -74,6 +75,7 @@
         <br>
         Queue task:
         <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
+        (<span id="celery_state"></span>)
       {% endif %}
     </p>
 
@@ -159,7 +161,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'astrometry_dist.png'  as list %}
+              {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png'  as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
