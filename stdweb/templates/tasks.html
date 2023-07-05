@@ -30,7 +30,7 @@
                 <small class="me-2">Created: <span class="fst-italic">{{ task.created|timestamp }}</span></small>
                 <small class="me-2">Modified: <span class="fst-italic">{{ task.modified|timestamp }}</span></small>
               </div>
-              <span class="badge bg-primary rounded-pill">{{ task.state }}</span>
+              <span class="badge bg-{% if task.state == 'failed' %}danger{% else %}primary{% endif %} rounded-pill">{{ task.state }}</span>
           </a>
         {% endfor %}
     </div>

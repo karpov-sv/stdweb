@@ -40,9 +40,12 @@
 
 {% endblock %}
 
-{% block ptitle %}Task {{ task.id }} : STDWeb{% endblock %}
+{% block ptitle %}
+  {% if task.celery_id %}(Running){% endif %}
+  Task {{ task.id }} : STDWeb
+{% endblock %}
 
-{% block title %}{{ task.original_name }}{% endblock %}
+{% block title_div %}{% endblock %}
 
 {% block content %}
 
@@ -50,12 +53,15 @@
     <p>Task not found</p>
   {% else %}
 
+    <h2>
+      {{ task.original_name }}
+    </h2>
+
     {% if task.title %}
     <p class="fst-italic">
       {{ task.title }}
     </p>
     {% endif %}
-
     <p>
       Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }}
       <br>
@@ -63,7 +69,7 @@
       {% if task.celery_id %}
       <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
       {% endif %}
-      <b class="text-primary">{{ task.state }}</b> on {{ task.modified|timestamp }}
+      <b class="text-{% if task.state == 'failed' %}danger{% elif task.celery_id %}primary{% else %}success{% endif %}">{{ task.state }}</b> on {{ task.modified|timestamp }}
       {% if task.celery_id %}
         <br>
         Queue task:
@@ -81,27 +87,29 @@
     <hr>
     <h3>Initial inspection and masking</h3>
 
-    <form action="" method="POST" class="mb-2">
-      {% csrf_token %}
+    {% if user.is_authenticated %}
+      <form action="" method="POST" class="mb-2">
+        {% csrf_token %}
 
-      {% crispy form_inspect %}
+        {% crispy form_inspect %}
 
-      <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
-      <button type="submit" name="action" value="cleanup_task" class="btn btn-danger">Cleanup</button>
+        <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
+        <button type="submit" name="action" value="cleanup_task" class="btn btn-danger">Cleanup</button>
 
-      <!-- Unsafe controls -->
-      <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#unsafeButtons"
-              aria-expanded="false"
-              aria-controls="unsafeButtons"
-              title="Show / hide unsafe controls">
-      </button>
+        <!-- Unsafe controls -->
+        <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#unsafeButtons"
+                aria-expanded="false"
+                aria-controls="unsafeButtons"
+                title="Show / hide unsafe controls">
+        </button>
 
-      <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
-        <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
-      </span>
-    </form>
+        <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
+          <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
+        </span>
+      </form>
+    {% endif %}
 
     <!-- Initial inspection -->
     <hr style="border-style: dotted">
@@ -112,17 +120,19 @@
         </div>
       {% endif %}
 
-      {% if 'image.fits' in files %}
-        <div class="col" style="max-width: 256px">
-          {% include "task_block_image.html" with fits='image.fits' task=task only %}
-        </div>
-      {% endif %}
+          <div class="col">
+            <div class="row">
+              {% make_list 'image.fits' 'mask.fits' as list %}
+              {% for name in list %}
+                {% if name in files %}
+                  <div class="col" style="max-width: 256px">
+                    {% include "task_block_image.html" with fits=name task=task only %}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
 
-      {% if 'mask.fits' in files %}
-        <div class="col" style="max-width: 256px">
-          {% include "task_block_image.html" with fits='mask.fits' task=task only %}
-        </div>
-      {% endif %}
     </div>
 
     <!-- Photometry and astrometry -->
@@ -130,13 +140,15 @@
       <hr>
       <h3>Photometry and astrometry</h3>
 
-      <form action="" method="POST" class="mb-2">
-        {% csrf_token %}
+      {% if user.is_authenticated %}
+        <form action="" method="POST" class="mb-2">
+          {% csrf_token %}
 
-        {% crispy form_photometry %}
+          {% crispy form_photometry %}
 
-        <button type="submit" name="action" value="photometry_image" class="btn btn-primary">Run photometry</button>
-      </form>
+          <button type="submit" name="action" value="photometry_image" class="btn btn-primary">Run photometry</button>
+        </form>
+      {% endif %}
 
       <hr style="border-style: dotted">
       <div class="row mb-2">
@@ -147,14 +159,14 @@
 
           <div class="col">
             <div class="row">
-          {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'astrometry_dist.png'  as list %}
-          {% for name in list %}
-            {% if name in files %}
-              <div class="col" style="max-width: 256px">
-                {% include "task_block_image.html" with image=name task=task only %}
-              </div>
-            {% endif %}
-          {% endfor %}
+              {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'astrometry_dist.png'  as list %}
+              {% for name in list %}
+                {% if name in files %}
+                  <div class="col" style="max-width: 256px">
+                    {% include "task_block_image.html" with image=name task=task only %}
+                  </div>
+                {% endif %}
+              {% endfor %}
             </div>
           </div>
         {% endif %}

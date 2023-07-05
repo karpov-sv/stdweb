@@ -51,18 +51,19 @@ def task_inspect(self, id):
     # Start processing
     try:
         processing.inspect_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
-        fix_config(config)
         task.state = 'inspected'
     except:
         import traceback
-        traceback.print_exc()
+        log("\nError!\n", traceback.format_exc())
 
         task.state = 'failed'
         task.celery_id = None
 
     # End processing
     task.celery_id = None
+    fix_config(config)
     task.save()
+
 
 @shared_task(bind=True)
 def task_photometry(self, id):
@@ -77,15 +78,15 @@ def task_photometry(self, id):
     # Start processing
     try:
         processing.photometry_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
-        fix_config(config)
         task.state = 'photometry'
     except:
         import traceback
-        traceback.print_exc()
+        log("\nError!\n", traceback.format_exc())
 
         task.state = 'failed'
         task.celery_id = None
 
     # End processing
     task.celery_id = None
+    fix_config(config)
     task.save()

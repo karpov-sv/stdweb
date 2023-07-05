@@ -37,7 +37,7 @@ class TaskPhotometryForm(forms.Form):
     form_type = forms.CharField(initial='photometry', widget=forms.HiddenInput())
     sn = forms.FloatField(min_value=0, required=False, label="S/N Ratio")
     initial_aper = forms.FloatField(min_value=0, required=False, label="Initial aperture, pixels")
-    bg_size = forms.FloatField(min_value=0, required=False, label="Background mesh size")
+    bg_size = forms.IntegerField(min_value=0, required=False, label="Background mesh size")
     minarea = forms.IntegerField(min_value=0, required=False, label="Minimal object area")
     rel_aper = forms.FloatField(min_value=0, required=False, label="Relative aperture, FWHM")
     use_color = forms.BooleanField(required=False, label="Use color term")

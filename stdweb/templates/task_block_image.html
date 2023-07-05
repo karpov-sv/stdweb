@@ -5,7 +5,7 @@
 
     <!-- FITS files -->
     <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.modified|unix }}"
-         class="figure-img img-fluid rounded"
+         class="figure-img img-fluid rounded" style="max-width: 256px;"
          onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.target_ra or task.config.target_dec %}'data-mark-ra':{{ task.config.target_ra }}, 'data-mark-dec':{{ task.config.target_dec }}{% endif %}})"/>
 
     <figcaption class="figure-caption text-center">

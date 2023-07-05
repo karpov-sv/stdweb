@@ -82,10 +82,33 @@ def inspect_image(filename, config, verbose=True, show=False):
         config['gain'] = header.get('GAIN', 1)
     log(f"Gain is {config['gain']:.2f}")
 
+    # Filter
     if not config.get('filter'):
         config['filter'] = header.get('FILTER', header.get('CAMFILT', 'unknown')).strip()
     log(f"Filter is {config['filter']}")
 
+    # Normalize filters
+    filter_aliases = {
+        # Johnson-Cousins
+        'B': [],
+        'V': [],
+        'R': ["Rc"],
+        'I': ["Ic"],
+        # Sloan-like
+        'u': ["SDSS-u", "SDSS-u'", "Sloan-u"],
+        'g': ["SDSS-g", "SDSS-g'", "Sloan-g"],
+        'r': ["SDSS-r", "SDSS-r'", "Sloan-r"],
+        'i': ["SDSS-i", "SDSS-i'", "Sloan-i"],
+        'z': ["SDSS-z", "SDSS-z'", "Sloan-z"],
+        }
+
+    for fname in filter_aliases.keys():
+        if config['filter'] in filter_aliases[fname]:
+            config['filter'] = fname
+            log(f"Filter name normalized to {config['filter']}")
+            break
+
+    # Saturation
     if not config.get('saturation'):
         satlevel = header.get('SATURATE',
                               header.get('DATAMAX'))
@@ -138,9 +161,6 @@ def inspect_image(filename, config, verbose=True, show=False):
             log("Target not resolved")
 
 
-    print(config)
-
-
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -154,6 +174,13 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Mask
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+
+    # Cleanup stale plots
+    for name in ['photometry.png', 'photometry_unmasked.png',
+                 'photometry_zeropoint.png', 'astrometry_dist.png']:
+        fullname = os.path.join(basepath, name)
+        if os.path.exists(fullname):
+            os.unlink(fullname)
 
     # Extract objects
     obj = photometry.get_objects_sextractor(image, mask=mask,
@@ -208,7 +235,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
 
     # Catalogue settings
-    config['cat_name'] = 'gaiadr3syn'
+    # config['cat_name'] = 'gaiadr3syn'
+    config['cat_name'] = 'ps1'
 
     if config['cat_name'] == 'gaiadr3syn':
         config['cat_col_mag'] = config['filter'] + 'mag'
@@ -217,7 +245,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         config['cat_col_color_mag1'] = 'Bmag'
         config['cat_col_color_mag2'] = 'Vmag'
     else:
-        config['cat_col_mag'] = fname + 'mag'
+        config['cat_col_mag'] = config['filter'] + 'mag'
         config['cat_col_mag_err'] = 'e_rmag'
 
         config['cat_col_color_mag1'] = 'gmag'
@@ -225,6 +253,9 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Get initial WCS
     wcs = WCS(header)
+
+    if wcs is None or not wcs.is_celestial:
+        raise RuntimeError('No WCS astrometric solution')
 
     obj['ra'],obj['dec'] = wcs.all_pix2world(obj['x'], obj['y'], 0)
 
@@ -248,6 +279,9 @@ def photometry_image(filename, config, verbose=True, show=False):
                                       robust=True, scale_noise=True,
                                       accept_flags=0x02, max_intrinsic_rms=0.01,
                                       verbose=verbose)
+
+    if m is None:
+        raise RuntimeError('Photometric match failed')
 
     # Plot photometric solution
     with plots.figure_saver(os.path.join(basepath, 'photometry.png'), figsize=(8, 6), show=show) as fig:

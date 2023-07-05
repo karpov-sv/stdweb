@@ -3,6 +3,7 @@ from django.template.defaultfilters import stringfilter
 
 import datetime
 import uuid
+import humanize
 
 register = template.Library()
 
@@ -56,3 +57,8 @@ def unix(time):
 @register.filter
 def make_uuid(x):
     return str(uuid.uuid1())
+
+
+@register.filter
+def naturalsize(size):
+    return humanize.naturalsize(size, binary=True)
