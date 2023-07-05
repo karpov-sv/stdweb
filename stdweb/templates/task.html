@@ -3,6 +3,7 @@
 {% load tags %}
 {% load filters %}
 {% load wrapwith %}
+{% load crispy_forms_tags %}
 
 {% block head %}
   {% include "popup_image.html" %}
@@ -78,14 +79,32 @@
     {% endif %}
 
     <hr>
+    <h3>Initial inspection and masking</h3>
+
     <form action="" method="POST" class="mb-2">
       {% csrf_token %}
+
+      {% crispy form_inspect %}
+
       <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
       <button type="submit" name="action" value="cleanup_task" class="btn btn-danger">Cleanup</button>
+
+      <!-- Unsafe controls -->
+      <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#unsafeButtons"
+              aria-expanded="false"
+              aria-controls="unsafeButtons"
+              title="Show / hide unsafe controls">
+      </button>
+
+      <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
+        <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
+      </span>
     </form>
 
     <!-- Initial inspection -->
-    <hr>
+    <hr style="border-style: dotted">
     <div class="row mb-2">
       {% if 'inspect.log' in files %}
         <div class="col">
@@ -94,12 +113,14 @@
       {% endif %}
 
       {% if 'image.fits' in files %}
-        <div class="col">
+        <div class="col" style="max-width: 256px">
           {% include "task_block_image.html" with fits='image.fits' task=task only %}
+        </div>
+      {% endif %}
 
-        {% if 'mask.fits' in files %}
+      {% if 'mask.fits' in files %}
+        <div class="col" style="max-width: 256px">
           {% include "task_block_image.html" with fits='mask.fits' task=task only %}
-        {% endif %}
         </div>
       {% endif %}
     </div>
@@ -107,22 +128,34 @@
     <!-- Photometry and astrometry -->
     {% if 'inspect.log' in files and 'mask.fits' in files %}
       <hr>
+      <h3>Photometry and astrometry</h3>
+
       <form action="" method="POST" class="mb-2">
         {% csrf_token %}
+
+        {% crispy form_photometry %}
+
         <button type="submit" name="action" value="photometry_image" class="btn btn-primary">Run photometry</button>
       </form>
 
-      <hr>
+      <hr style="border-style: dotted">
       <div class="row mb-2">
         {% if 'photometry.log' in files %}
           <div class="col">
             {% include "task_block_text.html" with file='photometry.log' %}
           </div>
-        {% endif %}
 
-        {% if 'objects.png' in files %}
           <div class="col">
-            {% include "task_block_image.html" with image='objects.png' task=task only %}
+            <div class="row">
+          {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'astrometry_dist.png'  as list %}
+          {% for name in list %}
+            {% if name in files %}
+              <div class="col" style="max-width: 256px">
+                {% include "task_block_image.html" with image=name task=task only %}
+              </div>
+            {% endif %}
+          {% endfor %}
+            </div>
           </div>
         {% endif %}
       </div>
@@ -130,13 +163,5 @@
     {% endif %}
 
   {% endif %}
-
-  <!-- Management -->
-  {% wrapwith 'wrapper_card_collapsed.html' with title='Management' %}
-  <form action="" method="POST">
-    {% csrf_token %}
-    <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
-  </form>
-  {% endwrapwith %}
 
 {% endblock %}

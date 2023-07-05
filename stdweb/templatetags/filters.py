@@ -9,7 +9,7 @@ register = template.Library()
 
 @register.filter
 def header_to_string(header):
-    return header.tostring('\n')
+    return header.tostring('\n').strip()
 
 
 @register.filter

@@ -53,13 +53,12 @@ def fix_header(header, verbose=True):
         header.remove('FOCALLEN')
 
 
-def inspect_image(filename, config=None, verbose=True):
+def inspect_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
     basepath = os.path.dirname(filename)
 
-    config = config or dict()
     config['sn'] = config.get('sn', 5)
     config['initial_aper'] = config.get('initial_aper', 3)
     config['rel_aper'] = config.get('rel_aper', 1)
@@ -79,14 +78,17 @@ def inspect_image(filename, config=None, verbose=True):
     fix_header(header)
 
     # Guess some parameters from keywords
-    config['gain'] = config.get('gain', header.get('GAIN', 1))
+    if not config.get('gain'):
+        config['gain'] = header.get('GAIN', 1)
     log(f"Gain is {config['gain']:.2f}")
 
-    config['filter'] = config.get('filter', header.get('FILTER', 'unknown').strip())
+    if not config.get('filter'):
+        config['filter'] = header.get('FILTER', header.get('CAMFILT', 'unknown')).strip()
     log(f"Filter is {config['filter']}")
 
-    if 'saturation' not in config:
-        satlevel = header.get('SATURATE', header.get('DATAMAX'))
+    if not config.get('saturation'):
+        satlevel = header.get('SATURATE',
+                              header.get('DATAMAX'))
         if not satlevel:
             satlevel = 0.95*np.nanmax(image)
         config['saturation'] = satlevel
@@ -107,7 +109,8 @@ def inspect_image(filename, config=None, verbose=True):
 
     log(f"{np.sum(mask)} ({100*np.sum(mask)/mask.shape[0]/mask.shape[1]:.1f}%) pixels masked")
 
-    fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), overwrite=True)
+    fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
+    log("Mask written to mask.fits")
 
     # WCS
     wcs = WCS(header)
@@ -135,13 +138,14 @@ def inspect_image(filename, config=None, verbose=True):
             log("Target not resolved")
 
 
-def photometry_image(filename, config=None, verbose=True):
+    print(config)
+
+
+def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
     basepath = os.path.dirname(filename)
-
-    config = config or dict()
 
     # Image
     image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
@@ -164,6 +168,7 @@ def photometry_image(filename, config=None, verbose=True):
     # FWHM
     fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
     log(f"FWHM is {fwhm:.2f} pixels")
+    config['fwhm'] = fwhm
 
     # Forced photometry at objects positions
     obj = photometry.measure_objects(obj, image, mask=mask,
@@ -180,7 +185,7 @@ def photometry_image(filename, config=None, verbose=True):
     obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
 
     # Plot detected objects
-    with plots.figure_saver(os.path.join(basepath, 'objects.png'), figsize=(8, 6)) as fig:
+    with plots.figure_saver(os.path.join(basepath, 'objects.png'), figsize=(8, 6), show=show,) as fig:
         ax = fig.add_subplot(1, 1, 1)
         idx = obj['flags'] == 0
         ax.plot(obj['x'][idx], obj['y'][idx], '.', label='Unflagged')
@@ -190,3 +195,81 @@ def photometry_image(filename, config=None, verbose=True):
         ax.set_ylim(0, image.shape[0])
         # ax.legend()
         ax.set_title(f"Detected objects: {np.sum(idx)} unmasked, {np.sum(~idx)} masked")
+
+    # Plot FWHM
+    with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=True) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        idx = obj['flags'] == 0
+        plots.binned_map(obj[idx]['x'], obj[idx]['y'], obj[idx]['fwhm'], bins=8, statistic='median', show_dots=True, ax=ax)
+        ax.set_aspect(1)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])
+        # ax.legend()
+        ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
+
+    # Catalogue settings
+    config['cat_name'] = 'gaiadr3syn'
+
+    if config['cat_name'] == 'gaiadr3syn':
+        config['cat_col_mag'] = config['filter'] + 'mag'
+        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
+
+        config['cat_col_color_mag1'] = 'Bmag'
+        config['cat_col_color_mag2'] = 'Vmag'
+    else:
+        config['cat_col_mag'] = fname + 'mag'
+        config['cat_col_mag_err'] = 'e_rmag'
+
+        config['cat_col_color_mag1'] = 'gmag'
+        config['cat_col_color_mag2'] = 'rmag'
+
+    # Get initial WCS
+    wcs = WCS(header)
+
+    obj['ra'],obj['dec'] = wcs.all_pix2world(obj['x'], obj['y'], 0)
+
+    # Get reference catalogue
+    ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, width=image.shape[1], height=image.shape[0])
+    pixscale = astrometry.get_pixscale(wcs=wcs)
+
+    log(f"Field center is at {ra0:.3f} {dec0:.3f}, radius {sr0:.2f} deg, scale {3600*pixscale:.2f} arcsec/pix")
+
+    cat = catalogs.get_cat_vizier(ra0, dec0, sr0, config['cat_name'], filters={'rmag':'<20'})
+
+    log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
+
+    # Photometric calibration
+    m = pipeline.calibrate_photometry(obj, cat, pixscale=pixscale,
+                                      cat_col_mag=config['cat_col_mag'],
+                                      cat_col_mag_err=config['cat_col_mag_err'],
+                                      cat_col_mag1=config.get('cat_col_color_mag1'),
+                                      cat_col_mag2=config.get('cat_col_color_mag2'),
+                                      order=config['spatial_order'],
+                                      robust=True, scale_noise=True,
+                                      accept_flags=0x02, max_intrinsic_rms=0.01,
+                                      verbose=verbose)
+
+    # Plot photometric solution
+    with plots.figure_saver(os.path.join(basepath, 'photometry.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(2, 1, 1)
+        plots.plot_photometric_match(m, mode='mag', ax=ax)
+        ax = fig.add_subplot(2, 1, 2)
+        plots.plot_photometric_match(m, mode='color', ax=ax)
+
+    with plots.figure_saver(os.path.join(basepath, 'photometry_unmasked.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(2, 1, 1)
+        plots.plot_photometric_match(m, mode='mag', show_masked=False, ax=ax)
+        ax = fig.add_subplot(2, 1, 2)
+        plots.plot_photometric_match(m, mode='color', show_masked=False, ax=ax)
+
+    with plots.figure_saver(os.path.join(basepath, 'photometry_zeropoint.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.plot_photometric_match(m, mode='zero', show_dots=True, bins=8, ax=ax)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])
+
+    with plots.figure_saver(os.path.join(basepath, 'astrometry_dist.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.plot_photometric_match(m, mode='dist', show_dots=True, bins=8, ax=ax)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])

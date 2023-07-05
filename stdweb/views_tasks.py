@@ -13,6 +13,7 @@ import os, glob
 from . import settings
 from . import views
 from . import models
+from . import forms
 from . import celery_tasks
 from . import celery
 
@@ -31,39 +32,60 @@ def tasks(request, id=None):
                 task.state = 'failed' # Should we do it?
                 task.save()
 
+        all_forms = {}
+
+        all_forms['inspect'] = forms.TaskInspectForm(request.POST or None, initial = task.config)
+        all_forms['photometry'] = forms.TaskPhotometryForm(request.POST or None, initial = task.config)
+
+        for name,form in all_forms.items():
+            context['form_'+name] = form
+
         # Form actions
         if request.method == 'POST':
-            action = request.POST.get('action')
+            # Handle forms
+            form_type = request.POST.get('form_type')
+            form = all_forms.get(form_type)
+            if form and form.is_valid():
+                if form.has_changed():
+                    for name,value in form.cleaned_data.items():
+                        if name not in ['form_type']:  # we do not want it to go to task.config
+                            if name in form.changed_data: # update only changed fields
+                                task.config[name] = value
 
-            if action == 'delete_task':
-                if request.user.is_staff or request.user == task.user:
-                    task.delete()
-                    messages.success(request, "Task " + str(id ) + " is deleted")
-                    return HttpResponseRedirect(reverse('tasks'))
-                else:
-                    messages.error(request, "Cannot delete task " + str(id) + " belonging to " + task.user.username)
-                    return HttpResponseRedirect(request.path_info)
+                    task.save()
 
-            if action == 'cleanup_task':
-                task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
-                task.config = {} # should we reset the config on cleanup?..
-                task.state = 'cleaning'
-                task.save()
-                messages.success(request, "Started cleanup for task " + str(id))
+                # Handle actions
+                action = request.POST.get('action')
 
-            if action == 'inspect_image':
-                task.celery_id = celery_tasks.task_inspect.delay(task.id).id
-                task.state = 'inspecting'
-                task.save()
-                messages.success(request, "Started image inspecion for task " + str(id))
+                if action == 'delete_task':
+                    if request.user.is_staff or request.user == task.user:
+                        task.delete()
+                        messages.success(request, "Task " + str(id ) + " is deleted")
+                        return HttpResponseRedirect(reverse('tasks'))
+                    else:
+                        messages.error(request, "Cannot delete task " + str(id) + " belonging to " + task.user.username)
+                        return HttpResponseRedirect(request.path_info)
 
-            if action == 'photometry_image':
-                task.celery_id = celery_tasks.task_photometry.delay(task.id).id
-                task.state = 'processing'
-                task.save()
-                messages.success(request, "Started image photometry for task " + str(id))
+                if action == 'cleanup_task':
+                    task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
+                    task.config = {} # should we reset the config on cleanup?..
+                    task.state = 'cleaning'
+                    task.save()
+                    messages.success(request, "Started cleanup for task " + str(id))
 
-            return HttpResponseRedirect(request.path_info)
+                if action == 'inspect_image':
+                    task.celery_id = celery_tasks.task_inspect.delay(task.id).id
+                    task.state = 'inspecting'
+                    task.save()
+                    messages.success(request, "Started image inspection for task " + str(id))
+
+                if action == 'photometry_image':
+                    task.celery_id = celery_tasks.task_photometry.delay(task.id).id
+                    task.state = 'processing'
+                    task.save()
+                    messages.success(request, "Started image photometry for task " + str(id))
+
+                return HttpResponseRedirect(request.path_info)
 
         # Display task
         context['task'] = task

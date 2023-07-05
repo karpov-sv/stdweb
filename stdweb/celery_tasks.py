@@ -5,8 +5,19 @@ import os, glob, shutil
 
 from functools import partial
 
+import numpy as np
+
 from . import models
 from . import processing
+
+
+def fix_config(config):
+    """
+    Fix non-serializable Numpy types in config
+    """
+    for key in config.keys():
+        if type(config[key]) == np.float32:
+            config[key] = float(config[key])
 
 
 @shared_task(bind=True)
@@ -40,6 +51,7 @@ def task_inspect(self, id):
     # Start processing
     try:
         processing.inspect_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+        fix_config(config)
         task.state = 'inspected'
     except:
         import traceback
@@ -51,7 +63,6 @@ def task_inspect(self, id):
     # End processing
     task.celery_id = None
     task.save()
-
 
 @shared_task(bind=True)
 def task_photometry(self, id):
@@ -66,6 +77,7 @@ def task_photometry(self, id):
     # Start processing
     try:
         processing.photometry_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+        fix_config(config)
         task.state = 'photometry'
     except:
         import traceback

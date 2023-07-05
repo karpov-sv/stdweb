@@ -23,7 +23,7 @@ class Task(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
-    config = models.JSONField(default=dict) #
+    config = models.JSONField(default=dict, blank=True) #
 
     def path(self):
         return os.path.join(settings.TASKS_PATH, str(self.id))

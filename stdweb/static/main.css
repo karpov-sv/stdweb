@@ -66,3 +66,12 @@
     content:'\f078';
     float:right;
 }
+
+.collapse-chevron-horizontal:after {
+    font-family:Fontawesome;
+    content:'\f053';
+}
+.collapse-chevron-horizontal.collapsed:after {
+    font-family:Fontawesome;
+    content:'\f054';
+}

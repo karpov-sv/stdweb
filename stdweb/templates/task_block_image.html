@@ -6,7 +6,7 @@
     <!-- FITS files -->
     <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.modified|unix }}"
          class="figure-img img-fluid rounded"
-         onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1})"/>
+         onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.target_ra or task.config.target_dec %}'data-mark-ra':{{ task.config.target_ra }}, 'data-mark-dec':{{ task.config.target_dec }}{% endif %}})"/>
 
     <figcaption class="figure-caption text-center">
       <small><a href="{% url 'task_download' task.id fits %}">{{ fits }}</a></small>
