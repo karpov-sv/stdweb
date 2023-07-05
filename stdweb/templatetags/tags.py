@@ -2,6 +2,7 @@ from django import template
 from django.template.defaultfilters import stringfilter
 
 import os
+import uuid
 
 from astropy.io import fits
 
@@ -33,7 +34,7 @@ def task_fits_header(task, filename):
         header = fits.getheader(path)
         contents = header.tostring('\n')
     except:
-        context = "Cannot get FITS header from " + filename
+        contents = "Cannot get FITS header from " + filename
 
     return contents
 
@@ -44,22 +45,24 @@ def make_uuid():
 
 
 # Code borrowed from https://stackoverflow.com/a/3715794
-@register.tag
+@register.tag('make_list')
 def make_list(parser, token):
-  bits = list(token.split_contents())
-  if len(bits) >= 4 and bits[-2] == "as":
-    varname = bits[-1]
-    items = bits[1:-2]
-    return MakeListNode(items, varname)
-  else:
-    raise template.TemplateSyntaxError("%r expected format is 'item [item ...] as varname'" % bits[0])
+    bits = token.contents.split()
+    if len(bits) >= 4 and bits[-2] == "as":
+        varname = bits[-1]
+        items = bits[1:-2]
+        return MakeListNode(items, varname)
+    else:
+        raise template.TemplateSyntaxError("%r expected format is 'item [item ...] as varname'" % bits[0])
 
 
 class MakeListNode(template.Node):
-  def __init__(self, items, varname):
-    self.items = map(template.Variable, items)
-    self.varname = varname
+    def __init__(self, items, varname):
+        print("__init__")
+        self.items = items
+        self.varname = varname
 
-  def render(self, context):
-    context[self.varname] = [ i.resolve(context) for i in self.items ]
-    return ""
+    def render(self, context):
+        items = map(template.Variable, self.items)
+        context[self.varname] = [ i.resolve(context) for i in items ]
+        return ""
