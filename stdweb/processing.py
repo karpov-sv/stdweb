@@ -15,6 +15,8 @@ import time
 
 import dill as pickle
 
+from . import settings
+
 # STDPipe
 from stdpipe import astrometry, photometry, catalogs, cutouts
 from stdpipe import templates, subtraction, plots, pipeline, utils, psf
@@ -116,6 +118,8 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['spatial_order'] = config.get('spatial_order', 2)
     config['minarea'] = config.get('minarea', 5)
     config['use_color'] = config.get('use_color', True)
+    config['refine_wcs'] = config.get('refine_wcs', True)
+    config['blind_match_wcs'] = config.get('blind_match_wcs', False)
 
     # Load the image
     log(f'Inspecting {filename}')
@@ -198,7 +202,8 @@ def inspect_image(filename, config, verbose=True, show=False):
         log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
     else:
         ra0,dec0,sr0 = None,None,None
-        log("No usable WCS found")
+        config['blind_match_wcs'] = True
+        log("No usable WCS found, blind matching enabled")
 
     # Target?..
     if not 'target' in config:
@@ -210,7 +215,7 @@ def inspect_image(filename, config, verbose=True, show=False):
             target = SkyCoord.from_name(config['target'])
             config['target_ra'] = target.ra.deg
             config['target_dec'] = target.dec.deg
-            log(f"Resolved to {config['target_ra']:.3f} {config['target_ra']:.3f}")
+            log(f"Resolved to {config['target_ra']:.3f} {config['target_dec']:.3f}")
         except:
             log("Target not resolved")
 
@@ -219,6 +224,11 @@ def inspect_image(filename, config, verbose=True, show=False):
             cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
             fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
             log("Target cutout written to image_target.fits")
+
+        if config.get('target_ra') is not None and config.get('blind_match_ra0') is None:
+            config['blind_match_ra0'] = config.get('target_ra')
+        if config.get('target_dec') is not None and config.get('blind_match_dec0') is None:
+            config['blind_match_dec0'] = config.get('target_dec')
 
     # Suggested catalogue
     if not config.get('cat_name'):
@@ -262,18 +272,24 @@ def photometry_image(filename, config, verbose=True, show=False):
         if os.path.exists(fullname):
             os.unlink(fullname)
 
+    log("\n---- Object detection ----\n")
+
     # Extract objects
     obj = photometry.get_objects_sextractor(image, mask=mask,
                                             aper=config.get('initial_aper', 3.0),
                                             gain=config.get('gain', 1.0),
                                             extra={'BACK_SIZE': config.get('bg_size', 256)},
                                             minarea=config.get('minarea', 3),
-                                            verbose=verbose)
+                                            verbose=verbose,
+                                            _tmpdir=settings.STDPIPE_TMPDIR,
+                                            _exe=settings.STDPIPE_SEXTRACTOR)
 
     log(f"{len(obj)} objects found")
 
     if not len(obj):
         raise RuntimeError('Cannot detect objects on the image')
+
+    log("\n---- Object measurement ----\n")
 
     # FWHM
     fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
@@ -337,6 +353,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         config['cat_col_color_mag1'] = 'gmag'
         config['cat_col_color_mag2'] = 'rmag'
 
+    log("\n---- Initial astrometry ----\n")
+
     # Get initial WCS
     if os.path.exists(os.path.join(basepath, "image.wcs")):
         wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
@@ -347,10 +365,48 @@ def photometry_image(filename, config, verbose=True, show=False):
         wcs = WCS(header)
         log("Using original WCS from FITS header")
 
+    if config['blind_match_wcs']:
+        # Blind match WCS
+        log("Will try blind matching for WCS solution")
+
+        # Get lowest S/N where we have at least 20 stars
+        sn_vals = obj['flux']/obj['fluxerr']
+        for sn0 in range(20, 1, -1):
+            if np.sum(sn_vals >= sn0) > 20:
+                break
+
+        log(f"SN0 = {sn0:.1f}, N0 = {np.sum(sn_vals >= sn0)}")
+
+        if np.sum(sn_vals >= sn0) < 10:
+            raise RuntimeError('Too few good objects for blind matching')
+
+        wcs = astrometry.blind_match_objects(obj[:500],
+                                             center_ra=config.get('target_ra'),
+                                             center_dec=config.get('target_dec'),
+                                             radius=1, # FIXME: make configurable!
+                                             scale_lower=0.2,
+                                             scale_upper=4.0,
+                                             sn=sn0,
+                                             verbose=verbose,
+                                             _tmpdir=settings.STDPIPE_TMPDIR,
+                                             _exe=settings.STDPIPE_SOLVE_FIELD,
+                                             config=settings.STDPIPE_SOLVE_FIELD_CONFIG)
+
+        if wcs is not None and wcs.is_celestial:
+            astrometry.store_wcs(os.path.join(basepath, "image.wcs"), wcs)
+            astrometry.clear_wcs(header)
+            header += wcs.to_header(relax=True)
+            config['blind_match_wcs'] = False
+            log("Blind matched WCS stored to image.wcs")
+        else:
+            log("Blind matching failed")
+
     if wcs is None or not wcs.is_celestial:
         raise RuntimeError('No WCS astrometric solution')
 
     obj['ra'],obj['dec'] = wcs.all_pix2world(obj['x'], obj['y'], 0)
+
+    log("\n---- Reference catalogue ----\n")
 
     # Get reference catalogue
     ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, width=image.shape[1], height=image.shape[0])
@@ -372,11 +428,15 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Astrometric refinement
     if config.get('refine_wcs', False):
+        log("\n---- Astrometric refinement ----\n")
+
         wcs1 = pipeline.refine_astrometry(obj, cat, 5*fwhm*pixscale,
                                           wcs=wcs, order=3, method='scamp',
                                           cat_col_mag=config.get('cat_col_mag'),
                                           cat_col_mag_err=config.get('cat_col_mag_err'),
-                                          verbose=verbose)
+                                          verbose=verbose,
+                                          _tmpdir=settings.STDPIPE_TMPDIR,
+                                          _exe=settings.STDPIPE_SCAMP)
         if wcs1 is None or not wcs1.is_celestial:
             raise RuntimeError('WCS refinement failed')
         else:
@@ -384,7 +444,10 @@ def photometry_image(filename, config, verbose=True, show=False):
             astrometry.store_wcs(os.path.join(basepath, "image.wcs"), wcs)
             astrometry.clear_wcs(header)
             header += wcs.to_header(relax=True)
+            config['refine_wcs'] = False
             log("Refined WCS stored to image.wcs")
+
+    log("\n---- Photometric calibration ----\n")
 
     # Photometric calibration
     m = pipeline.calibrate_photometry(obj, cat, pixscale=pixscale,

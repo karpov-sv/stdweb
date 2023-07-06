@@ -141,8 +141,8 @@ LOGIN_REDIRECT_URL = 'index'
 LOGOUT_REDIRECT_URL = 'index'
 
 # Paths for STDWeb
-DATA_PATH = config('DATA_PATH', default='data/', cast=str)
-TASKS_PATH = config('TASKS_PATH', default='tasks/', cast=str)
+DATA_PATH = config('DATA_PATH', default='data/')
+TASKS_PATH = config('TASKS_PATH', default='tasks/')
 
 # Messages
 from django.contrib.messages import constants as messages
@@ -171,3 +171,18 @@ CACHES = {
     #     "LOCATION": "unique-snowflake",
     # }
 }
+
+# Settings for STDPipe
+
+# Temporary folder
+STDPIPE_TMPDIR = config('STDPIPE_TMPDIR', default=None)
+# Path to Astrometry.Net executable
+STDPIPE_SOLVE_FIELD = config('STDPIPE_SOLVE_FIELD', default=None)
+# Path to Astrometry.Net config
+STDPIPE_SOLVE_FIELD_CONFIG = config('STDPIPE_SOLVE_FIELD_CONFIG', default=None)
+# Path to SExtractor executable
+STDPIPE_SEXTRACTOR = config('STDPIPE_SEXTRACTOR', default=None)
+# Path to SCAMP executable
+STDPIPE_SCAMP = config('STDPIPE_SCAMP', default=None)
+# Path to SWarp executable
+STDPIPE_SWARP = config('STDPIPE_SWARP', default=None)

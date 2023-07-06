@@ -5,10 +5,10 @@
 
     <!-- FITS files -->
     <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.modified|unix }}"
-         class="figure-img img-fluid rounded" style="max-width: 256px;"
+         class="figure-img img-fluid rounded mb-0" style="max-width: 256px;"
          onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.target_ra or task.config.target_dec %}'data-mark-ra':{{ task.config.target_ra }}, 'data-mark-dec':{{ task.config.target_dec }}{% endif %}})"/>
 
-    <figcaption class="figure-caption text-center">
+    <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_download' task.id fits %}">{{ fits }}</a></small>
     </figcaption>
 
@@ -16,10 +16,10 @@
 
     <!-- Normal image -->
     <img src="{% url 'task_view' task.id image %}"
-         class="figure-img img-fluid rounded" style="max-width: 256px;"
+         class="figure-img img-fluid rounded mb-0" style="max-width: 256px;"
          onclick="popupImage(event, '{% url 'task_view' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true)"/>
 
-    <figcaption class="figure-caption text-center">
+    <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_view' task.id image %}">{{ image }}</a></small>
     </figcaption>
 

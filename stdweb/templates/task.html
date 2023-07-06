@@ -8,36 +8,56 @@
 {% block head %}
   {% include "popup_image.html" %}
 
-  {% if task.celery_id %}
-    <script language="javascript">
-     var update_timer = 0;
-     var update_timeout = 3000;
+  <script language="javascript">
+   {% if task.celery_id %}
 
-     update = function(){
-       $.ajax({
-         url: "{% url 'queue_state' task.celery_id %}",
-         dataType: "json",
-         timeout: 3000,
+   var update_timer = 0;
+   var update_timeout = 3000;
 
-         success: function(json){
-           $('#celery_state').html(json.state);
-           if(json.state == 'SUCCESS' || json.state == 'FAILURE' || json.state == 'REVOKED'){
-             location.reload();
-           }
-         },
+   update = function(){
+     $.ajax({
+       url: "{% url 'queue_state' task.celery_id %}",
+       dataType: "json",
+       timeout: 3000,
 
-         complete: function(xhr, status) {
-           setTimeout(update, update_timeout);
+       success: function(json){
+         $('#celery_state').html(json.state);
+         if(json.state == 'SUCCESS' || json.state == 'FAILURE' || json.state == 'REVOKED'){
+           location.reload();
          }
-       });
-     }
+       },
 
-     $(function(){
-       setTimeout(update, update_timeout);
+       complete: function(xhr, status) {
+         setTimeout(update, update_timeout);
+       }
      });
+   }
 
-    </script>
-  {% endif %}
+   $(function(){
+     setTimeout(update, update_timeout);
+   });
+
+   {% endif %}
+
+   check_blindmatch_visibility = function(){
+     var checked = $('#id_blind_match_wcs').prop('checked');
+
+     for(var name of ['blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_ra0', 'blind_match_dec0', 'blind_match_sr0']){
+       var elem = $('#div_id_' + name);
+       if(checked && elem.is(':hidden')){
+         elem.show();
+       } else if(!checked && elem.is(':visible')){
+         elem.hide();
+       }
+     }
+   }
+
+   $(function(){
+     $('#id_blind_match_wcs').on('change', check_blindmatch_visibility);
+     check_blindmatch_visibility();
+   });
+
+  </script>
 
 {% endblock %}
 
@@ -92,24 +112,28 @@
     {% if user.is_authenticated %}
       <form action="" method="POST" class="mb-2">
         {% csrf_token %}
+        <fieldset {% if task.celery_id %}disabled{% endif %}>
 
-        {% crispy form_inspect %}
+          {% crispy form_inspect %}
 
-        <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
-        <button type="submit" name="action" value="cleanup_task" class="btn btn-danger">Cleanup</button>
+          <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
+          <button type="submit" name="action" value="cleanup_task" class="btn btn-danger"
+                  title="Delete all processing results and configurations">Cleanup</button>
 
-        <!-- Unsafe controls -->
-        <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#unsafeButtons"
-                aria-expanded="false"
-                aria-controls="unsafeButtons"
-                title="Show / hide unsafe controls">
-        </button>
+          <!-- Unsafe controls -->
+          <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#unsafeButtons"
+                  aria-expanded="false"
+                  aria-controls="unsafeButtons"
+                  title="Show / hide unsafe controls">
+          </button>
 
-        <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
-          <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
-        </span>
+          <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
+            <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
+          </span>
+
+        </fieldset>
       </form>
     {% endif %}
 
@@ -145,10 +169,12 @@
       {% if user.is_authenticated %}
         <form action="" method="POST" class="mb-2">
           {% csrf_token %}
+          <fieldset {% if task.celery_id %}disabled{% endif %}>
 
-          {% crispy form_photometry %}
+            {% crispy form_photometry %}
 
-          <button type="submit" name="action" value="photometry_image" class="btn btn-primary">Run photometry</button>
+            <button type="submit" name="action" value="photometry_image" class="btn btn-primary">Run photometry</button>
+          </fieldset>
         </form>
       {% endif %}
 

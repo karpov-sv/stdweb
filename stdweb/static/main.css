@@ -75,3 +75,7 @@
     font-family:Fontawesome;
     content:'\f054';
 }
+
+.form-label {
+    margin-bottom: 0.1em;
+}
