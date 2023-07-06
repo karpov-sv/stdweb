@@ -14,8 +14,6 @@ class UploadFileForm(forms.Form):
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
     target = forms.CharField(max_length=50, required=False, empty_value=None, label="Target name or coordinates")
-    filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
-                               required=False, label="Filter")
     gain = forms.FloatField(min_value=0, required=False, label="Gain, e/ADU")
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
     mask_cosmics = forms.BooleanField(initial=True, required=False, label="Mask cosmics")
@@ -28,7 +26,6 @@ class TaskInspectForm(forms.Form):
             'form_type',
             'target',
             Row(
-                Column('filter'),
                 Column('gain'),
                 Column('saturation'),
                 css_class='align-items-end'
@@ -46,6 +43,8 @@ class TaskPhotometryForm(forms.Form):
     minarea = forms.IntegerField(min_value=0, required=False, label="Minimal object area")
     rel_aper = forms.FloatField(min_value=0, required=False, label="Relative aperture, FWHM")
 
+    filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
+                               required=False, label="Filter")
     cat_name = forms.ChoiceField(choices=[('','')] + [(_,supported_catalogs[_]['name']) for _ in supported_catalogs.keys()],
                                 required=False, label="Reference catalog")
     cat_limit = forms.FloatField(required=False, label="Catalog limiting mag")
@@ -69,6 +68,7 @@ class TaskPhotometryForm(forms.Form):
                 css_class='align-items-end'
             ),
             Row(
+                Column('filter'),
                 Column('cat_name'),
                 Column('cat_limit'),
                 Column('use_color'),

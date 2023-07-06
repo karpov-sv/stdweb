@@ -13,6 +13,8 @@ from astropy.time import Time
 import astroscrappy
 import time
 
+import dill as pickle
+
 # STDPipe
 from stdpipe import astrometry, photometry, catalogs, cutouts
 from stdpipe import templates, subtraction, plots, pipeline, utils, psf
@@ -32,13 +34,13 @@ supported_filters = {
     'B': {'name':'Johnson-Cousins B', 'aliases':[]},
     'V': {'name':'Johnson-Cousins V', 'aliases':[]},
     'R': {'name':'Johnson-Cousins R', 'aliases':["Rc"]},
-    'I': {'name':'Johnson-Cousins I', 'aliases':["Ic"]},
+    'I': {'name':'Johnson-Cousins I', 'aliases':["Ic", "I'"]},
     # Sloan-like
-    'u': {'name':'Sloan u', 'aliases':["SDSS-u", "SDSS-u'", "Sloan-u"]},
-    'g': {'name':'Sloan g', 'aliases':["SDSS-g", "SDSS-g'", "Sloan-g"]},
-    'r': {'name':'Sloan r', 'aliases':["SDSS-r", "SDSS-r'", "Sloan-r"]},
-    'i': {'name':'Sloan i', 'aliases':["SDSS-i", "SDSS-i'", "Sloan-i"]},
-    'z': {'name':'Sloan z', 'aliases':["SDSS-z", "SDSS-z'", "Sloan-z"]},
+    'u': {'name':'Sloan u', 'aliases':["sdssu", "SDSS-u", "SDSS-u'", "Sloan-u", "sloanu"]},
+    'g': {'name':'Sloan g', 'aliases':["sdssg", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "SG", "sG"]},
+    'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "SR", "sR"]},
+    'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "SI", "sI"]},
+    'z': {'name':'Sloan z', 'aliases':["sdssz", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz"]},
     # Gaia
     'G': {'name':'Gaia G', 'aliases':[]},
     'BP': {'name':'Gaia BP', 'aliases':[]},
@@ -46,9 +48,16 @@ supported_filters = {
 }
 
 supported_catalogs = {
-    'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y']},
-    'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z']},
-    'skymapper': {'name':'SkyMapper DR1.1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z']},
+    'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
+                   'limit': 'Gmag'},
+    'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
+            'limit':'rmag'},
+    'skymapper': {'name':'SkyMapper DR1.1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
+                  'limit':'rPSF'},
+    'atlas': {'name':'ATLAS-REFCAT2', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
+              'limit':'rmag'},
+    'gaiaedr3': {'name':'Gaia eDR3', 'filters':['G', 'BP', 'RP'],
+              'limit':'Gmag'},
 }
 
 def print_to_file(*args, clear=False, logname='out.log', **kwargs):
@@ -61,6 +70,13 @@ def print_to_file(*args, clear=False, logname='out.log', **kwargs):
         with open(logname, 'a+') as lfd:
             print(file=lfd, *args, **kwargs)
 
+def pickle_to_file(filename, obj):
+    with open(filename, 'wb') as f:
+        pickle.dump(obj, f)
+
+def pickle_from_file(filename):
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
 
 def fix_header(header, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
@@ -84,6 +100,12 @@ def inspect_image(filename, config, verbose=True, show=False):
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
     basepath = os.path.dirname(filename)
+
+    # Cleanup stale plots
+    for name in ['mask.fits', 'image_target.fits']:
+        fullname = os.path.join(basepath, name)
+        if os.path.exists(fullname):
+            os.unlink(fullname)
 
     config['sn'] = config.get('sn', 5)
     config['initial_aper'] = config.get('initial_aper', 3)
@@ -160,7 +182,15 @@ def inspect_image(filename, config, verbose=True, show=False):
     log("Mask written to mask.fits")
 
     # WCS
-    wcs = WCS(header)
+    if os.path.exists(os.path.join(basepath, "image.wcs")):
+        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
+        astrometry.clear_wcs(header)
+        header += wcs.to_header(relax=True)
+        log("WCS loaded from image.wcs")
+    else:
+        wcs = WCS(header)
+        log("Using original WCS from FITS header")
+
     if wcs and wcs.is_celestial:
         ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, width=image.shape[1], height=image.shape[0])
         pixscale = astrometry.get_pixscale(wcs=wcs)
@@ -185,10 +215,18 @@ def inspect_image(filename, config, verbose=True, show=False):
         except:
             log("Target not resolved")
 
+        if (config.get('target_ra') or config.get('target_dec')) and wcs and wcs.is_celestial:
+            x0,y0 = wcs.all_world2pix(config.get('target_ra'), config.get('target_dec'), 0)
+            cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
+            fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
+            log("Target cutout written to image_target.fits")
+
     # Suggested catalogue
     if not config.get('cat_name'):
         if config['filter'] in ['U', 'B', 'V', 'R', 'I']:
             config['cat_name'] = 'gaiadr3syn'
+        elif config['filter'] in ['G', 'BP', 'RP']:
+            config['cat_name'] = 'gaiaedr3'
         else:
             config['cat_name'] = 'ps1'
 
@@ -218,7 +256,9 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Cleanup stale plots
     for name in ['photometry.png', 'photometry_unmasked.png',
-                 'photometry_zeropoint.png', 'astrometry_dist.png']:
+                 'photometry_zeropoint.png', 'photometry_model.png',
+                 'photometry_residuals.png', 'astrometry_dist.png',
+                 'photometry.pickle']:
         fullname = os.path.join(basepath, name)
         if os.path.exists(fullname):
             os.unlink(fullname)
@@ -285,15 +325,28 @@ def photometry_image(filename, config, verbose=True, show=False):
 
         config['cat_col_color_mag1'] = 'Bmag'
         config['cat_col_color_mag2'] = 'Vmag'
+    elif config['cat_name'] == 'gaiaedr3':
+        config['cat_col_mag'] = config['filter'] + 'mag'
+        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
+
+        config['cat_col_color_mag1'] = 'BPmag'
+        config['cat_col_color_mag2'] = 'RPmag'
     else:
         config['cat_col_mag'] = config['filter'] + 'mag'
-        config['cat_col_mag_err'] = 'e_rmag'
+        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
 
         config['cat_col_color_mag1'] = 'gmag'
         config['cat_col_color_mag2'] = 'rmag'
 
     # Get initial WCS
-    wcs = WCS(header)
+    if os.path.exists(os.path.join(basepath, "image.wcs")):
+        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
+        astrometry.clear_wcs(header)
+        header += wcs.to_header(relax=True)
+        log("WCS loaded from image.wcs")
+    else:
+        wcs = WCS(header)
+        log("Using original WCS from FITS header")
 
     if wcs is None or not wcs.is_celestial:
         raise RuntimeError('No WCS astrometric solution')
@@ -313,6 +366,27 @@ def photometry_image(filename, config, verbose=True, show=False):
     if not len(cat):
         raise RuntimeError('Cannot get catalogue stars')
 
+    if not (config['cat_col_mag'] in cat.colnames and
+            (not config.get('cat_col_color_mag1') or config['cat_col_color_mag1'] in cat.colnames) and
+            (not config.get('cat_col_color_mag2') or config['cat_col_color_mag2'] in cat.colnames)):
+        raise RuntimeError('Catalogue does not have required magnitudes')
+
+    # Astrometric refinement
+    if config['refine_wcs']:
+        wcs1 = pipeline.refine_astrometry(obj, cat, 5*fwhm*pixscale,
+                                          wcs=wcs, order=3, method='scamp',
+                                          cat_col_mag=config['cat_col_mag'],
+                                          cat_col_mag_err=config.get('cat_col_mag_err'),
+                                          verbose=verbose)
+        if wcs1 is None or not wcs1.is_celestial:
+            raise RuntimeError('WCS refinement failed')
+        else:
+            wcs = wcs1
+            astrometry.store_wcs(os.path.join(basepath, "image.wcs"), wcs)
+            astrometry.clear_wcs(header)
+            header += wcs.to_header(relax=True)
+            log("Refined WCS stored to image.wcs")
+
     # Photometric calibration
     m = pipeline.calibrate_photometry(obj, cat, pixscale=pixscale,
                                       cat_col_mag=config['cat_col_mag'],
@@ -327,6 +401,10 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     if m is None:
         raise RuntimeError('Photometric match failed')
+
+    # Store photometric solution
+    pickle_to_file(os.path.join(basepath, 'photometry.pickle'), m)
+    log("Photometric solution stored to photometry.pickle")
 
     # Plot photometric solution
     with plots.figure_saver(os.path.join(basepath, 'photometry.png'), figsize=(8, 6), show=show) as fig:

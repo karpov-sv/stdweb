@@ -8,3 +8,4 @@ celery
 django-celery-results
 redis
 humanize
+dill
