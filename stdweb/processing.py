@@ -36,11 +36,11 @@ supported_filters = {
     'R': {'name':'Johnson-Cousins R', 'aliases':["Rc"]},
     'I': {'name':'Johnson-Cousins I', 'aliases':["Ic", "I'"]},
     # Sloan-like
-    'u': {'name':'Sloan u', 'aliases':["sdssu", "SDSS-u", "SDSS-u'", "Sloan-u", "sloanu"]},
-    'g': {'name':'Sloan g', 'aliases':["sdssg", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "SG", "sG"]},
-    'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "SR", "sR"]},
-    'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "SI", "sI"]},
-    'z': {'name':'Sloan z', 'aliases':["sdssz", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz"]},
+    'u': {'name':'Sloan u', 'aliases':["sdssu", "SDSS u", "SDSS-u", "SDSS-u'", "Sloan-u", "sloanu"]},
+    'g': {'name':'Sloan g', 'aliases':["sdssg", "SDSS g", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "SG", "sG"]},
+    'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS r", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "SR", "sR"]},
+    'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS i", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "SI", "sI"]},
+    'z': {'name':'Sloan z', 'aliases':["sdssz", "SDSS z", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz"]},
     # Gaia
     'G': {'name':'Gaia G', 'aliases':[]},
     'BP': {'name':'Gaia BP', 'aliases':[]},
@@ -360,10 +360,10 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     cat = catalogs.get_cat_vizier(ra0, dec0, sr0, config['cat_name'], filters={'rmag':'<20'})
 
-    log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
-
-    if not len(cat):
+    if not cat or not len(cat):
         raise RuntimeError('Cannot get catalogue stars')
+
+    log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
 
     if not (config['cat_col_mag'] in cat.colnames and
             (not config.get('cat_col_color_mag1') or config['cat_col_color_mag1'] in cat.colnames) and
