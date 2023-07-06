@@ -116,7 +116,6 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['spatial_order'] = config.get('spatial_order', 2)
     config['minarea'] = config.get('minarea', 5)
     config['use_color'] = config.get('use_color', True)
-    config['mask_cosmics'] = config.get('mask_cosmics', True)
 
     # Load the image
     log(f'Inspecting {filename}')
@@ -165,10 +164,10 @@ def inspect_image(filename, config, verbose=True, show=False):
     mask |= image >= config['saturation']
 
     # Cosmics
-    if config['mask_cosmics']:
+    if config.get('mask_cosmics', True):
         cmask, cimage = astroscrappy.detect_cosmics(image, mask, verbose=False,
-                                                    gain=config['gain'],
-                                                    satlevel=config['saturation'],
+                                                    gain=config.get('gain', 1),
+                                                    satlevel=config.get('saturation'),
                                                     cleantype='medmask')
         log(f"Done masking cosmics, {np.sum(cmask)} ({100*np.sum(cmask)/cmask.shape[0]/cmask.shape[1]:.1f}%) pixels masked")
         mask |= cmask
@@ -205,7 +204,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if not 'target' in config:
         config['target'] = header.get('TARGET')
 
-    if config['target']:
+    if config.get('target'):
         log(f"Target is {config['target']}")
         try:
             target = SkyCoord.from_name(config['target'])
@@ -319,13 +318,13 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
 
     # Catalogue settings
-    if config['cat_name'] == 'gaiadr3syn':
+    if config.get('cat_name') == 'gaiadr3syn':
         config['cat_col_mag'] = config['filter'] + 'mag'
         config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
 
         config['cat_col_color_mag1'] = 'Bmag'
         config['cat_col_color_mag2'] = 'Vmag'
-    elif config['cat_name'] == 'gaiaedr3':
+    elif config.get('cat_name') == 'gaiaedr3':
         config['cat_col_mag'] = config['filter'] + 'mag'
         config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
 
@@ -372,10 +371,10 @@ def photometry_image(filename, config, verbose=True, show=False):
         raise RuntimeError('Catalogue does not have required magnitudes')
 
     # Astrometric refinement
-    if config['refine_wcs']:
+    if config.get('refine_wcs', False):
         wcs1 = pipeline.refine_astrometry(obj, cat, 5*fwhm*pixscale,
                                           wcs=wcs, order=3, method='scamp',
-                                          cat_col_mag=config['cat_col_mag'],
+                                          cat_col_mag=config.get('cat_col_mag'),
                                           cat_col_mag_err=config.get('cat_col_mag_err'),
                                           verbose=verbose)
         if wcs1 is None or not wcs1.is_celestial:
@@ -389,12 +388,12 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Photometric calibration
     m = pipeline.calibrate_photometry(obj, cat, pixscale=pixscale,
-                                      cat_col_mag=config['cat_col_mag'],
-                                      cat_col_mag_err=config['cat_col_mag_err'],
+                                      cat_col_mag=config.get('cat_col_mag'),
+                                      cat_col_mag_err=config.get('cat_col_mag_err'),
                                       cat_col_mag1=config.get('cat_col_color_mag1'),
                                       cat_col_mag2=config.get('cat_col_color_mag2'),
                                       use_color=config.get('use_color', True),
-                                      order=config['spatial_order'],
+                                      order=config.get('spatial_order', 0),
                                       robust=True, scale_noise=True,
                                       accept_flags=0x02, max_intrinsic_rms=0.01,
                                       verbose=verbose)

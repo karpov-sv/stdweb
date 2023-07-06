@@ -8,4 +8,5 @@ celery
 django-celery-results
 redis
 humanize
+astroscrappy
 dill
