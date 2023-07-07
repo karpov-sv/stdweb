@@ -35,6 +35,7 @@ def task_cleanup(self, id):
     # End processing
     task.state = 'cleaned'
     task.celery_id = None
+    task.complete()
     task.save()
 
 
@@ -62,6 +63,7 @@ def task_inspect(self, id):
     # End processing
     task.celery_id = None
     fix_config(config)
+    task.complete()
     task.save()
 
 
@@ -89,4 +91,5 @@ def task_photometry(self, id):
     # End processing
     task.celery_id = None
     fix_config(config)
+    task.complete()
     task.save()

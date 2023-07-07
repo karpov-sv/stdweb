@@ -31,6 +31,7 @@ def tasks(request, id=None):
             if ctask.state == 'REVOKED' or ctask.state == 'FAILURE':
                 task.celery_id = None
                 task.state = 'failed' # Should we do it?
+                task.complete()
                 task.save()
 
         all_forms = {}

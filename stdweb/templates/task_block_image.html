@@ -4,7 +4,7 @@
   {% if fits %}
 
     <!-- FITS files -->
-    <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.modified|unix }}"
+    <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.completed|unix }}"
          class="figure-img img-fluid rounded mb-0" style="max-width: 256px;"
          onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.target_ra or task.config.target_dec %}'data-mark-ra':{{ task.config.target_ra }}, 'data-mark-dec':{{ task.config.target_dec }}{% endif %}})"/>
 
@@ -17,7 +17,7 @@
     <!-- Normal image -->
     <img src="{% url 'task_view' task.id image %}"
          class="figure-img img-fluid rounded mb-0" style="max-width: 256px;"
-         onclick="popupImage(event, '{% url 'task_view' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true)"/>
+         onclick="popupImage(event, '{% url 'task_view' task.id image %}?timestamp={{ task.completed|unix }}', '{{ image }}', true)"/>
 
     <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_view' task.id image %}">{{ image }}</a></small>
@@ -26,7 +26,7 @@
   {% elif cutout %}
 
     <!-- Normal image -->
-    <img src="{% url 'task_cutout' task.id cutout %}?timestamp={{ task.modified|unix }}&format=png"
+    <img src="{% url 'task_cutout' task.id cutout %}?timestamp={{ task.completed|unix }}&format=png"
          class="figure-img img-fluid rounded mb-0 stdview-image"
          data-stretch=1 data-mark-ra={{ task.config.target_ra }} data-mark-dec={{ task.config.target_dec }}
          />
