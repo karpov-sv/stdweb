@@ -1,0 +1,130 @@
+{% if not cutout %}
+
+  <div class="text-center">
+    <img src="{% url 'cutout' path=path %}" class="img-fluid stdview-image"
+         data-stretch
+         {% if ra or dec %}
+         data-mark-ra={{ ra }} data-mark-dec={{ dec }}
+         {% endif %}
+         alt="{{ path }}"/>
+  </div>
+
+{% else %}
+
+  <!-- Metadata -->
+  <ul>
+    <li>Name: <b>{{ cutout.meta.name }}</b></li>
+    {% if cutout.meta.filename %}
+      <li>Time: <b>{{ cutout.meta.time.iso }}</b></li>
+    {% endif %}
+    <li>Mag: <b>{{ cutout.meta.mag_calib|floatformat:"2u" }}</b> +/- <b>{{ cutout.meta.magerr|floatformat:"2u" }}</b></li>
+    <li>RA/Dec: <b>{{ cutout.meta.ra|floatformat:"4u" }}</b> <b>{{ cutout.meta.dec|floatformat:"4u" }}</b></li>
+    <li>X/Y: <b>{{ cutout.meta.x|floatformat:"2u" }}</b> <b>{{ cutout.meta.y|floatformat:"2u" }}</b></li>
+
+    {% if cutout.meta.filename %}
+      <li>Original Image: <b>
+        {{ cutout.meta.filename }}
+      </b></li>
+    {% endif %}
+  </ul>
+
+  <!-- Metadata -->
+  <div class="card mb-4">
+    <h5 class="card-header pt-2 pb-2" data-bs-toggle="collapse" data-bs-target="#collapseMeta"
+        aria-expanded="false"
+        aria-controls="collapseMeta">
+      Full Metadata
+      <span class="float-right"><i class="fa fa-list"></i> </span>
+    </h5>
+
+    <div class="collapse" id="collapseMeta">
+      <div class="card-body p-0">
+        <table class="table table-sm table-striped m-0">
+          {% for m,val in cutout.meta.items %}
+            <tr>
+              <td>{{ m }}</td>
+              <td>{{ val }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview cutout image planes -->
+  <div class="row">
+  {% for hdu in fitsfile %}
+    {% if hdu.data is not none %}
+      <div class="col-2 p-1">
+        <div class="card">
+          <h6 class="card-header text-center p-1">
+            {{ hdu.name }}
+          </h6>
+
+          <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"
+               class="card-img img-fluid stdview-image"
+               data-stretch data-mark-ra={{ cutout.meta.ra }} data-mark-dec={{ cutout.meta.dec }}
+               alt="{{ hdu.name }}"/>
+
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+  </div>
+
+  <!-- External links -->
+  <div class="mt-2">
+    <!-- <h4>External resources</h4> -->
+    {% with ra=cutout.meta.ra dec=cutout.meta.dec %}
+      <ul class="list-inline">
+        <li class="list-inline-item disabled">
+          External resources:
+        </li>
+
+        <li class="list-inline-item">
+          <a href="http://simbad.u-strasbg.fr/simbad/sim-basic?Ident={{ ra }}+{{ dec }}&submit=SIMBAD+search" title="Check SIMBAD for this position" target="_blank">
+            <i class="fa fa-external-link"> </i>
+            SIMBAD
+          </a>
+        </li>
+
+        <li class="list-inline-item">
+          <a href="https://www.aavso.org/vsx/index.php?view=results.get&coords={{ ra }}+{{ dec }}&format=d&size=20&unit=3" title="Check AAVSO VSX for this position" target="_blank">
+            <i class="fa fa-external-link"> </i>
+            AAVSO
+          </a>
+        </li>
+
+        <li class="list-inline-item">
+          <a href="https://vizier.u-strasbg.fr/viz-bin/VizieR-4?-out.add=_r&-to=2&-4c=1&-c.u=arcsec&-c.r=5&-c={{ ra }}+{{ dec }}" title="Check Vizier for this position" target="_blank">
+            <i class="fa fa-external-link"> </i>
+            Vizier
+          </a>
+        </li>
+
+        <li class="list-inline-item">
+          <a href="https://asas-sn.osu.edu/photometry?utf8=✓&ra={{ ra }}&dec={{ dec }}&radius=0.1&vmag_min=&vmag_max=&epochs_min=&epochs_max=&rms_min=&rms_max=&sort_by=raj2000" target="_blank">
+            <i class="fa fa-external-link"> </i>
+            ASAS-SN
+          </a>
+        </li>
+
+        <li class="list-inline-item">
+          <a href="https://www.wis-tns.org/search?ra={{ ra }}&decl={{ dec }}&radius=10&coords_unit=arcsec" title="Transient Name Server" target="_blank">
+            <i class="fa fa-external-link"> </i>
+            TNS
+          </a>
+        </li>
+
+        <li class="list-inline-item">
+          <a href="http://aladin.u-strasbg.fr/AladinLite/?target={{ ra }}%20{{ dec }}&fov=0.40&survey=P%2FDSS2%2Fcolor" title="Aladin Lite" target="_blank">
+            <i class="fa fa-external-link"> </i>
+            Aladin
+          </a>
+        </li>
+
+      </ul>
+    {% endwith %}
+  </div>
+
+{% endif %}

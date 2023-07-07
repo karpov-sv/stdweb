@@ -115,6 +115,14 @@
         </div>
       {% endfor %}
 
+    {% elif mode == 'cutout' %}
+
+      {% include 'block_cutout.html' with path=path cutout=cutout fitsfile=fitsfile only %}
+
+    {% else %}
+      <p>
+        Cannot preview file
+      </p>
     {% endif %}
 
   {% endif %}

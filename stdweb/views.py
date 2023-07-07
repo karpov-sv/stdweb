@@ -102,13 +102,14 @@ def list_files(request, path='', base=settings.DATA_PATH):
                 hdus = fits.open(fullpath) # FIXME: will it be closed?..
                 context['fitsfile'] = hdus
 
+                if os.path.splitext(fullpath)[1] == '.cutout':
                 # if hdus[0].data is None and hdus[1].name == 'IMAGE' and hdus[2].name == 'TEMPLATE':
-                #     # Probably FITS with STDPipe cutout, let's try to load it
-                #     context['cutout'] = cutouts.load_cutout(fullpath)
-                #     context['mode'] = 'cutout'
+                    # Probably FITS with STDPipe cutout, let's try to load it
+                    context['cutout'] = cutouts.load_cutout(fullpath)
+                    context['mode'] = 'cutout'
 
-                #     if context['cutout'] and 'filename' in context['cutout']['meta']:
-                #         context['cutout_filename'] = os.path.split(context['cutout']['meta']['filename'])[1]
+                    if context['cutout'] and 'filename' in context['cutout']['meta']:
+                        context['cutout_filename'] = os.path.split(context['cutout']['meta']['filename'])[1]
 
             except:
                 import traceback
@@ -176,7 +177,7 @@ def download(request, path, attachment=True, base=settings.DATA_PATH):
 
 def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=settings.DATA_PATH):
     """
-    Preview FITS image as PNG
+    Preview FITS image as JPEG or PNG
     """
     path = sanitize_path(path)
 
@@ -292,3 +293,59 @@ def reuse_file(request, base=settings.DATA_PATH):
         return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 
     return HttpResponse('done')
+
+
+def cutout(request, path, width=None, base=settings.DATA_PATH):
+    """
+    Preview cutouts FITS image
+    """
+    path = sanitize_path(path)
+
+    fullpath = os.path.join(base, path)
+
+    # Optional parameters
+    ext = int(request.GET.get('ext', 0))
+    fmt = request.GET.get('format', 'jpeg')
+    quality = int(request.GET.get('quality', 95))
+
+    width = request.GET.get('width', width)
+    if width is not None:
+        width = int(width)
+
+    qq = None
+    if 'qmin' in request.GET or 'qmax' in request.GET:
+        qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))]
+
+    opts = {
+        'cmap': request.GET.get('cmap', 'Blues_r'),
+        'qq': qq,
+        'stretch': request.GET.get('stretch', None),
+    }
+
+    if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
+        # Show the position of the object
+        header = fits.getheader(fullpath, 1)
+        wcs = WCS(header)
+        x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
+        opts['mark_x'] = x
+        opts['mark_y'] = y
+
+    # Load the cutout
+    cutout = cutouts.load_cutout(fullpath)
+
+    planes = ['image', 'template', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']
+    planes = [_ for _ in planes if _ in cutout]
+
+    figsize = [256*len(planes), 256+40]
+
+    fig = Figure(facecolor='white', dpi=72, figsize=(figsize[0]/72, figsize[1]/72), tight_layout=True)
+
+    plots.plot_cutout(cutout, fig=fig,
+                      planes=planes,
+
+                      **opts)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format=fmt, pil_kwargs={'quality':quality})
+
+    return HttpResponse(buf.getvalue(), content_type='image/%s' % fmt)

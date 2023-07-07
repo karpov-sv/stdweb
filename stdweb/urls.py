@@ -33,6 +33,7 @@ urlpatterns = [
     path('view/<path:path>', views.download, {'attachment': False}, name='view'),
     path('download/<path:path>', views.download, {'attachment': True}, name='download'),
     path('preview/<path:path>', views.preview, name='preview'),
+    path('cutout/<path:path>', views.cutout, name='cutout'),
 
     # Uploads
     path('upload/', views.upload_file, name='upload'),
@@ -45,6 +46,7 @@ urlpatterns = [
     path('tasks/<int:id>/preview/<path:path>', views_tasks.task_preview, name='task_preview'),
     path('tasks/<int:id>/view/<path:path>', views_tasks.task_download, {'attachment': False}, name='task_view'),
     path('tasks/<int:id>/download/<path:path>', views_tasks.task_download, {'attachment': True}, name='task_download'),
+    path('tasks/<int:id>/cutout/<path:path>', views_tasks.task_cutout, name='task_cutout'),
 
     # Celery queue
     path('queue/', views_celery.view_queue, {'id': None}, name='queue'),

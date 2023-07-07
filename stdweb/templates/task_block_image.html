@@ -23,6 +23,18 @@
       <small><a href="{% url 'task_view' task.id image %}">{{ image }}</a></small>
     </figcaption>
 
+  {% elif cutout %}
+
+    <!-- Normal image -->
+    <img src="{% url 'task_cutout' task.id cutout %}?timestamp={{ task.modified|unix }}&format=png"
+         class="figure-img img-fluid rounded mb-0 stdview-image"
+         data-stretch=1 data-mark-ra={{ task.config.target_ra }} data-mark-dec={{ task.config.target_dec }}
+         />
+
+    <figcaption class="figure-caption text-center mt-0 mb-3">
+      <small><a href="{% url 'task_download' task.id cutout %}">{{ cutout }}</a></small>
+    </figcaption>
+
   {% endif %}
 
 </figure>
