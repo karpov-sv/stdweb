@@ -1,16 +1,27 @@
 from django import template
 from django.template.defaultfilters import stringfilter
+from django.utils.safestring import mark_safe
+from django.utils.html import escape
+from django.urls import reverse
 
 import os
 import uuid
+import re
+
+from functools import partial
 
 from astropy.io import fits
 
 register = template.Library()
 
+def task_file_link(m, task=None):
+    name = m.group(2)
+    url = reverse('task_view', kwargs={'id':task.id, 'path':name})
+
+    return r"<a href='" + url + "'>" + name + r"</a>"
 
 @register.simple_tag
-def task_file_contents(task, filename):
+def task_file_contents(task, filename, highlight=False):
     path = os.path.join(task.path(), filename)
 
     contents = ""
@@ -21,7 +32,19 @@ def task_file_contents(task, filename):
     except:
         pass
 
-    return contents
+    contents = escape(contents)
+
+    if highlight:
+        # Highlight some patterns in the text
+        contents = re.sub(r"^(----\s+(.+)+\s+----)$",
+                          r"<span class='text-primary'>\1</span>",
+                          contents, flags=re.MULTILINE)
+
+        contents = re.sub(r"\b(file:(\w+\.(fits|vot|txt|cutout)))\b",
+                          partial(task_file_link, task=task),
+                          contents, flags=re.MULTILINE)
+
+    return mark_safe(contents)
 
 
 @register.simple_tag
