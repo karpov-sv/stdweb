@@ -1,6 +1,7 @@
 import os, glob, shutil
 
 import numpy as np
+
 from astropy.wcs import WCS
 from astropy.io import fits as fits
 
@@ -49,6 +50,7 @@ supported_filters = {
     'RP': {'name':'Gaia RP', 'aliases':[]},
 }
 
+
 supported_catalogs = {
     'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
                    'limit': 'Gmag'},
@@ -62,6 +64,7 @@ supported_catalogs = {
               'limit':'Gmag'},
 }
 
+
 def print_to_file(*args, clear=False, logname='out.log', **kwargs):
     if clear and os.path.exists(logname):
         print('Clearing', logname)
@@ -72,13 +75,16 @@ def print_to_file(*args, clear=False, logname='out.log', **kwargs):
         with open(logname, 'a+') as lfd:
             print(file=lfd, *args, **kwargs)
 
+
 def pickle_to_file(filename, obj):
     with open(filename, 'wb') as f:
         pickle.dump(obj, f)
 
+
 def pickle_from_file(filename):
     with open(filename, 'rb') as f:
         return pickle.load(f)
+
 
 def fix_header(header, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
@@ -221,9 +227,13 @@ def inspect_image(filename, config, verbose=True, show=False):
 
         if (config.get('target_ra') or config.get('target_dec')) and wcs and wcs.is_celestial:
             x0,y0 = wcs.all_world2pix(config.get('target_ra'), config.get('target_dec'), 0)
-            cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
-            fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
-            log("Target cutout written to image_target.fits")
+
+            if x0 > 0 and y0 > 0 and x0 < image.shape[1] and y0 < image.shape[0]:
+                cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
+                fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
+                log("Target cutout written to image_target.fits")
+            else:
+                log("Target is outside the image")
 
         if config.get('target_ra') is not None and config.get('blind_match_ra0') is None:
             config['blind_match_ra0'] = config.get('target_ra')
@@ -264,10 +274,14 @@ def photometry_image(filename, config, verbose=True, show=False):
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
 
     # Cleanup stale plots
-    for name in ['photometry.png', 'photometry_unmasked.png',
+    for name in ['objects.png', 'fwhm.png',
+                 'photometry.png', 'photometry_unmasked.png',
                  'photometry_zeropoint.png', 'photometry_model.png',
                  'photometry_residuals.png', 'astrometry_dist.png',
-                 'photometry.pickle']:
+                 'photometry.pickle',
+                 'objects.vot', 'cat.vot',
+                 'limit_hist.png', 'limit_sn.png',
+                 'target.vot', 'target.cutout']:
         fullname = os.path.join(basepath, name)
         if os.path.exists(fullname):
             os.unlink(fullname)
@@ -308,8 +322,6 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"{len(obj)} objects properly measured")
 
-    obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
-
     # Plot detected objects
     with plots.figure_saver(os.path.join(basepath, 'objects.png'), figsize=(8, 6), show=show,) as fig:
         ax = fig.add_subplot(1, 1, 1)
@@ -332,26 +344,6 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_ylim(0, image.shape[0])
         # ax.legend()
         ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
-
-    # Catalogue settings
-    if config.get('cat_name') == 'gaiadr3syn':
-        config['cat_col_mag'] = config['filter'] + 'mag'
-        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
-
-        config['cat_col_color_mag1'] = 'Bmag'
-        config['cat_col_color_mag2'] = 'Vmag'
-    elif config.get('cat_name') == 'gaiaedr3':
-        config['cat_col_mag'] = config['filter'] + 'mag'
-        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
-
-        config['cat_col_color_mag1'] = 'BPmag'
-        config['cat_col_color_mag2'] = 'RPmag'
-    else:
-        config['cat_col_mag'] = config['filter'] + 'mag'
-        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
-
-        config['cat_col_color_mag1'] = 'gmag'
-        config['cat_col_color_mag2'] = 'rmag'
 
     log("\n---- Initial astrometry ----\n")
 
@@ -414,12 +406,44 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"Field center is at {ra0:.3f} {dec0:.3f}, radius {sr0:.2f} deg, scale {3600*pixscale:.2f} arcsec/pix")
 
-    cat = catalogs.get_cat_vizier(ra0, dec0, sr0, config['cat_name'], filters={'rmag':'<20'})
+    if config.get('cat_name') not in supported_catalogs:
+        raise RuntimeError("Unsupported or not specified catalogue")
+
+    filters = {}
+    if supported_catalogs[config['cat_name']].get('limit') and config.get('cat_limit'):
+        filters[supported_catalogs[config['cat_name']].get('limit')] = f"<{config['cat_limit']}"
+    cat = catalogs.get_cat_vizier(ra0, dec0, sr0, config['cat_name'], filters=filters, verbose=verbose)
 
     if not cat or not len(cat):
         raise RuntimeError('Cannot get catalogue stars')
 
     log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
+
+    cat.write(os.path.join(basepath, 'cat.vot'), format='votable', overwrite=True)
+    log("Catalogue written to cat.vot")
+
+    # Catalogue settings
+    if config.get('cat_name') == 'gaiadr3syn':
+        config['cat_col_mag'] = config['filter'] + 'mag'
+        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
+
+        config['cat_col_color_mag1'] = 'Bmag'
+        config['cat_col_color_mag2'] = 'Vmag'
+    elif config.get('cat_name') == 'gaiaedr3':
+        config['cat_col_mag'] = config['filter'] + 'mag'
+        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
+
+        config['cat_col_color_mag1'] = 'BPmag'
+        config['cat_col_color_mag2'] = 'RPmag'
+    else:
+        config['cat_col_mag'] = config['filter'] + 'mag'
+        config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
+
+        config['cat_col_color_mag1'] = 'gmag'
+        config['cat_col_color_mag2'] = 'rmag'
+
+    log(f"Will use catalogue column {config['cat_col_mag']} as primary magnitude ")
+    log(f"Will use catalogue columns {config['cat_col_color_mag1']} and {config['cat_col_color_mag2']} for color")
 
     if not (config['cat_col_mag'] in cat.colnames and
             (not config.get('cat_col_color_mag1') or config['cat_col_color_mag1'] in cat.colnames) and
@@ -504,3 +528,83 @@ def photometry_image(filename, config, verbose=True, show=False):
         plots.plot_photometric_match(m, mode='dist', show_dots=True, bins=8, ax=ax)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
+
+    # Apply photometry to objects
+    # (It should already be done in calibrate_photometry(), but let's be verbose
+    obj['mag_calib'] = obj['mag'] + m['zero_fn'](obj['x'], obj['y'], obj['mag'])
+    obj['mag_calib_err'] = np.hypot(obj['magerr'],
+                                    m['zero_fn'](obj['x'], obj['y'], obj['mag'], get_err=True))
+
+    obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
+    log("Measured objects stored to objects.vot")
+
+    # Detection limits
+    log("\n---- Global detection limit ----\n")
+    mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=verbose)
+    config['mag_limit'] = mag0
+
+    # Plot detection limit estimators
+    with plots.figure_saver(os.path.join(basepath, 'limit_hist.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.plot_mag_histogram(obj, cat, cat_col_mag=config['cat_col_mag'], sn=config.get('sn'), ax=ax)
+
+    with plots.figure_saver(os.path.join(basepath, 'limit_sn.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.plot_detection_limit(obj, mag_name=config['cat_col_mag'], sn=config.get('sn', 3), ax=ax)
+
+    # Target forced photometry
+    if config.get('target_ra') is not None and config.get('target_dec') is not None:
+        log("\n---- Target forced photometry ----\n")
+
+        target_obj = Table({'ra':[config['target_ra']], 'dec':[config['target_dec']]})
+        target_obj['x'],target_obj['y'] = wcs.all_world2pix(target_obj['ra'], target_obj['dec'], 0)
+
+        if (target_obj['x'] < 0 or target_obj['x'] >= image.shape[1] or
+            target_obj['y'] < 0 or target_obj['y'] >= image.shape[0]):
+            raise RuntimeError("Target is outside the image")
+
+        log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
+
+        target_obj = photometry.measure_objects(target_obj, image, mask=mask,
+                                                fwhm=fwhm,
+                                                aper=config.get('rel_aper', 1.0),
+                                                bkgann=config.get('rel_bkgann', None),
+                                                sn=0,
+                                                bg_size=config.get('bg_size', 256),
+                                                gain=config.get('gain', 1.0),
+                                                verbose=verbose)
+
+        target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'],
+                                                                   target_obj['y'],
+                                                                   target_obj['mag'])
+
+        target_obj['mag_calib_err'] = np.hypot(target_obj['magerr'],
+                                               m['zero_fn'](target_obj['x'],
+                                                            target_obj['y'],
+                                                            target_obj['mag'],
+                                                            get_err=True))
+
+        # TODO: Improve limiting mag estimate
+        target_obj['mag_limit'] = -2.5*np.log10(5*target_obj['fluxerr']) + m['zero_fn'](target_obj['x'],
+                                                                                        target_obj['y'],
+                                                                                        target_obj['mag'])
+
+        target_obj['mag_filter_name'] = m['cat_col_mag']
+
+        if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
+            target_obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
+            target_obj['mag_color_term'] = m['color_term']
+
+        obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
+        log("Measured target stored to target.vot")
+
+        # Create the cutout from image based on the candidate
+        cutout = cutouts.get_cutout(image, target_obj[0], 30, mask=mask, header=header)
+        # Cutout from relevant HiPS survey
+        if target_obj['dec'][0] > -30:
+            cutout['template'] = templates.get_hips_image('PanSTARRS/DR1/r', header=cutout['header'])[0]
+        else:
+            cutout['template'] = templates.get_hips_image('CDS/P/skymapper-R', header=cutout['header'])[0]
+
+        cutouts.write_cutout(cutout, os.path.join(basepath, 'target.cutout'))
+        log("Target cutouts stored to target.cutout")

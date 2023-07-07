@@ -187,7 +187,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png'  as list %}
+              {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
@@ -198,6 +198,17 @@
             </div>
           </div>
         {% endif %}
+      </div>
+
+    {% endif %}
+
+    <!-- Target cutout -->
+    {% if 'target.cutout' in files %}
+      <hr>
+      <h3>Target on direct image</h3>
+
+      <div class="text-center">
+        {% include "task_block_image.html" with cutout='target.cutout' task=task only %}
       </div>
 
     {% endif %}

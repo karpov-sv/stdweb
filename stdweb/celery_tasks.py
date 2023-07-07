@@ -78,7 +78,7 @@ def task_photometry(self, id):
     # Start processing
     try:
         processing.photometry_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
-        task.state = 'photometry'
+        task.state = 'photometrized'
     except:
         import traceback
         log("\nError!\n", traceback.format_exc())

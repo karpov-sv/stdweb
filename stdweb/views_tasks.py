@@ -17,6 +17,7 @@ from . import forms
 from . import celery_tasks
 from . import celery
 
+
 def tasks(request, id=None):
     context = {}
 
@@ -81,7 +82,7 @@ def tasks(request, id=None):
 
                 if action == 'photometry_image':
                     task.celery_id = celery_tasks.task_photometry.delay(task.id).id
-                    task.state = 'processing'
+                    task.state = 'photometry'
                     task.save()
                     messages.success(request, "Started image photometry for task " + str(id))
 
@@ -109,8 +110,16 @@ def task_download(request, id=None, path='', **kwargs):
 
     return views.download(request, path, base=task.path(), **kwargs)
 
+
 @cache_page(15 * 60)
 def task_preview(request, id=None, path='', **kwargs):
     task = models.Task.objects.get(id=id)
 
     return views.preview(request, path, base=task.path(), **kwargs)
+
+
+@cache_page(15 * 60)
+def task_cutout(request, id=None, path='', **kwargs):
+    task = models.Task.objects.get(id=id)
+
+    return views.cutout(request, path, base=task.path(), **kwargs)
