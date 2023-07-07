@@ -1,3 +1,4 @@
+{% load filters %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -46,24 +47,24 @@
   <body>
 
     <!-- Navigation bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <nav class="navbar bg-dark navbar-expand-lg mb-4" data-bs-theme="dark">
       <div class="container-fluid">
         <a class="navbar-brand" href="{% url 'index' %}">STDWeb</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarSupportedContent">
           <ul class="navbar-nav me-auto">
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'files' %}">Files</a>
+              <a class="nav-link {% if request.resolver_match.view_name == 'files' %}active{% endif %}" href="{% url 'files' %}">Files</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'tasks' %}">Tasks</a>
+              <a class="nav-link {% if request.resolver_match.view_name == 'tasks' %}active{% endif %}" href="{% url 'tasks' %}">Tasks</a>
             </li>
             {% if user.is_staff %}
               <li class="nav-item">
-                <a class="nav-link" href="{% url 'queue' %}">Queue</a>
+                <a class="nav-link {% if request.resolver_match.view_name == 'queue' %}active{% endif %}" href="{% url 'queue' %}">Queue</a>
               </li>
             {% endif %}
           </ul>
@@ -71,7 +72,7 @@
           <ul class="navbar-nav ms-auto me-2">
             {% if user.is_authenticated %}
               <li class="nav-item dropdown">
-                <a href="#" class="dropdown-toggle nav-link" data-bs-toggle="dropdown">User: {{ user.username }} <span class="caret"></span></a>
+                <a href="#" class="dropdown-toggle nav-link" data-bs-toggle="dropdown">User: {{ user|user }} <span class="caret"></span></a>
                 <ul class="dropdown-menu">
                   {% if user.is_staff %}
                     <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a></li>
