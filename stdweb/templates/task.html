@@ -53,9 +53,21 @@
      }
    }
 
+   // Toggle visibility of blind match options depending on the checkbox
    $(function(){
      $('#id_blind_match_wcs').on('change', check_blindmatch_visibility);
      check_blindmatch_visibility();
+   });
+
+   // Disable submitting the form on image cropping text fields
+   $(function(){
+     for(var id of ['crop_x1', 'crop_y1', 'crop_x2', 'crop_y2']){
+       $('#' + id).on('keypress keydown keyup', function (e) {
+         if (e.keyCode == 13) {
+           e.preventDefault();
+         }
+       });
+     }
    });
 
   </script>
