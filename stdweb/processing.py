@@ -622,7 +622,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             target_obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
             target_obj['mag_color_term'] = m['color_term']
 
-        obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
+        target_obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
         log("Measured target stored to target.vot")
 
         # Create the cutout from image based on the candidate
