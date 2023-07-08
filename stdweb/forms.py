@@ -38,10 +38,12 @@ class TaskPhotometryForm(forms.Form):
     form_type = forms.CharField(initial='photometry', widget=forms.HiddenInput())
     sn = forms.FloatField(min_value=0, required=False, label="S/N Ratio")
     initial_aper = forms.FloatField(min_value=0, required=False, label="Initial aperture, pixels")
-    initial_r0 = forms.FloatField(min_value=0, required=False, label="Smoothing kernel radius, pixels")
+    initial_r0 = forms.FloatField(min_value=0, required=False, label="Smoothing kernel, pixels")
     bg_size = forms.IntegerField(min_value=0, required=False, label="Background mesh size")
     minarea = forms.IntegerField(min_value=0, required=False, label="Minimal object area")
     rel_aper = forms.FloatField(min_value=0, required=False, label="Relative aperture, FWHM")
+    rel_bg1 = forms.FloatField(min_value=0, required=False, label="Local background inner annulus, FWHM")
+    rel_bg2 = forms.FloatField(min_value=0, required=False, label="Outer annulus, FWHM")
 
     filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
                                required=False, label="Filter")
@@ -69,9 +71,13 @@ class TaskPhotometryForm(forms.Form):
                 Column(Field('sn')),
                 Column(Field('initial_aper')),
                 Column('initial_r0'),
-                Column('rel_aper'),
                 Column('bg_size'),
                 Column('minarea'),
+                css_class='align-items-end'
+            ),
+            Row(Column('rel_aper'),
+                Column('rel_bg1'),
+                Column('rel_bg2'),
                 css_class='align-items-end'
             ),
             Row(

@@ -25,6 +25,12 @@ def tasks(request, id=None):
         task = models.Task.objects.get(id=id)
         path = task.path()
 
+        # Permissions
+        if request.user.is_authenticated and (request.user.is_staff or request.user == task.user):
+            context['user_may_submit'] = True
+        else:
+            context['user_may_submit'] = False
+
         # Clear the link to queued task if it was revoked
         if task.celery_id:
             ctask = celery.app.AsyncResult(task.celery_id)
@@ -51,7 +57,8 @@ def tasks(request, id=None):
                 if form.has_changed():
                     for name,value in form.cleaned_data.items():
                         if name not in ['form_type']:  # we do not want it to go to task.config
-                            if name in form.changed_data: # update only changed fields
+                            if name in form.changed_data or name not in task.config:
+                                # update only changed or new fields
                                 task.config[name] = value
 
                     task.save()

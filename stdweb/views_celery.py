@@ -27,8 +27,17 @@ def view_queue(request, id=None):
 
             return HttpResponseRedirect(request.path_info)
 
-        if action == 'terminatetask' and id:
+        if action == 'cleanuplinkedtasks':
             if request.user.is_staff:
+                for task in models.Task.objects.filter(celery_id__isnull=False):
+                    task.celery_id = None
+                    task.state = 'failed'
+                    task.save()
+
+            return HttpResponseRedirect(request.path_info)
+
+        if action == 'terminatetask' and id:
+            if request.user.is_staff or True:
                 celery.app.control.revoke(id, terminate=True, signal='SIGKILL')
                 messages.success(request, "Queued task " + id + " is terminated")
 
@@ -44,14 +53,15 @@ def view_queue(request, id=None):
 
         inspect = celery.app.control.inspect()
         for res,state in [(inspect.active(), 'active'), (inspect.reserved(), 'pending'), (inspect.scheduled(), 'scheduled')]:
-            for wtasks in res.values():
-                for ctask in wtasks:
-                    if 'name' in ctask:
-                        ctask['shortname'] = ctask['name'].split('.')[-1]
+            if res:
+                for wtasks in res.values():
+                    for ctask in wtasks:
+                        if 'name' in ctask:
+                            ctask['shortname'] = ctask['name'].split('.')[-1]
 
-                    ctask['state'] = state
+                        ctask['state'] = state
 
-                    queue.append(ctask)
+                        queue.append(ctask)
 
         context['queue'] = queue
 

@@ -65,6 +65,29 @@ supported_catalogs = {
 }
 
 
+# Files created at every step
+
+files_inspect = [
+    'inspect.log',
+    'mask.fits', 'image_target.fits'
+]
+
+files_photometry = [
+    'photometry.log',
+    'objects.png', 'fwhm.png',
+    'photometry.png', 'photometry_unmasked.png',
+    'photometry_zeropoint.png', 'photometry_model.png',
+    'photometry_residuals.png', 'astrometry_dist.png',
+    'photometry.pickle',
+    'objects.vot', 'cat.vot',
+    'limit_hist.png', 'limit_sn.png',
+    'target.vot', 'target.cutout'
+]
+
+cleanup_inspect = files_inspect + files_photometry
+
+cleanup_photometry = files_photometry
+
 def print_to_file(*args, clear=False, logname='out.log', **kwargs):
     if clear and os.path.exists(logname):
         print('Clearing', logname)
@@ -110,16 +133,17 @@ def inspect_image(filename, config, verbose=True, show=False):
     basepath = os.path.dirname(filename)
 
     # Cleanup stale plots
-    for name in ['mask.fits', 'image_target.fits']:
+    for name in cleanup_inspect:
         fullname = os.path.join(basepath, name)
         if os.path.exists(fullname):
             os.unlink(fullname)
 
-    config['sn'] = config.get('sn', 5)
+    config['sn'] = config.get('sn', 3)
     config['initial_aper'] = config.get('initial_aper', 3)
     config['initial_r0'] = config.get('initial_r0', 0)
     config['rel_aper'] = config.get('rel_aper', 1)
-    config['rel_bkgann'] = config.get('rel_bkgann', None)
+    config['rel_bg1'] = config.get('rel_bg1', 5)
+    config['rel_bg2'] = config.get('rel_bg2', 7)
     config['bg_size'] = config.get('bg_size', 256)
     config['spatial_order'] = config.get('spatial_order', 2)
     config['minarea'] = config.get('minarea', 5)
@@ -274,14 +298,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
 
     # Cleanup stale plots
-    for name in ['objects.png', 'fwhm.png',
-                 'photometry.png', 'photometry_unmasked.png',
-                 'photometry_zeropoint.png', 'photometry_model.png',
-                 'photometry_residuals.png', 'astrometry_dist.png',
-                 'photometry.pickle',
-                 'objects.vot', 'cat.vot',
-                 'limit_hist.png', 'limit_sn.png',
-                 'target.vot', 'target.cutout']:
+    for name in cleanup_photometry:
         fullname = os.path.join(basepath, name)
         if os.path.exists(fullname):
             os.unlink(fullname)
@@ -310,11 +327,16 @@ def photometry_image(filename, config, verbose=True, show=False):
     log(f"FWHM is {fwhm:.2f} pixels")
     config['fwhm'] = fwhm
 
+    if config.get('rel_bg1') and config.get('rel_bg2'):
+        rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
+    else:
+        rel_bkgann = None
+
     # Forced photometry at objects positions
     obj = photometry.measure_objects(obj, image, mask=mask,
                                      fwhm=fwhm,
                                      aper=config.get('rel_aper', 1.0),
-                                     bkgann=config.get('rel_bkgann', None),
+                                     bkgann=rel_bkgann,
                                      sn=config.get('sn', 3.0),
                                      bg_size=config.get('bg_size', 256),
                                      gain=config.get('gain', 1.0),
@@ -454,7 +476,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config.get('refine_wcs', False):
         log("\n---- Astrometric refinement ----\n")
 
-        wcs1 = pipeline.refine_astrometry(obj, cat, 5*fwhm*pixscale,
+        wcs1 = pipeline.refine_astrometry(obj, cat, fwhm*pixscale,
                                           wcs=wcs, order=3, method='scamp',
                                           cat_col_mag=config.get('cat_col_mag'),
                                           cat_col_mag_err=config.get('cat_col_mag_err'),
@@ -507,25 +529,29 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     with plots.figure_saver(os.path.join(basepath, 'photometry_zeropoint.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        plots.plot_photometric_match(m, mode='zero', show_dots=True, bins=8, ax=ax)
+        plots.plot_photometric_match(m, mode='zero', show_dots=True, bins=8, ax=ax,
+                                     range=[[0, image.shape[1]], [0, image.shape[0]]])
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
     with plots.figure_saver(os.path.join(basepath, 'photometry_model.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        plots.plot_photometric_match(m, mode='model', show_dots=True, bins=8, ax=ax)
+        plots.plot_photometric_match(m, mode='model', show_dots=True, bins=8, ax=ax,
+                                     range=[[0, image.shape[1]], [0, image.shape[0]]])
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
     with plots.figure_saver(os.path.join(basepath, 'photometry_residuals.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        plots.plot_photometric_match(m, mode='residuals', show_dots=True, bins=8, ax=ax)
+        plots.plot_photometric_match(m, mode='residuals', show_dots=True, bins=8, ax=ax,
+                                     range=[[0, image.shape[1]], [0, image.shape[0]]])
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
     with plots.figure_saver(os.path.join(basepath, 'astrometry_dist.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        plots.plot_photometric_match(m, mode='dist', show_dots=True, bins=8, ax=ax)
+        plots.plot_photometric_match(m, mode='dist', show_dots=True, bins=8, ax=ax,
+                                     range=[[0, image.shape[1]], [0, image.shape[0]]])
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
@@ -546,7 +572,10 @@ def photometry_image(filename, config, verbose=True, show=False):
     # Plot detection limit estimators
     with plots.figure_saver(os.path.join(basepath, 'limit_hist.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        plots.plot_mag_histogram(obj, cat, cat_col_mag=config['cat_col_mag'], sn=config.get('sn'), ax=ax)
+        # Filter out catalogue stars outside the image
+        cx,cy = wcs.all_world2pix(cat['RAJ2000'], cat['DEJ2000'], 0)
+        cat_idx = (cx > 0) & (cy > 0) & (cx < image.shape[1]) & (cy < image.shape[0])
+        plots.plot_mag_histogram(obj, cat[cat_idx], cat_col_mag=config['cat_col_mag'], sn=config.get('sn'), ax=ax)
 
     with plots.figure_saver(os.path.join(basepath, 'limit_sn.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
@@ -568,7 +597,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         target_obj = photometry.measure_objects(target_obj, image, mask=mask,
                                                 fwhm=fwhm,
                                                 aper=config.get('rel_aper', 1.0),
-                                                bkgann=config.get('rel_bkgann', None),
+                                                bkgann=rel_bkgann,
                                                 sn=0,
                                                 bg_size=config.get('bg_size', 256),
                                                 gain=config.get('gain', 1.0),
@@ -585,9 +614,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                                                             get_err=True))
 
         # TODO: Improve limiting mag estimate
-        target_obj['mag_limit'] = -2.5*np.log10(5*target_obj['fluxerr']) + m['zero_fn'](target_obj['x'],
-                                                                                        target_obj['y'],
-                                                                                        target_obj['mag'])
+        target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*target_obj['fluxerr']) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
 
         target_obj['mag_filter_name'] = m['cat_col_mag']
 
@@ -608,3 +635,15 @@ def photometry_image(filename, config, verbose=True, show=False):
 
         cutouts.write_cutout(cutout, os.path.join(basepath, 'target.cutout'))
         log("Target cutouts stored to target.cutout")
+
+        log(f"Target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
+        if target_obj['flux'][0] > 0:
+            mag_string = target_obj['mag_filter_name'][0]
+            if 'mag_color_name' in target_obj.colnames and 'mag_color_term' in target_obj.colnames and target_obj['mag_color_term'][0] is not None:
+                sign = '-' if target_obj['mag_color_term'][0] > 0 else '+'
+                mag_string += f" {sign} {np.abs(target_obj['mag_color_term'][0]):.2f}*({target_obj['mag_color_name'][0]})"
+
+            log(f"Target magnitude is {mag_string} = {target_obj['mag_calib'][0]:.2f} +/- {target_obj['mag_calib_err'][0]:.2f}")
+            log(f"Target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
+        else:
+            log("Target not detected")

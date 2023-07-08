@@ -4,6 +4,7 @@
 {% load filters %}
 {% load wrapwith %}
 {% load crispy_forms_tags %}
+{% load humanize %}
 
 {% block head %}
   {% include "popup_image.html" %}
@@ -84,18 +85,24 @@
     </p>
     {% endif %}
     <p>
-      Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }}
+      Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
       <br>
       State:
       {% if task.celery_id %}
       <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
       {% endif %}
-      <b class="text-{% if task.state == 'failed' %}danger{% elif task.celery_id %}primary{% else %}success{% endif %}">{{ task.state }}</b> on {{ task.modified|timestamp }}
+      <b class="text-{% if task.state == 'failed' %}danger{% elif task.celery_id %}primary{% else %}success{% endif %}">{{ task.state }}</b> on {{ task.modified|timestamp }} - {{ task.modified|naturaltime }}
       {% if task.celery_id %}
         <br>
         Queue task:
         <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
         (<span id="celery_state"></span>)
+        {% if user_may_submit and False %}
+          <form action="{% url 'queue' id=task.celery_id %}" method="POST">
+            {% csrf_token %}
+            <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate</button>
+          </form>
+        {% endif %}
       {% endif %}
     </p>
 
@@ -109,10 +116,10 @@
     <hr>
     <h3>Initial inspection and masking</h3>
 
-    {% if user.is_authenticated %}
+    {% if user_may_submit %}
       <form action="" method="POST" class="mb-2">
         {% csrf_token %}
-        <fieldset {% if task.celery_id %}disabled{% endif %}>
+        <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
 
           {% crispy form_inspect %}
 
@@ -166,10 +173,10 @@
       <hr>
       <h3>Photometry and astrometry</h3>
 
-      {% if user.is_authenticated %}
+      {% if user_may_submit %}
         <form action="" method="POST" class="mb-2">
           {% csrf_token %}
-          <fieldset {% if task.celery_id %}disabled{% endif %}>
+          <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
 
             {% crispy form_photometry %}
 

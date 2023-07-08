@@ -80,9 +80,9 @@
 
                   <!-- Logout requires POST -->
                   <li>
-                    <form id="logout-form" method="post" action="{% url 'logout' %}">
+                    <form id="logout-form" method="post" action="{% url 'logout' %}?next={{ request.get_full_path }}">
                       {% csrf_token %}
-                      <button class="button-link dropdown-item" type="submit">Log out</button>
+                      <button class="btn-link dropdown-item" type="submit">Log out</button>
                     </form>
                   </li>
 

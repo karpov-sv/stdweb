@@ -40,6 +40,10 @@ def task_file_contents(task, filename, highlight=False):
                           r"<span class='text-primary'>\1</span>",
                           contents, flags=re.MULTILINE)
 
+        contents = re.sub(r"^(RuntimeError:)(.*)$\b",
+                          r"\1<span class='text-danger'>\2</span>",
+                          contents, flags=re.MULTILINE)
+
         contents = re.sub(r"\b(file:(\w+\.(fits|vot|txt|cutout)))\b",
                           partial(task_file_link, task=task),
                           contents, flags=re.MULTILINE)
