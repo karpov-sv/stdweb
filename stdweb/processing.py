@@ -404,6 +404,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     # FWHM
     fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
     log(f"FWHM is {fwhm:.2f} pixels")
+
+    if config.get('fwhm_override'):
+        fwhm = config.get('fwhm_override')
+        log(f"Overriding with user-specified FWHM value of {fwhm:.2f} pixels")
+
     config['fwhm'] = fwhm
 
     if config.get('rel_bg1') and config.get('rel_bg2'):

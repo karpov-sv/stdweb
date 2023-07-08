@@ -46,6 +46,7 @@ class TaskPhotometryForm(forms.Form):
     rel_aper = forms.FloatField(min_value=0, required=False, label="Relative aperture, FWHM")
     rel_bg1 = forms.FloatField(min_value=0, required=False, label="Local background inner annulus, FWHM")
     rel_bg2 = forms.FloatField(min_value=0, required=False, label="Outer annulus, FWHM")
+    fwhm_override = forms.FloatField(min_value=0, required=False, label="FWHM override, pixels")
 
     filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
                                required=False, label="Filter")
@@ -83,24 +84,25 @@ class TaskPhotometryForm(forms.Form):
             Row(Column('rel_aper'),
                 Column('rel_bg1'),
                 Column('rel_bg2'),
-                Column('spatial_order'),
+                Column('fwhm_override'),
                 css_class='align-items-end'
             ),
             Row(
                 Column('filter'),
                 Column('cat_name'),
                 Column('cat_limit', css_class="col-md-2"),
+                Column('spatial_order', css_class="col-md-2"),
                 Column('use_color', css_class="col-md-2"),
-                Column('refine_wcs', css_class="col-md-2"),
                 css_class='align-items-end'
             ),
             Row(
-                Column('blind_match_wcs', css_class="col-md-2"),
-                Column('blind_match_ps_lo', css_class="col-md-2"),
-                Column('blind_match_ps_up', css_class="col-md-2"),
-                Column('blind_match_ra0', css_class="col-md-2"),
-                Column('blind_match_dec0', css_class="col-md-2"),
-                Column('blind_match_sr0', css_class="col-md-2"),
+                Column('refine_wcs'),
+                Column('blind_match_wcs'),
+                Column('blind_match_ps_lo'),
+                Column('blind_match_ps_up'),
+                Column('blind_match_ra0'),
+                Column('blind_match_dec0'),
+                Column('blind_match_sr0'),
                 css_class='align-items-end'
                 )
         )
