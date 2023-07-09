@@ -126,6 +126,74 @@ def fix_header(header, verbose=True):
         header.remove('FOCALLEN')
 
 
+def fix_image(filename, config, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    image,header = fits.getdata(filename), fits.getheader(filename)
+    fix_header(header)
+
+    if os.path.exists(os.path.join(basepath, 'image.wcs')):
+        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
+        astrometry.clear_wcs(header)
+        header += wcs.to_header(relax=True)
+        header.add_comment('WCS updated by STDWeb', before='WCSAXES')
+
+    # Write fixed image and header back
+    fits.writeto(filename, image, header, overwrite=True)
+
+
+def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    image,header = fits.getdata(filename), fits.getheader(filename)
+
+    # Sanitize input
+    try:
+        x1 = int(x1)
+    except:
+        x1 = 0
+
+    try:
+        y1 = int(y1)
+    except:
+        y1 = 0
+
+    try:
+        x2 = int(x2)
+    except:
+        x2 = image.shape[1]
+
+    try:
+        y2 = int(y2)
+    except:
+        y2 = image.shape[0]
+
+    # Interpret negative values as offsets from the top
+    if x1 < 0:
+        x1 = image.shape[1] + x1
+    if x2 < 0:
+        x2 = image.shape[1] + x2
+    if y1 < 0:
+        y1 = image.shape[0] + y1
+    if y2 < 0:
+        y2 = image.shape[0] + y2
+
+    # Ensure we are within the image
+    x1,x2 = max(0, x1), min(image.shape[1], x2)
+    y1,y2 = max(0, y1), min(image.shape[0], y2)
+
+    image,header = cutouts.crop_image(image, x1, y1, x2 - x1, y2 - y1, header=header)
+
+    # Write cropped image and header back
+    fits.writeto(filename, image, header, overwrite=True)
+
+
 def inspect_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -245,20 +313,31 @@ def inspect_image(filename, config, verbose=True, show=False):
             target = SkyCoord.from_name(config['target'])
             config['target_ra'] = target.ra.deg
             config['target_dec'] = target.dec.deg
-            log(f"Resolved to {config['target_ra']:.3f} {config['target_dec']:.3f}")
+            log(f"Resolved to RA={config['target_ra']:.4f} Dec={config['target_dec']:.4f}")
         except:
             log("Target not resolved")
 
         if (config.get('target_ra') or config.get('target_dec')) and wcs and wcs.is_celestial:
-            x0,y0 = wcs.all_world2pix(config.get('target_ra'), config.get('target_dec'), 0)
+            if ra0 is not None and dec0 is not None and sr0 is not None:
+                if astrometry.spherical_distance(ra0, dec0,
+                                                 config.get('target_ra'),
+                                                 config.get('target_dec')) > 2.0*sr0:
+                    log("Target is very far from the image center!")
 
-            if x0 > 0 and y0 > 0 and x0 < image.shape[1] and y0 < image.shape[0]:
-                cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
-                fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
-                log("Target cutout written to image_target.fits")
-            else:
-                log("Target is outside the image")
+            try:
+                x0,y0 = wcs.all_world2pix(config.get('target_ra'), config.get('target_dec'), 0)
 
+                if x0 > 0 and y0 > 0 and x0 < image.shape[1] and y0 < image.shape[0]:
+                    cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
+                    fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
+                    log(f"Target is at x={x0:.1f} y={y0:.1f}")
+                    log("Target cutout written to image_target.fits")
+                else:
+                    log("Target is outside the image")
+            except:
+                pass
+
+        # We may initialize some blind match parameters from the target position, if any
         if config.get('target_ra') is not None and config.get('blind_match_ra0') is None:
             config['blind_match_ra0'] = config.get('target_ra')
         if config.get('target_dec') is not None and config.get('blind_match_dec0') is None:
@@ -325,6 +404,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     # FWHM
     fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
     log(f"FWHM is {fwhm:.2f} pixels")
+
+    if config.get('fwhm_override'):
+        fwhm = config.get('fwhm_override')
+        log(f"Overriding with user-specified FWHM value of {fwhm:.2f} pixels")
+
     config['fwhm'] = fwhm
 
     if config.get('rel_bg1') and config.get('rel_bg2'):

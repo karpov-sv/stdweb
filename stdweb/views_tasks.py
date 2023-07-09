@@ -16,7 +16,7 @@ from . import models
 from . import forms
 from . import celery_tasks
 from . import celery
-
+from . import processing
 
 def tasks(request, id=None):
     context = {}
@@ -56,7 +56,12 @@ def tasks(request, id=None):
             if form and form.is_valid():
                 if form.has_changed():
                     for name,value in form.cleaned_data.items():
-                        if name not in ['form_type']:  # we do not want it to go to task.config
+                        # we do not want these to go to task.config
+                        ignored_fields = [
+                            'form_type',
+                            'crop_x1', 'crop_y1', 'crop_x2', 'crop_y2',
+                        ]
+                        if name not in ignored_fields:
                             if name in form.changed_data or name not in task.config:
                                 # update only changed or new fields
                                 task.config[name] = value
@@ -75,7 +80,23 @@ def tasks(request, id=None):
                         messages.error(request, "Cannot delete task " + str(id) + " belonging to " + task.user.username)
                         return HttpResponseRedirect(request.path_info)
 
-                if action == 'cleanup_task':
+                if action == 'fix_image':
+                    # TODO: move to async celery task?..
+                    processing.fix_image(os.path.join(task.path(), 'image.fits'), task.config)
+                    messages.success(request, "Fixed the image header for task " + str(id))
+
+                if action == 'crop_image':
+                    # TODO: move to async celery task?..
+                    processing.crop_image(os.path.join(task.path(), 'image.fits'), task.config,
+                                          x1=request.POST.get('crop_x1'),
+                                          y1=request.POST.get('crop_y1'),
+                                          x2=request.POST.get('crop_x2'),
+                                          y2=request.POST.get('crop_y2'))
+
+                    messages.success(request, "Cropped the image for task " + str(id))
+                    # Now we have to cleanup, which will be handled below
+
+                if action == 'cleanup_task' or action == 'crop_image':
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
                     task.config = {} # should we reset the config on cleanup?..
                     task.state = 'cleaning'

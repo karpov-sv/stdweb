@@ -53,9 +53,21 @@
      }
    }
 
+   // Toggle visibility of blind match options depending on the checkbox
    $(function(){
      $('#id_blind_match_wcs').on('change', check_blindmatch_visibility);
      check_blindmatch_visibility();
+   });
+
+   // Disable submitting the form on image cropping text fields
+   $(function(){
+     for(var id of ['crop_x1', 'crop_y1', 'crop_x2', 'crop_y2']){
+       $('#' + id).on('keypress keydown keyup', function (e) {
+         if (e.keyCode == 13) {
+           e.preventDefault();
+         }
+       });
+     }
    });
 
   </script>
@@ -120,10 +132,10 @@
       <form action="" method="POST" class="mb-2">
         {% csrf_token %}
         <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
-
           {% crispy form_inspect %}
 
           <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
+
           <button type="submit" name="action" value="cleanup_task" class="btn btn-danger"
                   title="Delete all processing results and configurations">Cleanup</button>
 
@@ -137,8 +149,50 @@
           </button>
 
           <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
-            <button type="submit" name="action" value="delete_task" class="btn btn-danger">Delete task</button>
+            <button type="submit" name="action" value="fix_image" class="btn btn-warning {% if 'image.wcs' not in files %}disabled{% endif %}"
+                    title="Update the image header with refined WCS">Fix header</button>
+
+            <!-- Crop control hide/show -->
+            <button type="button" class="btn btn-light collapse-chevron collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#cropControls"
+                    aria-expanded="false"
+                    aria-controls="cropControls"
+                    title="Crop the image">Crop&nbsp;</button>
+
+            <button type="submit" name="action" value="delete_task" class="btn btn-danger"
+                    title="Permanently delete this task">Delete task</button>
           </span>
+
+          <!-- Crop controls -->
+          <div id="cropControls" class="collapse collapsed">
+            <div class="row align-items-end">
+              <div class="col">
+                <label for="crop_x1" class="form-label">Min X</label>
+                <input type="number" class="form-control" name="crop_x1" id="crop_x1"
+                       title="Use negative values for offsets from the right"/>
+              </div>
+              <div class="col">
+                <label for="crop_x1" class="form-label">Min Y</label>
+                <input type="number" class="form-control" name="crop_y1" id="crop_y1"
+                       title="Use negative values for offsets from the top"/>
+              </div>
+              <div class="col">
+                <label for="crop_x2" class="form-label">Max X</label>
+                <input type="number" class="form-control" name="crop_x2" id="crop_x2"
+                       title="Use negative values for offsets from the right"/>
+              </div>
+              <div class="col">
+                <label for="crop_x2" class="form-label">Max Y</label>
+                <input type="number" class="form-control" name="crop_y2" id="crop_y2"
+                       title="Use negative values for offsets from the top"/>
+              </div>
+              <div class="col">
+                <button type="submit" name="action" value="crop_image" class="btn btn-warning"
+                        title="Crop the image">Crop!</button>
+              </div>
+            </div>
+          </div>
 
         </fieldset>
       </form>

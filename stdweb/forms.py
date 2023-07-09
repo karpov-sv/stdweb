@@ -22,6 +22,8 @@ class TaskInspectForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.form_tag = False
+        self.helper.disable_csrf = True
+        self.helper.field_template = 'crispy_field.html'
         self.helper.layout = Layout(
             'form_type',
             Row(
@@ -44,6 +46,7 @@ class TaskPhotometryForm(forms.Form):
     rel_aper = forms.FloatField(min_value=0, required=False, label="Relative aperture, FWHM")
     rel_bg1 = forms.FloatField(min_value=0, required=False, label="Local background inner annulus, FWHM")
     rel_bg2 = forms.FloatField(min_value=0, required=False, label="Outer annulus, FWHM")
+    fwhm_override = forms.FloatField(min_value=0, required=False, label="FWHM override, pixels")
 
     filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
                                required=False, label="Filter")
@@ -51,6 +54,7 @@ class TaskPhotometryForm(forms.Form):
                                 required=False, label="Reference catalog")
     cat_limit = forms.FloatField(required=False, label="Catalog limiting mag")
 
+    spatial_order = forms.IntegerField(min_value=0, required=False, label="Zeropoint spatial order")
     use_color = forms.BooleanField(required=False, label="Use color term")
     refine_wcs = forms.BooleanField(required=False, label="Refine astrometry")
     blind_match_wcs = forms.BooleanField(required=False, label="Blind match")
@@ -65,11 +69,13 @@ class TaskPhotometryForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.form_tag = False
+        self.helper.disable_csrf = True
+        self.helper.field_template = 'crispy_field.html'
         self.helper.layout = Layout(
             'form_type',
             Row(
-                Column(Field('sn')),
-                Column(Field('initial_aper')),
+                Column('sn'),
+                Column('initial_aper'),
                 Column('initial_r0'),
                 Column('bg_size'),
                 Column('minarea'),
@@ -78,23 +84,25 @@ class TaskPhotometryForm(forms.Form):
             Row(Column('rel_aper'),
                 Column('rel_bg1'),
                 Column('rel_bg2'),
+                Column('fwhm_override'),
                 css_class='align-items-end'
             ),
             Row(
                 Column('filter'),
                 Column('cat_name'),
                 Column('cat_limit', css_class="col-md-2"),
+                Column('spatial_order', css_class="col-md-2"),
                 Column('use_color', css_class="col-md-2"),
-                Column('refine_wcs', css_class="col-md-2"),
                 css_class='align-items-end'
             ),
             Row(
-                Column('blind_match_wcs', css_class="col-md-2"),
-                Column('blind_match_ps_lo', css_class="col-md-2"),
-                Column('blind_match_ps_up', css_class="col-md-2"),
-                Column('blind_match_ra0', css_class="col-md-2"),
-                Column('blind_match_dec0', css_class="col-md-2"),
-                Column('blind_match_sr0', css_class="col-md-2"),
+                Column('refine_wcs'),
+                Column('blind_match_wcs'),
+                Column('blind_match_ps_lo'),
+                Column('blind_match_ps_up'),
+                Column('blind_match_ra0'),
+                Column('blind_match_dec0'),
+                Column('blind_match_sr0'),
                 css_class='align-items-end'
                 )
         )
