@@ -35,7 +35,7 @@
       {{ files|length }} entries
       </p> -->
 
-      <div class="list-group">
+      <div class="list-group mb-4">
         {% for file in files %}
           <a href='{% url 'files' path=file.path %}' class="list-group-item list-group-item-action">
               <i class="me-2 fa fa-{% if file.type == 'dir' %}folder-open-o{% elif file.type == 'up' %}level-up{% elif file.type == 'text' %}file-text-o{% elif file.type == 'file' %}file-o{% else %}file-image-o{% endif %}"></i>

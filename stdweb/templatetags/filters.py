@@ -5,6 +5,8 @@ import datetime
 import uuid
 import humanize
 
+import numpy as np
+
 register = template.Library()
 
 
@@ -62,3 +64,27 @@ def make_uuid(x):
 @register.filter
 def naturalsize(size):
     return humanize.naturalsize(size, binary=True)
+
+@register.filter
+def to_sexadecimal(value, plus=False):
+    avalue = np.abs(value)
+    deg = int(np.floor(avalue))
+    min = int(np.floor(60.0*(avalue - deg)))
+    sec = 3600.0*(avalue - deg - 1.0*min/60)
+
+    string = '%02d %02d %04.1f' % (deg, min, sec)
+
+    if value < 0:
+        string = '-' + string
+    elif plus:
+        string = '+' + string
+
+    return string
+
+@register.filter
+def to_sexadecimal_plus(value):
+    return to_sexadecimal(value, plus=True)
+
+@register.filter
+def to_sexadecimal_hours(value):
+    return to_sexadecimal(value*1.0/15)

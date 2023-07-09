@@ -40,7 +40,11 @@ def task_file_contents(task, filename, highlight=False):
                           r"<span class='text-primary'>\1</span>",
                           contents, flags=re.MULTILINE)
 
-        contents = re.sub(r"^(RuntimeError:)(.*)$\b",
+        contents = re.sub(r"^(RuntimeError:)(.*)$",
+                          r"\1<span class='text-danger fw-bold'>\2</span>",
+                          contents, flags=re.MULTILINE)
+
+        contents = re.sub(r"^(\S+Error:)(.*)$",
                           r"\1<span class='text-danger'>\2</span>",
                           contents, flags=re.MULTILINE)
 

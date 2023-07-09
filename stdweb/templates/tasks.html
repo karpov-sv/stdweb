@@ -26,6 +26,16 @@
                   <div class="fst-italic">{{ task.title }}</div>
                 {% endif %}
 
+                <div>
+                {% if task.config.target_ra or task.config.target_dec %}
+                  Target: <span class="fw-bold">{{ task.config.target_ra|to_sexadecimal_hours }} {{ task.config.target_dec|to_sexadecimal_plus }}</span>
+                {% endif %}
+
+                {% if task.config.mag_limit %}
+                  Detection limit: <span class="fw-bold">{{ task.config.mag_limit|floatformat:2 }}</span>
+                {% endif %}
+                </div>
+
                 <small class="me-2 badge bg-info">{{ task.user|user }}</small>
                 <small class="me-2">Created: <span class="fst-italic">{{ task.created|timestamp }}</span></small>
                 <small class="me-2">Modified: <span class="fst-italic">{{ task.modified|timestamp }}</span></small>
