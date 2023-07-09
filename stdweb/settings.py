@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'el_pagination',
-    'django_celery_results',
     'stdweb',
 ]
 
@@ -158,7 +157,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_BROKER_URL = 'redis://localhost/'
 CELERY_TIMEZONE = TIME_ZONE
-CELERY_RESULT_BACKEND = 'django-db'
+CELERY_RESULT_BACKEND = 'redis://localhost/'
 
 # Caching
 CACHES = {
@@ -186,3 +185,5 @@ STDPIPE_SEXTRACTOR = config('STDPIPE_SEXTRACTOR', default=None)
 STDPIPE_SCAMP = config('STDPIPE_SCAMP', default=None)
 # Path to SWarp executable
 STDPIPE_SWARP = config('STDPIPE_SWARP', default=None)
+# Path to store PS1 download cache (if not set, use task-local cache)
+STDPIPE_PS1_CACHE = config('STDPIPE_PS1_CACHE', default=None)

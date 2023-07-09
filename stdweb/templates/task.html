@@ -97,7 +97,11 @@
     </p>
     {% endif %}
     <p>
-      Task {{ task.id }} created by {{ task.user|user }} on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
+      Task {{ task.id }} created by <span class="text-secondary fw-bold">{{ task.user|user }}</span> on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
+      {% if not user_may_submit %}
+        <br>
+        <span class="text-danger fw-bold">Task is read-only</span>
+      {% endif %}
       <br>
       State:
       {% if task.celery_id %}
@@ -273,6 +277,59 @@
       </div>
 
     {% endif %}
+
+    <!-- Image subtraction -->
+    {% if 'photometry.pickle' in files %}
+      <hr>
+      <h3>Template subtraction</h3>
+
+      {% if user_may_submit %}
+        <form action="" method="POST" class="mb-2">
+          {% csrf_token %}
+          <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
+
+            {% crispy form_subtraction %}
+
+            <button type="submit" name="action" value="subtract_image" class="btn btn-primary">Run subtraction</button>
+          </fieldset>
+        </form>
+      {% endif %}
+
+      <hr style="border-style: dotted">
+      <div class="row mb-2">
+        {% if 'subtraction.log' in files %}
+          <div class="col">
+            {% include "task_block_text.html" with file='subtraction.log' %}
+          </div>
+
+          <div class="col">
+            <div class="row">
+              {% make_list 'template.fits' 'template_mask.fits' 'conv.fits' 'diff.fits' 'sdiff.fits' 'ediff.fits' as list %}
+              {% for name in list %}
+                {% if name in files %}
+                  <div class="col" style="max-width: 256px">
+                    {% include "task_block_image.html" with fits=name task=task only %}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+    {% endif %}
+
+    <!-- Target cutout -->
+    {% if 'sub_target.cutout' in files %}
+      <hr>
+      <h3>Target on difference (template-subtracted) image</h3>
+
+      <div class="text-center">
+        {% include "task_block_image.html" with cutout='sub_target.cutout' task=task only %}
+      </div>
+
+    {% endif %}
+
 
   {% endif %}
 

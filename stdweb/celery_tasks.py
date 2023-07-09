@@ -93,3 +93,31 @@ def task_photometry(self, id):
     fix_config(config)
     task.complete()
     task.save()
+
+
+@shared_task(bind=True)
+def task_subtraction(self, id):
+    task = models.Task.objects.get(id=id)
+    basepath = task.path()
+
+    config = task.config
+
+    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'subtraction.log'))
+    log(clear=True)
+
+    # Start processing
+    try:
+        processing.subtract_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+        task.state = 'subtracted'
+    except:
+        import traceback
+        log("\nError!\n", traceback.format_exc())
+
+        task.state = 'failed'
+        task.celery_id = None
+
+    # End processing
+    task.celery_id = None
+    fix_config(config)
+    task.complete()
+    task.save()

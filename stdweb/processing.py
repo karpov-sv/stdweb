@@ -1,5 +1,7 @@
 import os, glob, shutil
 
+from functools import partial
+
 import numpy as np
 
 from astropy.wcs import WCS
@@ -13,6 +15,8 @@ from astropy.time import Time
 
 import astroscrappy
 import time
+
+import sep
 
 import dill as pickle
 
@@ -50,7 +54,6 @@ supported_filters = {
     'RP': {'name':'Gaia RP', 'aliases':[]},
 }
 
-
 supported_catalogs = {
     'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
                    'limit': 'Gmag'},
@@ -62,6 +65,41 @@ supported_catalogs = {
               'limit':'rmag'},
     'gaiaedr3': {'name':'Gaia eDR3', 'filters':['G', 'BP', 'RP'],
               'limit':'Gmag'},
+}
+
+supported_templates = {
+    'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},
+    'skymapper': {'name': 'SkyMapper DR1 (HiPS)', 'filters': {
+        'u': 'CDS/P/skymapper-U',
+        'g': 'CDS/P/skymapper-G',
+        'r': 'CDS/P/skymapper-R',
+        'i': 'CDS/P/skymapper-I',
+        'z': 'CDS/P/skymapper-Z',
+    }},
+    # 'des': {'name': 'Dark Energy Survey DR2 (HiPS)', 'filters': {
+    #     'g': 'CDS/P/DES-DR2/g',
+    #     'r': 'CDS/P/DES-DR2/r',
+    #     'i': 'CDS/P/DES-DR2/i',
+    #     'z': 'CDS/P/DES-DR2/z',
+    # }},
+    # 'legacy': {'name': 'DESI Legacy Surveys DR10 (HiPS)', 'filters': {
+    #     'g': 'CDS/P/DESI-Legacy-Surveys/DR10/g',
+    #     'i': 'CDS/P/DESI-Legacy-Surveys/DR10/i',
+    # }},
+}
+
+# Best guess template filter mappings
+filter_mappings = {
+    'U': ['u', 'g'],
+    'B': ['u', 'g'],
+    'V': ['g'],
+    'R': ['r', 'i'],
+    'I': ['i', 'z'],
+    'u': ['u', 'g'],
+    'g': ['g', 'g'],
+    'r': ['r', 'i'],
+    'i': ['i', 'r'],
+    'z': ['z', 'r'],
 }
 
 
@@ -84,9 +122,20 @@ files_photometry = [
     'target.vot', 'target.cutout'
 ]
 
-cleanup_inspect = files_inspect + files_photometry
+files_subtraction = [
+    'subtraction.log',
+    'sub_image.fits', 'sub_mask.fits',
+    'sub_template.fits', 'sub_template_mask.fits',
+    'sub_diff.fits', 'sub_sdiff.fits', 'sub_conv.fits', 'sub_ediff.fits',
+    'sub_target.vot', 'sub_target.cutout',
+]
 
-cleanup_photometry = files_photometry
+cleanup_inspect = files_inspect + files_photometry + files_subtraction
+
+cleanup_photometry = files_photometry + files_subtraction
+
+cleanup_subtraction = files_subtraction
+
 
 def print_to_file(*args, clear=False, logname='out.log', **kwargs):
     if clear and os.path.exists(logname):
@@ -218,6 +267,11 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['use_color'] = config.get('use_color', True)
     config['refine_wcs'] = config.get('refine_wcs', True)
     config['blind_match_wcs'] = config.get('blind_match_wcs', False)
+
+    config['sub_size'] = config.get('sub_size', 1000)
+    config['sub_overlap'] = config.get('sub_overlap', 50)
+    config['sub_verbose'] = config.get('sub_verbose', False)
+    config['detect_transients'] = config.get('detect_transients', False)
 
     # Load the image
     log(f'Inspecting {filename}')
@@ -360,6 +414,15 @@ def inspect_image(filename, config, verbose=True, show=False):
     if not config.get('cat_limit'):
         # Modest limit to restrict getting too faint stars
         config['cat_limit'] = 20.0
+
+    # Suggested template
+    if not config.get('template'):
+        if (dec0 is not None and dec0 < -30) or config.get('target_dec', 0) < -30:
+            config['template'] = 'skymapper'
+        else:
+            config['template'] = 'ps1'
+
+        log(f"Suggested template is {supported_templates[config['template']]['name']}")
 
 
 def photometry_image(filename, config, verbose=True, show=False):
@@ -731,3 +794,257 @@ def photometry_image(filename, config, verbose=True, show=False):
             log(f"Target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
         else:
             log("Target not detected")
+
+
+def subtract_image(filename, config, verbose=True, show=False):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    if settings.STDPIPE_PS1_CACHE:
+        _cachedir = settings.STDPIPE_PS1_CACHE
+    else:
+        # Task-local
+        _cachedir = os.path.join(basepath, 'cache')
+
+    sub_verbose = verbose if config.get('sub_verbose') else False
+    detect_transients = config.get('detect_transients', False)
+
+    # Cleanup stale plots and files
+    for name in cleanup_subtraction:
+        fullname = os.path.join(basepath, name)
+        if os.path.exists(fullname):
+            os.unlink(fullname)
+
+    # Image
+    image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+
+    fix_header(header)
+
+    # Mask
+    mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+
+    # Photometric solution
+    m = pickle_from_file(os.path.join(basepath, 'photometry.pickle'))
+
+    # Objects
+    obj = Table.read(os.path.join(basepath, 'objects.vot'))
+
+    # Catalogue
+    cat = Table.read(os.path.join(basepath, 'cat.vot'))
+
+    # WCS
+    if os.path.exists(os.path.join(basepath, "image.wcs")):
+        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
+        astrometry.clear_wcs(header)
+        header += wcs.to_header(relax=True)
+        log("WCS loaded from image.wcs")
+    else:
+        wcs = WCS(header)
+        log("Using original WCS from FITS header")
+
+    if wcs is None or not wcs.is_celestial:
+        raise RuntimeError('No WCS astrometric solution')
+
+    log("\n---- Template selection ----\n")
+
+    tname = config.get('template', 'ps1')
+    tconf = supported_templates.get(tname)
+
+    if tconf is None:
+        raise RuntimeError(f"Unsupported template: {tname}")
+
+    tfilter = None
+    for _ in filter_mappings[config['filter']]:
+        if _ in tconf['filters']:
+            tfilter = _
+            break
+
+    log(f"Using {tconf['name']} in filter {tfilter} as a template")
+
+    sub_size = config.get('sub_size', 1000)
+    sub_overlap = config.get('sub_overlap', 50)
+
+    if detect_transients:
+        log('Transient detection mode activated')
+        # We will split the image into nx x ny blocks
+        nx = int(np.round(image.shape[1] / sub_size))
+        ny = int(np.round(image.shape[0] / sub_size))
+        log(f"Will split the image into {nx} x {ny} sub-images")
+        split_fn = partial(pipeline.split_image, get_index=True, overlap=sub_overlap, nx=nx, ny=ny)
+
+    elif config.get('target_ra') is not None:
+        log('Forced photometry mode activated')
+        # We will just crop the image
+        x0,y0 = wcs.all_world2pix(config['target_ra'], config['target_dec'], 0)
+        log(f"Will crop the sub-image centered at {x0:.1f} {y0:.1f}")
+        def split_fn(image, **kwargs):
+            result = pipeline.get_subimage_centered(image, x0, y0, sub_size, **kwargs)
+
+            yield [0] + result
+
+    else:
+        log('No target provided and transient detection is disabled, nothing to do')
+        return
+
+    for i, x0, y0, image1, mask1, header1, wcs1, obj1, cat1 in split_fn(
+            image, mask=mask, header=header, wcs=wcs, obj=obj, cat=cat,
+            get_origin=True, verbose=False):
+
+        log(f"\n---- Sub-image {i}: {x0} {y0} - {x0 + image1.shape[1]} {y0 + image1.shape[0]} ----\n")
+
+        fits.writeto(os.path.join(basepath, 'sub_image.fits'), image1, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_mas.fits'), mask1.astype(np.int8), header1, overwrite=True)
+
+        # Get the template
+        if tname == 'ps1':
+            log("Getting the template from original Pan-STARRS archive")
+            tmpl = templates.get_ps1_image(tfilter, wcs=wcs1, shape=image1.shape,
+                                           _cachedir=_cachedir,
+                                           _tmpdir=settings.STDPIPE_TMPDIR,
+                                           _exe=settings.STDPIPE_SWARP,
+                                           verbose=sub_verbose)
+            tmask = templates.get_ps1_image(tfilter, ext='mask', wcs=wcs1, shape=image1.shape,
+                                            extra={'COMBINE_TYPE':'AND'},
+                                            _cachedir=_cachedir,
+                                           _tmpdir=settings.STDPIPE_TMPDIR,
+                                            _exe=settings.STDPIPE_SWARP,
+                                            verbose=sub_verbose)
+            if tmask is not None and tmpl is not None:
+                tmask = (tmask & ~0x8000) > 0
+                tmask |= np.isnan(tmpl)
+            else:
+                raise RuntimeError('Error getting the template from Pan-STARRS')
+        else:
+            log("Getting the template from HiPS server")
+            tmpl = templates.get_hips_image(tconf['filters'][tfilter], wcs=wcs1, shape=image1.shape,
+                                            get_header=False,
+                                            verbose=sub_verbose)
+            if tmpl is not None:
+                tmask = np.isnan(tmpl)
+            else:
+                raise RuntimeError(f"Error getting the template from {tconf['name']}")
+
+        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header, overwrite=True)
+
+        tobj,tsegm = photometry.get_objects_sextractor(tmpl, mask=tmask, sn=5,
+                                                       extra_params=['NUMBER'],
+                                                       checkimages=['SEGMENTATION'],
+                                                       _tmpdir=settings.STDPIPE_TMPDIR,
+                                                       _exe=settings.STDPIPE_SEXTRACTOR)
+        # Mask the footprints of masked objects
+        # for _ in tobj[(tobj['flags'] & 0x100) > 0]:
+        #     tmask |= tsegm == _['NUMBER']
+        tobj = tobj[tobj['flags'] == 0]
+
+        t_fwhm = np.median(tobj['fwhm'])
+        i_fwhm = config.get('fwhm', 3.0)
+
+        log(f"Using template FWHM = {t_fwhm:.1f} pix and image FWHM = {i_fwhm:.1f} pix")
+
+        bg = sep.Background(image1, mask=mask1,
+                            bw=config.get('bg_size', 128),
+                            bh=config.get('bg_size', 128))
+
+        res = subtraction.run_hotpants(image1-bg, tmpl,
+                                       mask=mask1, template_mask=tmask,
+                                       get_convolved=True,
+                                       get_scaled=True,
+                                       get_noise=True,
+                                       verbose=verbose,
+                                       image_fwhm=i_fwhm,
+                                       template_fwhm=t_fwhm,
+                                       image_gain=config.get('gain', 1.0),
+                                       template_gain=10000,
+                                       err=True,
+                                       extra={'ko':2, 'bgo':0},
+                                       obj=obj1[obj1['flags']==0])
+
+        if res is not None:
+            diff,conv,sdiff,ediff = res
+        else:
+            raise RuntimeError('Subtraction failed')
+
+        dmask = diff == 1e-30 # Bad pixels
+
+        # Combined mask on the sub-image
+        fullmask1 = mask1 | tmask | dmask
+
+        fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header, overwrite=True)
+
+        if config.get('target_ra') is not None and config.get('target_dec') is not None and not detect_transients:
+        # Target forced photometry
+            log(f"\n---- Target forced photometry ----\n")
+
+            target_obj = Table({'ra':[config['target_ra']], 'dec':[config['target_dec']]})
+            target_obj['x'],target_obj['y'] = wcs1.all_world2pix(target_obj['ra'], target_obj['dec'], 0)
+
+            if not (target_obj['x'] > 0 and target_obj['x'] < image1.shape[1] and
+                    target_obj['y'] > 0 and target_obj['y'] < image1.shape[0]):
+                raise RuntimeError("Target is outside the sub-image")
+
+            log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
+
+            if config.get('rel_bg1') and config.get('rel_bg2'):
+                rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
+            else:
+                rel_bkgann = None
+
+            target_obj = photometry.measure_objects(target_obj, diff, mask=fullmask1,
+                                                    # FWHM should match the one used for calibration
+                                                    fwhm=config.get('fwhm'),
+                                                    aper=config.get('rel_aper', 1.0),
+                                                    bkgann=rel_bkgann,
+                                                    sn=0,
+                                                    # We assume no background
+                                                    bg=None,
+                                                    # ..and known error model
+                                                    err=ediff,
+                                                    gain=config.get('gain', 1.0),
+                                                    verbose=verbose)
+
+            target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'] + x0,
+                                                                       target_obj['y'] + y0,
+                                                                       target_obj['mag'])
+
+            target_obj['mag_calib_err'] = np.hypot(target_obj['magerr'],
+                                                   m['zero_fn'](target_obj['x'] + x0,
+                                                                target_obj['y'] + y0,
+                                                                target_obj['mag'],
+                                                                get_err=True))
+
+            # TODO: Improve limiting mag estimate
+            target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*target_obj['fluxerr']) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
+
+            target_obj['mag_filter_name'] = m['cat_col_mag']
+
+            if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
+                target_obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
+                target_obj['mag_color_term'] = m['color_term']
+
+            target_obj.write(os.path.join(basepath, 'sub_target.vot'), format='votable', overwrite=True)
+            log("Measured target stored to sub_target.vot")
+
+            # Create the cutout from image based on the candidate
+            cutout = cutouts.get_cutout(image1, target_obj[0], 30,
+                                        mask=fullmask1, header=header1,
+                                        diff=diff, template=tmpl, convolved=conv, err=ediff)
+            cutouts.write_cutout(cutout, os.path.join(basepath, 'sub_target.cutout'))
+            log("Target cutouts stored to sub_target.cutout")
+
+            log(f"Target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
+            if target_obj['flux'][0] > 0:
+                mag_string = target_obj['mag_filter_name'][0]
+                if 'mag_color_name' in target_obj.colnames and 'mag_color_term' in target_obj.colnames and target_obj['mag_color_term'][0] is not None:
+                    sign = '-' if target_obj['mag_color_term'][0] > 0 else '+'
+                    mag_string += f" {sign} {np.abs(target_obj['mag_color_term'][0]):.2f}*({target_obj['mag_color_name'][0]})"
+
+                log(f"Target magnitude is {mag_string} = {target_obj['mag_calib'][0]:.2f} +/- {target_obj['mag_calib_err'][0]:.2f}")
+                log(f"Target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
+            else:
+                log("Target not detected")

@@ -3,7 +3,7 @@ from django import forms
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column
 
-from .processing import supported_filters, supported_catalogs
+from .processing import supported_filters, supported_catalogs, supported_templates
 
 
 class UploadFileForm(forms.Form):
@@ -105,4 +105,36 @@ class TaskPhotometryForm(forms.Form):
                 Column('blind_match_sr0'),
                 css_class='align-items-end'
                 )
+        )
+
+class TaskSubtractionForm(forms.Form):
+    form_type = forms.CharField(initial='subtraction', widget=forms.HiddenInput())
+    template = forms.ChoiceField(choices=[('','')] + [(_,supported_templates[_]['name']) for _ in supported_templates.keys()],
+                                 required=False, label="Template")
+    # file = forms.FileField(required=False, label="Custom template file")
+    sub_size = forms.IntegerField(min_value=0, required=False, label="Sub-image size")
+    sub_overlap = forms.IntegerField(min_value=0, required=False, label="Sub-image overlap")
+    sub_verbose = forms.BooleanField(required=False, label="Verbose")
+    detect_transients = forms.BooleanField(required=False, label="Detect transients")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.disable_csrf = True
+        self.helper.field_template = 'crispy_field.html'
+        self.helper.layout = Layout(
+            'form_type',
+            Row(
+                Column('template'),
+                # Column('file'),
+                Column('sub_size', css_class="col-md-2"),
+                Column('sub_overlap', css_class="col-md-2"),
+                Column('sub_verbose', css_class="col-md-1"),
+                css_class='align-items-end'
+            ),
+            Row(
+                Column('detect_transients'),
+                css_class='align-items-end'
+            ),
         )

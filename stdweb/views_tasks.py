@@ -44,6 +44,7 @@ def tasks(request, id=None):
 
         all_forms['inspect'] = forms.TaskInspectForm(request.POST or None, initial = task.config)
         all_forms['photometry'] = forms.TaskPhotometryForm(request.POST or None, initial = task.config)
+        all_forms['subtraction'] = forms.TaskSubtractionForm(request.POST or None, initial = task.config)
 
         for name,form in all_forms.items():
             context['form_'+name] = form
@@ -114,6 +115,12 @@ def tasks(request, id=None):
                     task.state = 'photometry'
                     task.save()
                     messages.success(request, "Started image photometry for task " + str(id))
+
+                if action == 'subtract_image':
+                    task.celery_id = celery_tasks.task_subtraction.delay(task.id).id
+                    task.state = 'subtraction'
+                    task.save()
+                    messages.success(request, "Started template subtraction for task " + str(id))
 
                 return HttpResponseRedirect(request.path_info)
 
