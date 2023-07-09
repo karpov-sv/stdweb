@@ -395,11 +395,11 @@ def photometry_image(filename, config, verbose=True, show=False):
             raise RuntimeError('Too few good objects for blind matching')
 
         wcs = astrometry.blind_match_objects(obj[:500],
-                                             center_ra=config.get('target_ra'),
-                                             center_dec=config.get('target_dec'),
-                                             radius=1, # FIXME: make configurable!
-                                             scale_lower=0.2,
-                                             scale_upper=4.0,
+                                             center_ra=config.get('blind_match_ra0'),
+                                             center_dec=config.get('blind_match_dec0'),
+                                             radius=config.get('blind_match_sr0'),
+                                             scale_lower=config.get('blind_match_ps_lo'),
+                                             scale_upper=config.get('blind_match_ps_up'),
                                              sn=sn0,
                                              verbose=verbose,
                                              _tmpdir=settings.STDPIPE_TMPDIR,
@@ -588,8 +588,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         target_obj = Table({'ra':[config['target_ra']], 'dec':[config['target_dec']]})
         target_obj['x'],target_obj['y'] = wcs.all_world2pix(target_obj['ra'], target_obj['dec'], 0)
 
-        if (target_obj['x'] < 0 or target_obj['x'] >= image.shape[1] or
-            target_obj['y'] < 0 or target_obj['y'] >= image.shape[0]):
+        if not (target_obj['x'] > 0 and target_obj['x'] < image.shape[1] and
+                target_obj['y'] > 0 and target_obj['y'] < image.shape[0]):
             raise RuntimeError("Target is outside the image")
 
         log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
