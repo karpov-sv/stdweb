@@ -76,16 +76,22 @@ supported_templates = {
         'i': 'CDS/P/skymapper-I',
         'z': 'CDS/P/skymapper-Z',
     }},
-    # 'des': {'name': 'Dark Energy Survey DR2 (HiPS)', 'filters': {
-    #     'g': 'CDS/P/DES-DR2/g',
-    #     'r': 'CDS/P/DES-DR2/r',
-    #     'i': 'CDS/P/DES-DR2/i',
-    #     'z': 'CDS/P/DES-DR2/z',
-    # }},
-    # 'legacy': {'name': 'DESI Legacy Surveys DR10 (HiPS)', 'filters': {
-    #     'g': 'CDS/P/DESI-Legacy-Surveys/DR10/g',
-    #     'i': 'CDS/P/DESI-Legacy-Surveys/DR10/i',
-    # }},
+    'des': {'name': 'Dark Energy Survey DR2 (HiPS)', 'filters': {
+        'g': 'CDS/P/DES-DR2/g',
+        'r': 'CDS/P/DES-DR2/r',
+        'i': 'CDS/P/DES-DR2/i',
+        'z': 'CDS/P/DES-DR2/z',
+    }},
+    'legacy': {'name': 'DESI Legacy Surveys DR10 (HiPS)', 'filters': {
+        'g': 'CDS/P/DESI-Legacy-Surveys/DR10/g',
+        'i': 'CDS/P/DESI-Legacy-Surveys/DR10/i',
+    }},
+    'decaps': {'name': 'DECaPS DR2 (HiPS)', 'filters': {
+        'g': 'CDS/P/DECaPS/DR2/g',
+        'r': 'CDS/P/DECaPS/DR2/r',
+        'i': 'CDS/P/DECaPS/DR2/i',
+        'z': 'CDS/P/DECaPS/DR2/z',
+    }},
 }
 
 # Best guess template filter mappings
