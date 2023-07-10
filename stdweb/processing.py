@@ -278,7 +278,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['use_color'] = config.get('use_color', True)
     config['refine_wcs'] = config.get('refine_wcs', True)
     config['blind_match_wcs'] = config.get('blind_match_wcs', False)
-
+    config['hotpants_extra'] = config.get('hotpants_extra', {'ko':0, 'bgo':0})
     config['sub_size'] = config.get('sub_size', 1000)
     config['sub_overlap'] = config.get('sub_overlap', 50)
     config['sub_verbose'] = config.get('sub_verbose', False)
@@ -993,7 +993,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                        image_gain=config.get('gain', 1.0),
                                        template_gain=10000,
                                        err=True,
-                                       extra={'ko':0, 'bgo':0},
+                                       extra=config.get('hotpants_extra', {'ko':0, 'bgo':0}),
                                        obj=obj1[obj1['flags']==0])
 
         if res is not None:

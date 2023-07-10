@@ -112,6 +112,7 @@ class TaskSubtractionForm(forms.Form):
     template = forms.ChoiceField(choices=[('','')] + [(_,supported_templates[_]['name']) for _ in supported_templates.keys()],
                                  required=False, label="Template")
     # file = forms.FileField(required=False, label="Custom template file")
+    hotpants_extra = forms.JSONField(required=False, label="HOTPANTS extra params", widget=forms.TextInput)
     sub_size = forms.IntegerField(min_value=0, required=False, label="Sub-image size")
     sub_overlap = forms.IntegerField(min_value=0, required=False, label="Sub-image overlap")
     sub_verbose = forms.BooleanField(required=False, label="Verbose")
@@ -130,6 +131,7 @@ class TaskSubtractionForm(forms.Form):
                 # Column('file'),
                 Column('sub_size', css_class="col-md-2"),
                 Column('sub_overlap', css_class="col-md-2"),
+                Column('hotpants_extra'),
                 Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-end'
             ),
