@@ -118,3 +118,4 @@ data/
 tasks/
 
 db.sqlite3
+dump.rdb
