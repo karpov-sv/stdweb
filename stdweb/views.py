@@ -211,6 +211,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     # ax.set_axis_off()
     fig.add_axes(ax)
     plots.imshow(data, ax=ax, show_axis=False, show_colorbar=False,
+                 origin='lower',
                  cmap=request.GET.get('cmap', 'Blues_r'),
                  stretch=request.GET.get('stretch', 'linear'),
                  qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))])

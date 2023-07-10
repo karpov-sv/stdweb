@@ -684,6 +684,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax = fig.add_subplot(1, 1, 1)
         plots.plot_photometric_match(m, mode='zero', show_dots=True, bins=8, ax=ax,
                                      range=[[0, image.shape[1]], [0, image.shape[0]]])
+        ax.set_aspect(1)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
@@ -691,6 +692,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax = fig.add_subplot(1, 1, 1)
         plots.plot_photometric_match(m, mode='model', show_dots=True, bins=8, ax=ax,
                                      range=[[0, image.shape[1]], [0, image.shape[0]]])
+        ax.set_aspect(1)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
@@ -698,6 +700,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax = fig.add_subplot(1, 1, 1)
         plots.plot_photometric_match(m, mode='residuals', show_dots=True, bins=8, ax=ax,
                                      range=[[0, image.shape[1]], [0, image.shape[0]]])
+        ax.set_aspect(1)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
@@ -705,6 +708,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax = fig.add_subplot(1, 1, 1)
         plots.plot_photometric_match(m, mode='dist', show_dots=True, bins=8, ax=ax,
                                      range=[[0, image.shape[1]], [0, image.shape[0]]])
+        ax.set_aspect(1)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
 
