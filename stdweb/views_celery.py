@@ -43,6 +43,15 @@ def view_queue(request, id=None):
 
             return HttpResponseRedirect(request.path_info)
 
+        if action == 'cleanuplinkedtask' and id:
+            if request.user.is_staff or True:
+                for task in models.Task.objects.filter(celery_id=id):
+                    task.celery_id = None
+                    task.state = 'failed'
+                    task.save()
+
+            return HttpResponseRedirect(request.path_info)
+
     if id:
         ctask = celery.app.AsyncResult(id)
 

@@ -39,7 +39,7 @@
       <form action="" method="POST">
         {% csrf_token %}
         <button type="submit" name="action" value="terminatealltasks" class="btn btn-danger">Terminate all queued tasks</button>
-        <button type="submit" name="action" value="cleanuplinkedtasks" class="btn btn-danger">Cleanup linked tasks</button>
+        <button type="submit" name="action" value="cleanuplinkedtasks" class="btn btn-danger">Cleanup all linked tasks</button>
       </form>
 
       {% endwrapwith %}
@@ -64,6 +64,7 @@
       <form action="" method="POST">
         {% csrf_token %}
         <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task</button>
+        <button type="submit" name="action" value="cleanuplinkedtask" class="btn btn-danger">Cleanup linked tasks</button>
       </form>
 
       {% endwrapwith %}
