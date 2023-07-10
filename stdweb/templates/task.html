@@ -70,6 +70,29 @@
      }
    });
 
+   check_custom_template_visibility = function(){
+     var selected = $('#id_template').find(":selected").val();
+     var row = $('#custom_row');
+
+     if (selected == 'custom' && row.is(':hidden')){
+       row.show();
+     } else if (selected != 'custom' && row.is(':visible')){
+       row.hide();
+     }
+   }
+
+   // Toggle visibility of custom template options depending on the checkbox
+   $(function(){
+     $('#id_template').on('change', check_custom_template_visibility);
+     check_custom_template_visibility();
+
+     // Also change the label if template is already uploaded
+     if ({% if 'custom_template.fits' in files %}true{% else %}false{% endif %}){
+       $('#div_id_custom_template label').text('Replace uploaded custom template file');
+       $('#div_id_custom_template label').addClass('text-success');
+     }
+   });
+
   </script>
 
 {% endblock %}
@@ -213,7 +236,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' as list %}
+              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_template.fits' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
@@ -284,7 +307,7 @@
       <h3>Template subtraction</h3>
 
       {% if user_may_submit %}
-        <form action="" method="POST" class="mb-2">
+        <form action="" method="POST" class="mb-2" enctype="multipart/form-data">
           {% csrf_token %}
           <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
 

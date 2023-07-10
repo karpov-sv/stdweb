@@ -18,6 +18,8 @@ import time
 
 import sep
 
+import reproject
+
 import dill as pickle
 
 from . import settings
@@ -68,6 +70,7 @@ supported_catalogs = {
 }
 
 supported_templates = {
+    'custom': {'name': 'Custom template'},
     'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},
     'skymapper': {'name': 'SkyMapper DR1 (HiPS)', 'filters': {
         'u': 'CDS/P/skymapper-U',
@@ -886,16 +889,35 @@ def subtract_image(filename, config, verbose=True, show=False):
     tname = config.get('template', 'ps1')
     tconf = supported_templates.get(tname)
 
-    if tconf is None:
-        raise RuntimeError(f"Unsupported template: {tname}")
+    if tname == 'custom':
+        log("Using custom template from custom_template.fits")
 
-    tfilter = None
-    for _ in filter_mappings[config['filter']]:
-        if _ in tconf['filters']:
-            tfilter = _
-            break
+        if not os.path.exists(os.path.join(basepath, 'custom_template.fits')):
+            raise RuntimeError("Custom template not found")
 
-    log(f"Using {tconf['name']} in filter {tfilter} as a template")
+        custom_template = fits.getdata(os.path.join(basepath, 'custom_template.fits')).astype(np.double)
+        custom_header = fits.getheader(os.path.join(basepath, 'custom_template.fits'))
+        custom_wcs = WCS(custom_header)
+
+        template_gain = config.get('custom_template_gain', 10000)
+        template_saturation = config.get('custom_template_saturation', None)
+
+        custom_mask = np.isnan(custom_template)
+        if template_saturation:
+            custom_mask |= custom_template >= template_saturation
+    else:
+        if tconf is None:
+            raise RuntimeError(f"Unsupported template: {tname}")
+
+        tfilter = None
+        for _ in filter_mappings[config['filter']]:
+            if _ in tconf['filters']:
+                tfilter = _
+                break
+
+        template_gain = 10000 # Assume effectively noise-less
+
+        log(f"Using {tconf['name']} in filter {tfilter} as a template")
 
     sub_size = config.get('sub_size', 1000)
     sub_overlap = config.get('sub_overlap', 50)
@@ -950,6 +972,16 @@ def subtract_image(filename, config, verbose=True, show=False):
                 tmask |= np.isnan(tmpl)
             else:
                 raise RuntimeError('Error getting the template from Pan-STARRS')
+
+        elif tname == 'custom':
+            log("Re-projecting custom template onto sub-image")
+
+            tmpl,fp = reproject.reproject_adaptive((custom_template, custom_wcs), wcs1, image1.shape)
+            tmask,fp = reproject.reproject_adaptive((custom_mask.astype(np.double), custom_wcs), wcs1, image1.shape)
+
+            tmask = tmask > 0.5
+            tmask |= fp < 0.5
+
         else:
             log("Getting the template from HiPS server")
             tmpl = templates.get_hips_image(tconf['filters'][tfilter], wcs=wcs1, shape=image1.shape,

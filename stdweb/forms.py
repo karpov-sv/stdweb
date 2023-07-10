@@ -109,13 +109,16 @@ class TaskPhotometryForm(forms.Form):
 
 class TaskSubtractionForm(forms.Form):
     form_type = forms.CharField(initial='subtraction', widget=forms.HiddenInput())
-    template = forms.ChoiceField(choices=[('','')] + [(_,supported_templates[_]['name']) for _ in supported_templates.keys()],
+    template = forms.ChoiceField(choices=[(_,supported_templates[_]['name']) for _ in supported_templates.keys()],
                                  required=False, label="Template")
-    # file = forms.FileField(required=False, label="Custom template file")
     hotpants_extra = forms.JSONField(required=False, label="HOTPANTS extra params", widget=forms.TextInput)
     sub_size = forms.IntegerField(min_value=0, required=False, label="Sub-image size")
     sub_overlap = forms.IntegerField(min_value=0, required=False, label="Sub-image overlap")
     sub_verbose = forms.BooleanField(required=False, label="Verbose")
+    custom_template = forms.FileField(required=False, label="Custom template file")
+    custom_template_gain = forms.FloatField(min_value=0, required=False, label="Custom template gain, e/ADU")
+    custom_template_saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
+
     detect_transients = forms.BooleanField(required=False, label="Detect transients")
 
     def __init__(self, *args, **kwargs):
@@ -132,11 +135,18 @@ class TaskSubtractionForm(forms.Form):
                 Column('sub_size', css_class="col-md-2"),
                 Column('sub_overlap', css_class="col-md-2"),
                 Column('hotpants_extra'),
-                Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-end'
             ),
             Row(
+                Column('custom_template'),
+                Column('custom_template_gain'),
+                Column('custom_template_saturation'),
+                css_class='align-items-end',
+                id='custom_row',
+            ),
+            Row(
                 Column('detect_transients'),
+                Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-end'
             ),
         )
