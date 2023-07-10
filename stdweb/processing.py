@@ -726,6 +726,25 @@ def photometry_image(filename, config, verbose=True, show=False):
     obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
     log("Measured objects stored to objects.vot")
 
+    # Check the filter
+    if config.get('use_color', True) and np.abs(m['color_term']) > 0.5:
+        log("Color term is too large, checking whether other filters would work better")
+
+        for fname in supported_catalogs[config['cat_name']].get('filters', []):
+            m1 = pipeline.calibrate_photometry(
+                obj, cat, pixscale=pixscale,
+                cat_col_mag=fname + 'mag',
+                cat_col_mag_err='e_' + fname + 'mag',
+                cat_col_mag1=config.get('cat_col_color_mag1'),
+                cat_col_mag2=config.get('cat_col_color_mag2'),
+                use_color=config.get('use_color', True),
+                order=config.get('spatial_order', 0),
+                robust=True, scale_noise=True,
+                accept_flags=0x02, max_intrinsic_rms=0.01,
+                verbose=False)
+
+            log(f"filter {fname}: color term {m1['color_term']:.2f}")
+
     # Detection limits
     log("\n---- Global detection limit ----\n")
     mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=verbose)
@@ -941,8 +960,8 @@ def subtract_image(filename, config, verbose=True, show=False):
             else:
                 raise RuntimeError(f"Error getting the template from {tconf['name']}")
 
-        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, overwrite=True)
 
         tobj,tsegm = photometry.get_objects_sextractor(tmpl, mask=tmask, sn=5,
                                                        extra_params=['NUMBER'],
@@ -987,10 +1006,10 @@ def subtract_image(filename, config, verbose=True, show=False):
         # Combined mask on the sub-image
         fullmask1 = mask1 | tmask | dmask
 
-        fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header1, overwrite=True)
 
         if config.get('target_ra') is not None and config.get('target_dec') is not None and not detect_transients:
         # Target forced photometry
