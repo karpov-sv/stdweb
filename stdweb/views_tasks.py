@@ -65,7 +65,6 @@ def tasks(request, id=None):
                     views.handle_uploaded_file(request.FILES['custom_template'],
                                                os.path.join(task.path(), 'custom_template.fits'))
                     messages.info(request, "Custom template uploaded as custom_template.fits")
-                    return HttpResponseRedirect(request.path_info)
 
                 if form.has_changed():
                     for name,value in form.cleaned_data.items():

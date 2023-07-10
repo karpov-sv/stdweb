@@ -366,6 +366,10 @@ def inspect_image(filename, config, verbose=True, show=False):
 
         log(f"Field center is at {ra0:.3f} {dec0:.3f}, radius {sr0:.2f} deg")
         log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
+
+        if wcs.sip is not None:
+            log("WCS uses SIP polynomials, enabling refinement for SWarp inter-operability")
+            config['refine_wcs'] = True
     else:
         ra0,dec0,sr0 = None,None,None
         config['blind_match_wcs'] = True
