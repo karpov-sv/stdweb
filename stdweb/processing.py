@@ -936,8 +936,8 @@ def subtract_image(filename, config, verbose=True, show=False):
             else:
                 raise RuntimeError(f"Error getting the template from {tconf['name']}")
 
-        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, overwrite=True)
 
         tobj,tsegm = photometry.get_objects_sextractor(tmpl, mask=tmask, sn=5,
                                                        extra_params=['NUMBER'],
@@ -982,10 +982,10 @@ def subtract_image(filename, config, verbose=True, show=False):
         # Combined mask on the sub-image
         fullmask1 = mask1 | tmask | dmask
 
-        fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header1, overwrite=True)
 
         if config.get('target_ra') is not None and config.get('target_dec') is not None and not detect_transients:
         # Target forced photometry
