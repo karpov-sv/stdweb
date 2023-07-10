@@ -10,3 +10,4 @@ redis
 humanize
 astroscrappy
 dill
+astropy==5.2
