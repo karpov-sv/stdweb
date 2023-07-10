@@ -92,6 +92,11 @@ supported_templates = {
         'i': 'CDS/P/DECaPS/DR2/i',
         'z': 'CDS/P/DECaPS/DR2/z',
     }},
+    'ztf': {'name': 'ZTF DR7 (HiPS)', 'filters': {
+        'g': 'CDS/P/ZTF/DR7/g',
+        'r': 'CDS/P/ZTF/DR7/r',
+        'i': 'CDS/P/ZTF/DR7/i',
+    }},
 }
 
 # Best guess template filter mappings
@@ -969,7 +974,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                        image_gain=config.get('gain', 1.0),
                                        template_gain=10000,
                                        err=True,
-                                       extra={'ko':2, 'bgo':0},
+                                       extra={'ko':0, 'bgo':0},
                                        obj=obj1[obj1['flags']==0])
 
         if res is not None:
