@@ -901,7 +901,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         log(f"\n---- Sub-image {i}: {x0} {y0} - {x0 + image1.shape[1]} {y0 + image1.shape[0]} ----\n")
 
         fits.writeto(os.path.join(basepath, 'sub_image.fits'), image1, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_mas.fits'), mask1.astype(np.int8), header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.int8), header1, overwrite=True)
 
         # Get the template
         if tname == 'ps1':
