@@ -353,6 +353,20 @@
 
     {% endif %}
 
+    <!-- Transient candidates -->
+    {% if 'candidates' in files %}
+      <hr>
+      <h3>Transient candidates on difference (template-subtracted) image</h3>
+
+      {% for cand in candidates %}
+        <div class="text-center">
+          {% include "task_block_image.html" with cutout=cand task=task only %}
+        </div>
+      {% endfor %}
+
+    {% endif %}
+
+
 
   {% endif %}
 

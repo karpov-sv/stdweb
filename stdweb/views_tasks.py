@@ -142,6 +142,10 @@ def tasks(request, id=None):
 
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
+        if 'candidates' in context['files']:
+            candidates = sorted(glob.glob(os.path.join(path, 'candidates', '*.cutout')))
+            context['candidates'] = [os.path.join('candidates', os.path.split(_)[1]) for _ in candidates]
+
         return TemplateResponse(request, 'task.html', context=context)
     else:
         # List all tasks

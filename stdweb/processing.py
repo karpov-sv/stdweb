@@ -889,6 +889,8 @@ def subtract_image(filename, config, verbose=True, show=False):
     if wcs is None or not wcs.is_celestial:
         raise RuntimeError('No WCS astrometric solution')
 
+    pixscale = astrometry.get_pixscale(wcs=wcs)
+
     log("\n---- Template selection ----\n")
 
     tname = config.get('template', 'ps1')
@@ -1048,6 +1050,11 @@ def subtract_image(filename, config, verbose=True, show=False):
         fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header1, overwrite=True)
         fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header1, overwrite=True)
 
+        if config.get('rel_bg1') and config.get('rel_bg2'):
+            rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
+        else:
+            rel_bkgann = None
+
         if config.get('target_ra') is not None and config.get('target_dec') is not None and not detect_transients:
         # Target forced photometry
             log(f"\n---- Target forced photometry ----\n")
@@ -1060,11 +1067,6 @@ def subtract_image(filename, config, verbose=True, show=False):
                 raise RuntimeError("Target is outside the sub-image")
 
             log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
-
-            if config.get('rel_bg1') and config.get('rel_bg2'):
-                rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
-            else:
-                rel_bkgann = None
 
             target_obj = photometry.measure_objects(target_obj, diff, mask=fullmask1,
                                                     # FWHM should match the one used for calibration
@@ -1119,3 +1121,81 @@ def subtract_image(filename, config, verbose=True, show=False):
                 log(f"Target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
             else:
                 log("Target not detected")
+
+        else:
+            # Transient detection mode
+            log(f"Starting transient detection using edge size {sub_overlap}")
+
+            sobj,segm = photometry.get_objects_sextractor(diff, mask=fullmask1,
+                                                          err=ediff,
+                                                          wcs=wcs1, edge=sub_overlap,
+                                                          aper=config.get('initial_aper', 3.0),
+                                                          gain=config.get('gain', 1.0),
+                                                          sn=config.get('sn', 3.0),
+                                                          minarea=config.get('minarea', 3),
+                                                          extra_params=['NUMBER'],
+                                                          extra={'BACK_SIZE': config.get('bg_size', 256)},
+                                                          checkimages=['SEGMENTATION'],
+                                                          verbose=verbose,
+                                                          _tmpdir=settings.STDPIPE_TMPDIR,
+                                                          _exe=settings.STDPIPE_SEXTRACTOR)
+
+            sobj = photometry.measure_objects(sobj, diff, mask=fullmask1,
+                                              # FWHM should match the one used for calibration
+                                              fwhm=config.get('fwhm'),
+                                              aper=config.get('rel_aper', 1.0),
+                                              bkgann=rel_bkgann,
+                                              sn=config.get('sn', 3.0),
+                                              # We assume no background
+                                              bg=None,
+                                              # ..and known error model
+                                              err=ediff,
+                                              gain=config.get('gain', 1.0),
+                                              verbose=verbose)
+
+            sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](sobj['x'] + x0, sobj['y'] + y0, sobj['mag'])
+            sobj['mag_calib_err'] = np.hypot(sobj['magerr'],
+                                             m['zero_fn'](sobj['x'] + x0,
+                                                          sobj['y'] + y0,
+                                                          sobj['mag'],
+                                                          get_err=True))
+
+            # TODO: Improve limiting mag estimate
+            sobj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*sobj['fluxerr']) + m['zero_fn'](sobj['x'], sobj['y'], sobj['mag'])
+
+            sobj['mag_filter_name'] = m['cat_col_mag']
+
+            if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
+                sobj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
+                sobj['mag_color_term'] = m['color_term']
+
+            log(f"{len(sobj)} transient candidates found in difference image")
+
+            # Filter out catalogue objects
+            candidates = pipeline.filter_transient_candidates(sobj, cat=None,
+                                                              pixscale=pixscale,
+                                                              time=None,
+                                                              vizier=['vsx', 'ps1', 'skymapper'],
+                                                              flagged=True,
+                                                              skybot=False,
+                                                              verbose=verbose)
+
+            for cand in candidates:
+                cutout = cutouts.get_cutout(image1 - bg, cand, 30,
+                                            mask=fullmask1,
+                                            diff=diff,
+                                            template=tmpl,
+                                            convolved=conv,
+                                            err=ediff,
+                                            footprint=(segm==cand['NUMBER']),
+                                            header=header1)
+
+                jname = utils.make_jname(cand['ra'], cand['dec'])
+                cutout_name = os.path.join(basepath, 'candidates', jname + '.cutout')
+
+                try:
+                    os.makedirs(os.path.join(basepath, 'candidates'))
+                except OSError:
+                    pass
+
+                cutouts.write_cutout(cutout, cutout_name)

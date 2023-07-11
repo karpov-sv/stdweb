@@ -183,6 +183,9 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     fullpath = os.path.join(base, path)
 
+    if not os.path.exists(fullpath):
+        return HttpResponse('not found')
+
     # Optional parameters
     ext = int(request.GET.get('ext', 0))
     fmt = request.GET.get('format', 'jpeg')
@@ -303,6 +306,9 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
     path = sanitize_path(path)
 
     fullpath = os.path.join(base, path)
+
+    if not os.path.exists(fullpath):
+        return HttpResponse('not found')
 
     # Optional parameters
     ext = int(request.GET.get('ext', 0))
