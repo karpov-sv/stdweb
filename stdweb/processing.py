@@ -142,6 +142,7 @@ files_subtraction = [
     'sub_template.fits', 'sub_template_mask.fits',
     'sub_diff.fits', 'sub_sdiff.fits', 'sub_conv.fits', 'sub_ediff.fits',
     'sub_target.vot', 'sub_target.cutout',
+    'candidates',
 ]
 
 cleanup_inspect = files_inspect + files_photometry + files_subtraction
@@ -149,6 +150,15 @@ cleanup_inspect = files_inspect + files_photometry + files_subtraction
 cleanup_photometry = files_photometry + files_subtraction
 
 cleanup_subtraction = files_subtraction
+
+def cleanup_paths(paths, basepath=None):
+    for path in paths:
+        fullpath = os.path.join(basepath, path)
+        if os.path.exists(fullpath):
+            if os.path.isdir(fullpath):
+                shutil.rmtree(fullpath)
+            else:
+                os.unlink(fullpath)
 
 
 def print_to_file(*args, clear=False, logname='out.log', **kwargs):
@@ -264,10 +274,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     basepath = os.path.dirname(filename)
 
     # Cleanup stale plots
-    for name in cleanup_inspect:
-        fullname = os.path.join(basepath, name)
-        if os.path.exists(fullname):
-            os.unlink(fullname)
+    cleanup_paths(cleanup_inspect, basepath=basepath)
 
     config['sn'] = config.get('sn', 3)
     config['initial_aper'] = config.get('initial_aper', 3)
@@ -458,10 +465,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
 
     # Cleanup stale plots
-    for name in cleanup_photometry:
-        fullname = os.path.join(basepath, name)
-        if os.path.exists(fullname):
-            os.unlink(fullname)
+    cleanup_paths(cleanup_photometry, basepath=basepath)
 
     log("\n---- Object detection ----\n")
 
@@ -853,10 +857,7 @@ def subtract_image(filename, config, verbose=True, show=False):
     detect_transients = config.get('detect_transients', False)
 
     # Cleanup stale plots and files
-    for name in cleanup_subtraction:
-        fullname = os.path.join(basepath, name)
-        if os.path.exists(fullname):
-            os.unlink(fullname)
+    cleanup_paths(cleanup_subtraction, basepath=basepath)
 
     # Image
     image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
