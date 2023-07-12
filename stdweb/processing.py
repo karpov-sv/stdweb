@@ -142,7 +142,7 @@ files_subtraction = [
     'sub_template.fits', 'sub_template_mask.fits',
     'sub_diff.fits', 'sub_sdiff.fits', 'sub_conv.fits', 'sub_ediff.fits',
     'sub_target.vot', 'sub_target.cutout',
-    'candidates',
+    'candidates', 'candidates.vot'
 ]
 
 cleanup_inspect = files_inspect + files_photometry + files_subtraction
@@ -355,14 +355,14 @@ def inspect_image(filename, config, verbose=True, show=False):
         raise RuntimeError('More than half of the image is masked')
 
     fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
-    log("Mask written to mask.fits")
+    log("Mask written to file:mask.fits")
 
     # WCS
     if os.path.exists(os.path.join(basepath, "image.wcs")):
         wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
         astrometry.clear_wcs(header)
         header += wcs.to_header(relax=True)
-        log("WCS loaded from image.wcs")
+        log("WCS loaded from file:image.wcs")
     else:
         wcs = WCS(header)
         log("Using original WCS from FITS header")
@@ -410,7 +410,7 @@ def inspect_image(filename, config, verbose=True, show=False):
                     cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
                     fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
                     log(f"Target is at x={x0:.1f} y={y0:.1f}")
-                    log("Target cutout written to image_target.fits")
+                    log("Target cutout written to file:image_target.fits")
                 else:
                     log("Target is outside the image")
             except:
@@ -580,7 +580,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             astrometry.clear_wcs(header)
             header += wcs.to_header(relax=True)
             config['blind_match_wcs'] = False
-            log("Blind matched WCS stored to image.wcs")
+            log("Blind matched WCS stored to file:image.wcs")
         else:
             log("Blind matching failed")
 
@@ -611,7 +611,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
 
     cat.write(os.path.join(basepath, 'cat.vot'), format='votable', overwrite=True)
-    log("Catalogue written to cat.vot")
+    log("Catalogue written to file:cat.vot")
 
     # Catalogue settings
     if config.get('cat_name') == 'gaiadr3syn':
@@ -681,7 +681,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Store photometric solution
     pickle_to_file(os.path.join(basepath, 'photometry.pickle'), m)
-    log("Photometric solution stored to photometry.pickle")
+    log("Photometric solution stored to file:photometry.pickle")
 
     # Plot photometric solution
     with plots.figure_saver(os.path.join(basepath, 'photometry.png'), figsize=(8, 6), show=show) as fig:
@@ -735,7 +735,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                                     m['zero_fn'](obj['x'], obj['y'], obj['mag'], get_err=True))
 
     obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
-    log("Measured objects stored to objects.vot")
+    log("Measured objects stored to file:objects.vot")
 
     # Check the filter
     if config.get('use_color', True) and np.abs(m['color_term']) > 0.5:
@@ -760,6 +760,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     log("\n---- Global detection limit ----\n")
     mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=verbose)
     config['mag_limit'] = mag0
+
+    if 'bg_fluxerr' in obj.colnames and np.any(obj['bg_fluxerr'] > 0):
+        fluxerr = obj['fluxerr']
+        maglim = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](obj['x'], obj['y'], obj['mag'])
+        log(f"Local background RMS detection limit is {np.median(maglim):.2f} +/- {np.std(maglim):.2f}")
 
     # Plot detection limit estimators
     with plots.figure_saver(os.path.join(basepath, 'limit_hist.png'), figsize=(8, 6), show=show) as fig:
@@ -805,8 +810,12 @@ def photometry_image(filename, config, verbose=True, show=False):
                                                             target_obj['mag'],
                                                             get_err=True))
 
-        # TODO: Improve limiting mag estimate
-        target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*target_obj['fluxerr']) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
+        # Local detection limit from background rms, if available
+        if 'bg_fluxerr' in target_obj.colnames and np.any(target_obj['bg_fluxerr'] > 0):
+            fluxerr = target_obj['bg_fluxerr']
+        else:
+            fluxerr = target_obj['fluxerr']
+        target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
 
         target_obj['mag_filter_name'] = m['cat_col_mag']
 
@@ -815,7 +824,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             target_obj['mag_color_term'] = m['color_term']
 
         target_obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
-        log("Measured target stored to target.vot")
+        log("Measured target stored to file:target.vot")
 
         # Create the cutout from image based on the candidate
         cutout = cutouts.get_cutout(image, target_obj[0], 30, mask=mask, header=header)
@@ -826,7 +835,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             cutout['template'] = templates.get_hips_image('CDS/P/skymapper-R', header=cutout['header'])[0]
 
         cutouts.write_cutout(cutout, os.path.join(basepath, 'target.cutout'))
-        log("Target cutouts stored to target.cutout")
+        log("Target cutouts stored to file:target.cutout")
 
         log(f"Target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
         if target_obj['flux'][0] > 0:
@@ -837,6 +846,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
             log(f"Target magnitude is {mag_string} = {target_obj['mag_calib'][0]:.2f} +/- {target_obj['mag_calib_err'][0]:.2f}")
             log(f"Target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
+
         else:
             log("Target not detected")
 
@@ -950,6 +960,9 @@ def subtract_image(filename, config, verbose=True, show=False):
     else:
         log('No target provided and transient detection is disabled, nothing to do')
         return
+
+    all_candidates = []
+    cutout_names = []
 
     for i, x0, y0, image1, mask1, header1, wcs1, obj1, cat1 in split_fn(
             image, mask=mask, header=header, wcs=wcs, obj=obj, cat=cat,
@@ -1091,8 +1104,12 @@ def subtract_image(filename, config, verbose=True, show=False):
                                                                 target_obj['mag'],
                                                                 get_err=True))
 
-            # TODO: Improve limiting mag estimate
-            target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*target_obj['fluxerr']) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
+            # Local detection limit from background rms, if available
+            if 'bg_fluxerr' in target_obj.colnames and np.any(target_obj['bg_fluxerr'] > 0):
+                fluxerr = target_obj['bg_fluxerr']
+            else:
+                fluxerr = target_obj['fluxerr']
+            target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
 
             target_obj['mag_filter_name'] = m['cat_col_mag']
 
@@ -1101,14 +1118,14 @@ def subtract_image(filename, config, verbose=True, show=False):
                 target_obj['mag_color_term'] = m['color_term']
 
             target_obj.write(os.path.join(basepath, 'sub_target.vot'), format='votable', overwrite=True)
-            log("Measured target stored to sub_target.vot")
+            log("Measured target stored to file:sub_target.vot")
 
             # Create the cutout from image based on the candidate
             cutout = cutouts.get_cutout(image1, target_obj[0], 30,
                                         mask=fullmask1, header=header1,
                                         diff=diff, template=tmpl, convolved=conv, err=ediff)
             cutouts.write_cutout(cutout, os.path.join(basepath, 'sub_target.cutout'))
-            log("Target cutouts stored to sub_target.cutout")
+            log("Target cutouts stored to file:sub_target.cutout")
 
             log(f"Target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
             if target_obj['flux'][0] > 0:
@@ -1122,7 +1139,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             else:
                 log("Target not detected")
 
-        else:
+        elif detect_transients:
             # Transient detection mode
             log(f"Starting transient detection using edge size {sub_overlap}")
 
@@ -1173,12 +1190,16 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             # Filter out catalogue objects
             candidates = pipeline.filter_transient_candidates(sobj, cat=None,
+                                                              sr=0.5*pixscale*config.get('fwhm', 1.0),
                                                               pixscale=pixscale,
                                                               time=None,
-                                                              vizier=['vsx', 'ps1', 'skymapper'],
-                                                              flagged=True,
+                                                              vizier=['ps1', 'skymapper'],
+                                                              # Filter out any flags except for 0x100 which is isophotal masked
+                                                              flagged=True, flagmask=0xfe00,
                                                               skybot=False,
                                                               verbose=verbose)
+
+            diff[fullmask1] = np.nan # For better visuals
 
             for cand in candidates:
                 cutout = cutouts.get_cutout(image1 - bg, cand, 30,
@@ -1199,3 +1220,17 @@ def subtract_image(filename, config, verbose=True, show=False):
                     pass
 
                 cutouts.write_cutout(cutout, cutout_name)
+
+                all_candidates.append(cand)
+                cutout_names.append(os.path.join('candidates', jname + '.cutout'))
+
+    if detect_transients:
+        log("\n---- Final list of candidates ----\n")
+
+        all_candidates = vstack(all_candidates)
+        all_candidates['cutout_name'] = cutout_names
+
+        log(f"{len(all_candidates)} candidates in total")
+        if len(all_candidates):
+            all_candidates.write(os.path.join(basepath, 'candidates.vot'), format='votable', overwrite=True)
+            log("Candidates written to file:candidates.vot")
