@@ -42,6 +42,8 @@ overlay_stdview_images = function() {
         /* data-mark-ra and data-mark-dec parameters */
         if ('markRa' in image.data() && 'markDec' in image.data()) {
   	    var checkbox = $('<input type="checkbox"/>');
+            var label = $('<i class="fa fa-bullseye" style="padding-left: 0.3em; padding-right: 0.1em;">');
+
   	    checkbox.on('click', function() {
     	        if (this.checked)
       	            update_image_get_params(image, {ra: image.data('markRa'), dec: image.data('markDec')});
@@ -51,7 +53,27 @@ overlay_stdview_images = function() {
 
             checkbox.attr('title', 'Click to mark the position');
 
+  	    overlay.append(label);
   	    overlay.append(checkbox);
+        }
+
+        /* grid */
+        if ('grid' in image.data()) {
+  	    var checkbox = $('<input type="checkbox" id="checkbox_grid"/>');
+            var label = $('<i class="fa fa-th" style="padding-left: 0.3em;  padding-right: 0.1em;">');
+
+  	    checkbox.on('click', function() {
+    	        if (this.checked)
+      	            update_image_get_params(image, {grid: 1});
+                else
+      	            update_image_get_params(image, {grid: null});
+            });
+
+            checkbox.attr('title', 'Click to show grid');
+
+  	    overlay.append(label);
+  	    overlay.append(checkbox);
+
         }
     });
 }

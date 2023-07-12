@@ -194,6 +194,11 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     if width is not None:
         width = int(width)
 
+    if int(request.GET.get('grid', 0)):
+        show_grid = True
+    else:
+        show_grid = False
+
     data = fits.getdata(fullpath, ext)
 
     figsize = [data.shape[1], data.shape[0]]
@@ -208,11 +213,19 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         figsize[1] = width*figsize[1]/figsize[0]
         figsize[0] = width
 
-    fig = Figure(facecolor='white', dpi=72, figsize=(figsize[0]/72, figsize[1]/72))
-    ax = Axes(fig, [0., 0., 1., 1.])
-    # ax.set_axis_off()
+    fig = Figure(dpi=72, figsize=(figsize[0]/72, figsize[1]/72))
+    if show_grid:
+        dx = 40/figsize[0]
+        dy = 20/figsize[1]
+        ax = Axes(fig, [dx, dy, 0.99 - dx, 0.99 - dy])
+        ax.grid(color='white')
+    else:
+        # No axes, just the image
+        ax = Axes(fig, [0., 0., 1., 1.])
+
     fig.add_axes(ax)
-    plots.imshow(data, ax=ax, show_axis=False, show_colorbar=False,
+
+    plots.imshow(data, ax=ax, show_axis=True if show_grid else False, show_colorbar=False,
                  origin='lower',
                  cmap=request.GET.get('cmap', 'Blues_r'),
                  stretch=request.GET.get('stretch', 'linear'),
