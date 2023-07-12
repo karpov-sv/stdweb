@@ -1,34 +1,60 @@
 {% extends "template.html" %}
 
+{% load crispy_forms_tags %}
+{% load filters %}
+
 {% block title %}STDWeb - STDPipe on the Web{% endblock %}
 
 {% block content %}
 
-  <!-- File upload form -->
-  <div class="card">
-    <div class="card-header">
-      Upload new FITS file to be processed
-    </div>
-    <div class="card-body">
+  <p>
+    This is a simple web-based tool for a quick-look photometry and transient detection on astronomical images. It is based on <a href="https://github.com/karpov-sv/stdpipe">STDPipe</a> library and tries to implement a self-consistent and mostly automatic data analysis workflow from its routines.
+  </p>
 
-      <form enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
-        {% csrf_token %}
+  <p>
+    It currently allows you to:
+    <ul>
+      <li>Upload your own FITS files, or analyze some files already on the server</li>
+      <li>Do basic pre-processing and masking</li>
+      <li>Detect objects on the image and do astrometric calibration, either by blind mathcing or refining existing solution</li>
+      <li>Photometrically calibrate the image using one of supported reference catalogues</li>
+      <li>Subtract either user-provided or automatically downloaded template images</li>
+      <li>Do forced photometry for a specified target on either original or difference image</li>
+      <li>Do (experimental) transient detection on difference image</li>
+    </ul>
+  </p>
 
-        <div class="mb-3">
-          <!-- <label for="fileUpload" class="form-label">File</label> -->
-          <input type="file" class="form-control" name="file" id="fileUpload" aria-describedby="uploadHelp" {% if not user.is_authenticated %}disabled{% endif %}/>
-          <div id="uploadHelp" class="form-text">You may upload FITS files here</div>
+  <p>
+    If you want to better understand the routines used for it, please consult STDPipe <a href="https://stdpipe.readthedocs.io/">documentation</a> and <a href="https://github.com/karpov-sv/stdpipe/tree/master/notebooks">example notebooks</a>, as well as the <a href="https://github.com/karpov-sv/stdweb">actual source code</a> behind this website.
+  </p>
+
+  <h3>Image upload</h3>
+
+  <p>
+    You may upload new FITS image here. Upon uploading, you will be redirected to the dedicated task page for this image, where you may analyze it.
+  </p>
+
+  {% if user.is_authenticated %}
+
+    <!-- File upload form -->
+    <form class="mb-4" enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
+      {% csrf_token %}
+      <input type="hidden" name="type" value="image"/>
+      <div class="card">
+        <div class="card-header">
+          Upload new FITS file to be processed
         </div>
-
-        <div class="mb-3">
-          <input type="text" class="form-control" name="title" {% if not user.is_authenticated %}disabled{% endif %} placeholder="File title or description, optional"/>
+        <div class="card-body">
+          {{ form|crispy }}
+          <button type="submit" class="btn btn-primary">Upload</button>
         </div>
+      </div>
+    </form>
 
-        <button type="submit" class="btn btn-primary" {% if not user.is_authenticated %}disabled{% endif %}>Upload</button>
+  {% else %}
 
-      </form>
+    Please <a href="{% url 'login' %}">log in</a> to be able to upload files.
 
-    </div>
-  </div>
+  {% endif %}
 
 {% endblock %}

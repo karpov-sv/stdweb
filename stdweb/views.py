@@ -280,7 +280,7 @@ def upload_file(request):
 
     form = forms.UploadFileForm()
     context = {'form': form}
-    return TemplateResponse(request, 'upload.html', context=context)
+    return TemplateResponse(request, 'index.html', context=context)
 
 
 def reuse_file(request, base=settings.DATA_PATH):
@@ -357,7 +357,7 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
 
     figsize = [256*len(planes), 256+40]
 
-    fig = Figure(facecolor='white', dpi=72, figsize=(figsize[0]/72, figsize[1]/72))#, tight_layout=True)
+    fig = Figure(facecolor='white', dpi=72, figsize=(figsize[0]/72, figsize[1]/72), tight_layout=True)
 
     plots.plot_cutout(cutout, fig=fig,
                       planes=planes,
