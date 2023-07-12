@@ -942,8 +942,8 @@ def subtract_image(filename, config, verbose=True, show=False):
     if detect_transients:
         log('Transient detection mode activated')
         # We will split the image into nx x ny blocks
-        nx = int(np.round(image.shape[1] / sub_size))
-        ny = int(np.round(image.shape[0] / sub_size))
+        nx = max(1, int(np.round(image.shape[1] / sub_size)))
+        ny = max(1, int(np.round(image.shape[0] / sub_size)))
         log(f"Will split the image into {nx} x {ny} sub-images")
         split_fn = partial(pipeline.split_image, get_index=True, overlap=sub_overlap, nx=nx, ny=ny)
 
@@ -1043,7 +1043,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                        image_fwhm=i_fwhm,
                                        template_fwhm=t_fwhm,
                                        image_gain=config.get('gain', 1.0),
-                                       template_gain=10000,
+                                       template_gain=template_gain,
                                        err=True,
                                        extra=config.get('hotpants_extra', {'ko':0, 'bgo':0}),
                                        obj=obj1[obj1['flags']==0])
@@ -1092,7 +1092,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                                     # ..and known error model
                                                     err=ediff,
                                                     gain=config.get('gain', 1.0),
-                                                    verbose=verbose)
+                                                    verbose=sub_verbose)
 
             target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'] + x0,
                                                                        target_obj['y'] + y0,
@@ -1153,7 +1153,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                                           extra_params=['NUMBER'],
                                                           extra={'BACK_SIZE': config.get('bg_size', 256)},
                                                           checkimages=['SEGMENTATION'],
-                                                          verbose=verbose,
+                                                          verbose=sub_verbose,
                                                           _tmpdir=settings.STDPIPE_TMPDIR,
                                                           _exe=settings.STDPIPE_SEXTRACTOR)
 
@@ -1168,23 +1168,24 @@ def subtract_image(filename, config, verbose=True, show=False):
                                               # ..and known error model
                                               err=ediff,
                                               gain=config.get('gain', 1.0),
-                                              verbose=verbose)
+                                              verbose=sub_verbose)
 
-            sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](sobj['x'] + x0, sobj['y'] + y0, sobj['mag'])
-            sobj['mag_calib_err'] = np.hypot(sobj['magerr'],
-                                             m['zero_fn'](sobj['x'] + x0,
-                                                          sobj['y'] + y0,
-                                                          sobj['mag'],
-                                                          get_err=True))
+            if len(sobj):
+                sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](sobj['x'] + x0, sobj['y'] + y0, sobj['mag'])
+                sobj['mag_calib_err'] = np.hypot(sobj['magerr'],
+                                                 m['zero_fn'](sobj['x'] + x0,
+                                                              sobj['y'] + y0,
+                                                              sobj['mag'],
+                                                              get_err=True))
 
-            # TODO: Improve limiting mag estimate
-            sobj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*sobj['fluxerr']) + m['zero_fn'](sobj['x'], sobj['y'], sobj['mag'])
+                # TODO: Improve limiting mag estimate
+                sobj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*sobj['fluxerr']) + m['zero_fn'](sobj['x'], sobj['y'], sobj['mag'])
 
-            sobj['mag_filter_name'] = m['cat_col_mag']
+                sobj['mag_filter_name'] = m['cat_col_mag']
 
-            if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
-                sobj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
-                sobj['mag_color_term'] = m['color_term']
+                if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
+                    sobj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
+                    sobj['mag_color_term'] = m['color_term']
 
             log(f"{len(sobj)} transient candidates found in difference image")
 
