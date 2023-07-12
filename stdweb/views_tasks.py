@@ -10,6 +10,8 @@ from django.views.decorators.cache import cache_page
 
 import os, glob
 
+from astropy.table import Table
+
 from . import settings
 from . import views
 from . import models
@@ -53,13 +55,8 @@ def tasks(request, id=None):
         if request.method == 'POST':
             # Handle forms
             form_type = request.POST.get('form_type')
-            print(form_type)
             form = all_forms.get(form_type)
-            if form and not form.is_valid():
-                print("imvalid")
             if form and form.is_valid():
-                print(request.FILES)
-
                 # Handle uploaded files, if any
                 if 'custom_template' in request.FILES:
                     views.handle_uploaded_file(request.FILES['custom_template'],
@@ -142,9 +139,13 @@ def tasks(request, id=None):
 
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
-        if 'candidates' in context['files']:
-            candidates = sorted(glob.glob(os.path.join(path, 'candidates', '*.cutout')))
-            context['candidates'] = [os.path.join('candidates', os.path.split(_)[1]) for _ in candidates]
+        if 'candidates.vot' in context['files']:
+            # candidates = sorted(glob.glob(os.path.join(path, 'candidates', '*.cutout')))
+            # context['candidates'] = [os.path.join('candidates', os.path.split(_)[1]) for _ in candidates]
+            candidates = Table.read(os.path.join(path, 'candidates.vot'))
+            if candidates:
+                candidates.sort('flux', reverse=True)
+                context['candidates'] = candidates
 
         return TemplateResponse(request, 'task.html', context=context)
     else:

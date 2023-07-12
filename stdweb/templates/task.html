@@ -296,7 +296,7 @@
       <h3>Target on direct image</h3>
 
       <div class="text-center">
-        {% include "task_block_image.html" with cutout='target.cutout' task=task only %}
+        {% include "task_block_image.html" with cutout='target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
       </div>
 
     {% endif %}
@@ -348,19 +348,19 @@
       <h3>Target on difference (template-subtracted) image</h3>
 
       <div class="text-center">
-        {% include "task_block_image.html" with cutout='sub_target.cutout' task=task only %}
+        {% include "task_block_image.html" with cutout='sub_target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
       </div>
 
     {% endif %}
 
     <!-- Transient candidates -->
-    {% if 'candidates' in files %}
+    {% if candidates %}
       <hr>
       <h3>Transient candidates on difference (template-subtracted) image</h3>
 
       {% for cand in candidates %}
         <div class="text-center">
-          {% include "task_block_image.html" with cutout=cand task=task only %}
+          {% include "task_block_image.html" with cutout=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
         </div>
       {% endfor %}
 
