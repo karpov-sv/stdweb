@@ -1259,10 +1259,13 @@ def subtract_image(filename, config, verbose=True, show=False):
     if detect_transients:
         log("\n---- Final list of candidates ----\n")
 
-        all_candidates = vstack(all_candidates)
-        all_candidates['cutout_name'] = cutout_names
-
-        log(f"{len(all_candidates)} candidates in total")
         if len(all_candidates):
+            all_candidates = vstack(all_candidates)
+            all_candidates['cutout_name'] = cutout_names
+
+            log(f"{len(all_candidates)} candidates in total")
+
             all_candidates.write(os.path.join(basepath, 'candidates.vot'), format='votable', overwrite=True)
             log("Candidates written to file:candidates.vot")
+        else:
+            log("No candidates found")
