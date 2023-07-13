@@ -17,6 +17,7 @@ class TaskInspectForm(forms.Form):
     gain = forms.FloatField(min_value=0, required=False, label="Gain, e/ADU")
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
     mask_cosmics = forms.BooleanField(initial=True, required=False, label="Mask cosmics")
+    inspect_bg = forms.BooleanField(initial=False, required=False, label="Inspect background")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -32,7 +33,11 @@ class TaskInspectForm(forms.Form):
                 Column('saturation', css_class="col-md-3"),
                 css_class='align-items-end'
             ),
-            'mask_cosmics'
+            Row(
+                Column('mask_cosmics', css_class="col-md-2"),
+                Column('inspect_bg', css_class="col-md-2"),
+                css_class='align-items-end justify-content-start'
+            ),
         )
 
 

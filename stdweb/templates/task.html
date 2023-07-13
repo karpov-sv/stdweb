@@ -120,7 +120,7 @@
     </p>
     {% endif %}
     <p>
-      Task {{ task.id }} created by <span class="text-secondary fw-bold">{{ task.user|user }}</span> on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
+      Task {{ task.id }} created by <span class="text-primary fw-bold">{{ task.user|user }}</span> on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
       {% if not user_may_submit %}
         <br>
         <span class="text-danger fw-bold">Task is read-only</span>
@@ -241,6 +241,15 @@
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
                     {% include "task_block_image.html" with fits=name task=task only %}
+                  </div>
+                {% endif %}
+              {% endfor %}
+
+              {% make_list 'image_bg.png' 'image_rms.png' as list %}
+              {% for name in list %}
+                {% if name in files %}
+                  <div class="col" style="max-width: 256px">
+                    {% include "task_block_image.html" with image=name task=task only %}
                   </div>
                 {% endif %}
               {% endfor %}

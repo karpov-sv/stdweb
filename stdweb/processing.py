@@ -121,7 +121,8 @@ filter_mappings = {
 
 files_inspect = [
     'inspect.log',
-    'mask.fits', 'image_target.fits'
+    'mask.fits', 'image_target.fits',
+    'image_bg.png', 'image_rms.png',
 ]
 
 files_photometry = [
@@ -357,6 +358,26 @@ def inspect_image(filename, config, verbose=True, show=False):
     fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
     log("Mask written to file:mask.fits")
 
+    # Cosmics
+    if config.get('inspect_bg', False):
+        bg = sep.Background(image, mask=mask)
+
+        with plots.figure_saver(os.path.join(basepath, 'image_bg.png'), figsize=(8, 6), show=True) as fig:
+            ax = fig.add_subplot(1, 1, 1)
+            plots.imshow(bg.back(), ax=ax)
+            ax.set_aspect(1)
+            ax.set_xlim(0, image.shape[1])
+            ax.set_ylim(0, image.shape[0])
+            ax.set_title(f"Background: median {np.median(bg.back()):.2f} RMS {np.std(bg.back()):.2f}")
+
+        with plots.figure_saver(os.path.join(basepath, 'image_rms.png'), figsize=(8, 6), show=True) as fig:
+            ax = fig.add_subplot(1, 1, 1)
+            plots.imshow(bg.rms(), ax=ax)
+            ax.set_aspect(1)
+            ax.set_xlim(0, image.shape[1])
+            ax.set_ylim(0, image.shape[0])
+            ax.set_title(f"Background RMS: median {np.median(bg.rms()):.2f} RMS {np.std(bg.rms()):.2f}")
+
     # WCS
     if os.path.exists(os.path.join(basepath, "image.wcs")):
         wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
@@ -384,6 +405,7 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Target?..
     if not 'target' in config:
+        # TODO: resolve target from the header
         config['target'] = header.get('TARGET')
 
     if config.get('target'):
@@ -421,6 +443,10 @@ def inspect_image(filename, config, verbose=True, show=False):
             config['blind_match_ra0'] = config.get('target_ra')
         if config.get('target_dec') is not None and config.get('blind_match_dec0') is None:
             config['blind_match_dec0'] = config.get('target_dec')
+    else:
+        # Remove fields that are computed from the target
+        config.pop('target_ra', None)
+        config.pop('target_dec', None)
 
     # Suggested catalogue
     if not config.get('cat_name'):
