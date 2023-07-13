@@ -304,6 +304,9 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     log(f"Image size is {image.shape[1]} x {image.shape[0]}")
 
+    log(f"Image Min / Median / Max : {np.nanmin(image):.2f} {np.nanmedian(image):.2f} {np.nanmax(image):.2f}")
+    log(f"Image RMS: {np.nanstd(image):.2f}")
+
     fix_header(header)
 
     # Guess some parameters from keywords
@@ -332,8 +335,13 @@ def inspect_image(filename, config, verbose=True, show=False):
     if not config.get('saturation'):
         satlevel = header.get('SATURATE',
                               header.get('DATAMAX'))
-        if not satlevel:
-            satlevel = 0.95*np.nanmax(image)
+        if satlevel:
+            log("Got saturation level from FITS header")
+
+        else:
+            satlevel = 0.05*np.nanmedian(image) + 0.95*np.nanmax(image) # med + 0.95(max-med)
+            log("Estimating saturation level from the image max value")
+
         config['saturation'] = satlevel
     log(f"Saturation level is {config['saturation']:.1f}")
 
@@ -358,7 +366,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     log(f"{np.sum(mask)} ({100*np.sum(mask)/mask.shape[0]/mask.shape[1]:.1f}%) pixels masked")
 
     if np.sum(mask) > 0.8*mask.shape[0]*mask.shape[1]:
-        raise RuntimeError('More than 80%% of the image is masked')
+        raise RuntimeError('More than 80% of the image is masked')
 
     fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
     log("Mask written to file:mask.fits")
