@@ -343,7 +343,12 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Cosmics
     if config.get('mask_cosmics', True):
+        # We will use custom noise model for astroscrappy as we do not know whether
+        # the image is background-subtracted already, or how it was flatfielded
+        bg = sep.Background(image, mask)
+        rms = bg.rms().astype(np.float32)
         cmask, cimage = astroscrappy.detect_cosmics(image, mask, verbose=False,
+                                                    invar=rms**2,
                                                     gain=config.get('gain', 1),
                                                     satlevel=config.get('saturation'),
                                                     cleantype='medmask')
