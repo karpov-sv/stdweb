@@ -1,7 +1,8 @@
 from django import forms
 
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column
+from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit
+from crispy_forms.bootstrap import InlineField, PrependedText
 
 from .processing import supported_filters, supported_catalogs, supported_templates
 
@@ -10,6 +11,19 @@ class UploadFileForm(forms.Form):
     file = forms.FileField(label="FITS file")
     title = forms.CharField(max_length=150, required=False, label="Optional title or comment")
 
+
+class TasksFilterForm(forms.Form):
+    query = forms.CharField(max_length=100, required=False, label="Filter Tasks")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_show_labels = False
+        self.helper.layout = Layout(
+            Row(
+                InlineField(PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames')),
+            )
+        )
 
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())

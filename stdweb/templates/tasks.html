@@ -1,6 +1,7 @@
 {% extends "template.html" %}
 
 {% load el_pagination_tags %}
+{% load crispy_forms_tags %}
 {% load filters %}
 
 {% block ptitle %}Tasks : STDWeb{% endblock %}
@@ -8,6 +9,10 @@
 {% block title %}Tasks{% endblock %}
 
 {% block content %}
+
+  <div>
+    {% crispy form %}
+  </div>
 
   {% if tasks %}
 
@@ -48,7 +53,7 @@
     {% show_pages %}
 
   {% else %}
-    No tasks submitted
+    No tasks found
   {% endif %}
 
 {% endblock %}

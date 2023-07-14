@@ -1,6 +1,7 @@
 from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.db.models import Q
 
 from django.contrib import messages
 
@@ -151,8 +152,22 @@ def tasks(request, id=None):
     else:
         # List all tasks
         tasks = models.Task.objects.all()
+        tasks = tasks.order_by('-created')
 
-        tasks = tasks.order_by('-modified')
+        form = forms.TasksFilterForm(request.POST)
+        context['form'] = form
+
+        if request.method == 'POST':
+            if form.is_valid():
+                query = form.cleaned_data.get('query')
+                if query:
+                    tasks = tasks.filter(Q(original_name__icontains = query) |
+                                         Q(title__icontains = query) |
+                                         Q(user__username__icontains = query) |
+                                         Q(user__first_name__icontains = query) |
+                                         Q(user__last_name__icontains = query)
+                                         )
+
 
         context['tasks'] = tasks
 
