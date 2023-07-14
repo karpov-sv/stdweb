@@ -18,6 +18,7 @@ class TasksFilterForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
+        self.helper.form_action = 'tasks'
         self.helper.form_show_labels = False
         self.helper.layout = Layout(
             Row(
