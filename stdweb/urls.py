@@ -48,6 +48,8 @@ urlpatterns = [
     path('tasks/<int:id>/download/<path:path>', views_tasks.task_download, {'attachment': True}, name='task_download'),
     path('tasks/<int:id>/cutout/<path:path>', views_tasks.task_cutout, name='task_cutout'),
 
+    path('tasks/<int:id>/mask', views_tasks.task_mask, name='task_mask'),
+
     # Celery queue
     path('queue/', views_celery.view_queue, {'id': None}, name='queue'),
     path('queue/<slug:id>', views_celery.view_queue, name='queue'),

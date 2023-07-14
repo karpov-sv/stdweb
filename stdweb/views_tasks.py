@@ -2,16 +2,16 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.db.models import Q
-
 from django.contrib import messages
-
 from django.contrib.auth.decorators import login_required
-
 from django.views.decorators.cache import cache_page
 
 import os, glob
+import json
+import numpy as np
 
 from astropy.table import Table
+from astropy.io import fits
 
 from . import settings
 from . import views
@@ -108,6 +108,9 @@ def tasks(request, id=None):
                     messages.success(request, "Cropped the image for task " + str(id))
                     # Now we have to cleanup, which will be handled below
 
+                if action == 'make_custom_mask':
+                    return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id}))
+
                 if action == 'cleanup_task' or action == 'crop_image':
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
                     task.config = {} # should we reset the config on cleanup?..
@@ -192,3 +195,60 @@ def task_cutout(request, id=None, path='', **kwargs):
     task = models.Task.objects.get(id=id)
 
     return views.cutout(request, path, base=task.path(), **kwargs)
+
+
+def handle_task_mask_creation(task, width, height, areas):
+    if not areas:
+        if os.path.exists(os.path.join(task.path(), 'custom_mask.fits')):
+            os.unlink(os.path.join(task.path(), 'custom_mask.fits'))
+
+        return False
+
+    if os.path.exists(os.path.join(task.path(), 'image.fits')):
+        header = fits.getheader(os.path.join(task.path(), 'image.fits'))
+        scale = header['NAXIS1'] / width # FIXME: Should we assume it is the same for y?..
+
+        mask = np.ones(shape=(header['NAXIS2'], header['NAXIS1']), dtype=bool)
+        for area in areas:
+            x0 = max(0, int(np.floor(scale*area['x'])))
+            y0 = max(0, int(np.floor(scale*area['y'])))
+
+            x1 = min(header['NAXIS1'], int(np.ceil(scale*(area['x'] + area['width']))))
+            y1 = min(header['NAXIS2'], int(np.ceil(scale*(area['y'] + area['height']))))
+
+            mask[y0:y1, x0:x1] = False
+
+        mask = mask[::-1] # Flip the mask vertically as the origin is at bottom
+
+        fits.writeto(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.int8), overwrite=True)
+
+    return True
+
+def task_mask(request, id=None, path=''):
+    task = models.Task.objects.get(id=id)
+
+    if request.method == 'POST':
+        areas = json.loads(request.POST.get('areas'))
+
+        if handle_task_mask_creation(task,
+                                     int(request.POST.get('width')),
+                                     int(request.POST.get('height')),
+                                     areas):
+
+            messages.success(request, "Custom mask created for task " + str(id))
+        else:
+            messages.success(request, "Custom mask cleared for task " + str(id))
+
+        # Now we need to run image inspection
+        task.celery_id = celery_tasks.task_inspect.delay(task.id).id
+        task.state = 'inspecting'
+        task.save()
+        messages.success(request, "Started image inspection for task " + str(id))
+
+        return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
+
+    context = {}
+
+    context['task'] = task
+
+    return TemplateResponse(request, 'task_mask.html', context=context)

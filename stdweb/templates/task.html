@@ -163,6 +163,9 @@
 
           <button type="submit" name="action" value="inspect_image" class="btn btn-primary">Run initial inspection</button>
 
+          <button type="submit" name="action" value="make_custom_mask" class="btn btn-secondary"
+                  title="Create custom mask to define usable image regions">Make custom mask</button>
+
           <button type="submit" name="action" value="cleanup_task" class="btn btn-danger"
                   title="Delete all processing results and configurations">Cleanup</button>
 
@@ -236,7 +239,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_template.fits' as list %}
+              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">

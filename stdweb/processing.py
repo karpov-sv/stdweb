@@ -349,6 +349,11 @@ def inspect_image(filename, config, verbose=True, show=False):
     mask = np.isnan(image)
     mask |= image >= config['saturation']
 
+    # Custom mask
+    if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
+        mask |= fits.getdata(os.path.join(basepath, 'custom_mask.fits')) > 0
+        log("Custom mask loaded from custom_mask.fits")
+
     # Cosmics
     if config.get('mask_cosmics', True):
         # We will use custom noise model for astroscrappy as we do not know whether

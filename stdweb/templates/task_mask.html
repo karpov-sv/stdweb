@@ -1,0 +1,68 @@
+{% extends "template.html" %}
+
+{% load tags %}
+{% load filters %}
+{% load static %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'selectareas/jquery.selectareas.css' %}">
+  <script src="{% static 'selectareas/jquery.selectareas.js' %}"></script>
+
+  <script language="javascript">
+   $(function(){
+     $('#image').selectAreas({
+       onChanged: $.noop,    // fired when a selection is released
+       onChanging: $.noop,    // fired during the modification of a selection});
+       overlayOpacity: 0.5
+     });
+   });
+
+   $(function(){
+     $("#form").on("submit", function(event) {
+       var img = $('#image');
+
+       $('#form_width').val(img.prop('width'));
+       $('#form_height').val(img.prop('height'));
+       $('#form_areas').val(JSON.stringify(img.selectAreas('areas')));
+
+       /* event.preventDefault(); */
+     });
+   });
+  </script>
+
+{% endblock %}
+
+{% block title_div %}{% endblock %}
+
+{% block content %}
+
+  {% if not task %}
+    <p>Task not found</p>
+  {% else %}
+
+    <h2>
+      {{ task.original_name }}
+    </h2>
+
+    <p>
+      Define usable image regions by clicking and dragging the selections.
+    </p>
+
+    <div class="mb-2 image-decorator">
+      <img src="{% url 'task_preview' id=task.id path='image.fits' %}" class="img-fluid" alt="{{ path }}" id="image" data-stretch/>
+    </div>
+
+    <div class="mb-4">
+      <form action="" method="POST" id="form">
+        {% csrf_token %}
+        <input type="hidden" name="width" id="form_width"/>
+        <input type="hidden" name="height" id="form_height"/>
+        <input type="hidden" name="areas" id="form_areas"/>
+        <button class="btn btn-primary">Create mask</button>
+        <button class="btn btn-secondary" onclick="$('#image').selectAreas('reset')">Clear</button>
+      </form>
+    </div>
+
+  {% endif %}
+
+{% endblock %}
