@@ -46,9 +46,9 @@ supported_filters = {
     'I': {'name':'Johnson-Cousins I', 'aliases':["Ic", "I'"]},
     # Sloan-like
     'u': {'name':'Sloan u', 'aliases':["sdssu", "SDSS u", "SDSS-u", "SDSS-u'", "Sloan-u", "sloanu"]},
-    'g': {'name':'Sloan g', 'aliases':["sdssg", "SDSS g", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "SG", "sG"]},
-    'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS r", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "SR", "sR"]},
-    'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS i", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "SI", "sI"]},
+    'g': {'name':'Sloan g', 'aliases':["sdssg", "SDSS g", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "SG", "sG", "ZTF_g"]},
+    'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS r", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "SR", "sR", "ZTF_r"]},
+    'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS i", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "SI", "sI", "ZTF_i"]},
     'z': {'name':'Sloan z', 'aliases':["sdssz", "SDSS z", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz"]},
     # Gaia
     'G': {'name':'Gaia G', 'aliases':[]},
@@ -277,7 +277,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     # Cleanup stale plots
     cleanup_paths(cleanup_inspect, basepath=basepath)
 
-    config['sn'] = config.get('sn', 3)
+    config['sn'] = config.get('sn', 5)
     config['initial_aper'] = config.get('initial_aper', 3)
     config['initial_r0'] = config.get('initial_r0', 0)
     config['rel_aper'] = config.get('rel_aper', 1)
@@ -358,10 +358,11 @@ def inspect_image(filename, config, verbose=True, show=False):
     if config.get('mask_cosmics', True):
         # We will use custom noise model for astroscrappy as we do not know whether
         # the image is background-subtracted already, or how it was flatfielded
-        bg = sep.Background(image, mask)
-        rms = bg.rms().astype(np.float32)
+        bg = sep.Background(image, mask=mask)
+        rms = bg.rms()
+        var = rms**2 + np.abs(image - bg.back())/config.get('gain', 1)
         cmask, cimage = astroscrappy.detect_cosmics(image, mask, verbose=False,
-                                                    invar=rms**2,
+                                                    invar=var.astype(np.float32),
                                                     gain=config.get('gain', 1),
                                                     satlevel=config.get('saturation'),
                                                     cleantype='medmask')
@@ -519,6 +520,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                                             gain=config.get('gain', 1.0),
                                             extra={'BACK_SIZE': config.get('bg_size', 256)},
                                             minarea=config.get('minarea', 3),
+                                            mask_to_nans=True,
                                             verbose=verbose,
                                             _tmpdir=settings.STDPIPE_TMPDIR,
                                             _exe=settings.STDPIPE_SEXTRACTOR)
@@ -526,7 +528,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     log(f"{len(obj)} objects found")
 
     if not len(obj):
-        raise RuntimeError('Cannot detect objects on the image')
+        raise RuntimeError('Cannot detect objects in the image')
 
     log("\n---- Object measurement ----\n")
 
@@ -550,7 +552,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                                      fwhm=fwhm,
                                      aper=config.get('rel_aper', 1.0),
                                      bkgann=rel_bkgann,
-                                     sn=config.get('sn', 3.0),
+                                     sn=config.get('sn', 5.0),
                                      bg_size=config.get('bg_size', 256),
                                      gain=config.get('gain', 1.0),
                                      verbose=verbose)
@@ -725,7 +727,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Store photometric solution
     pickle_to_file(os.path.join(basepath, 'photometry.pickle'), m)
-    log("Photometric solution stored to file:photometry.pickle")
+    log("Photometric solution stored to photometry.pickle")
 
     # Plot photometric solution
     with plots.figure_saver(os.path.join(basepath, 'photometry.png'), figsize=(8, 6), show=show) as fig:
@@ -1192,7 +1194,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                                           wcs=wcs1, edge=sub_overlap,
                                                           aper=config.get('initial_aper', 3.0),
                                                           gain=config.get('gain', 1.0),
-                                                          sn=config.get('sn', 3.0),
+                                                          sn=config.get('sn', 5.0),
                                                           minarea=config.get('minarea', 3),
                                                           extra_params=['NUMBER'],
                                                           extra={'BACK_SIZE': config.get('bg_size', 256)},
@@ -1206,7 +1208,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                               fwhm=config.get('fwhm'),
                                               aper=config.get('rel_aper', 1.0),
                                               bkgann=rel_bkgann,
-                                              sn=config.get('sn', 3.0),
+                                              sn=config.get('sn', 5.0),
                                               # We assume no background
                                               bg=None,
                                               # ..and known error model
