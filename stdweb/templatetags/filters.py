@@ -65,6 +65,7 @@ def make_uuid(x):
 def naturalsize(size):
     return humanize.naturalsize(size, binary=True)
 
+
 @register.filter
 def to_sexadecimal(value, plus=False):
     avalue = np.abs(value)
@@ -81,9 +82,11 @@ def to_sexadecimal(value, plus=False):
 
     return string
 
+
 @register.filter
 def to_sexadecimal_plus(value):
     return to_sexadecimal(value, plus=True)
+
 
 @register.filter
 def to_sexadecimal_hours(value):

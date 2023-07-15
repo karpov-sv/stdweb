@@ -1,4 +1,5 @@
 {% load filters %}
+{% load tags %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -76,6 +77,9 @@
                 <a href="#" class="dropdown-toggle nav-link" data-bs-toggle="dropdown">User: {{ user|user }} <span class="caret"></span></a>
                 <ul class="dropdown-menu">
                   {% if user.is_staff %}
+                    <li class="dropdown-item disabled">
+                      Free: {% filter naturalsize %}{% free_disk_space %}{% endfilter %}
+                    </li>
                     <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a></li>
                   {% endif %}
 

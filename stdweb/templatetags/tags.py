@@ -3,6 +3,7 @@ from django.template.defaultfilters import stringfilter
 from django.utils.safestring import mark_safe
 from django.utils.html import escape
 from django.urls import reverse
+from django.conf import settings
 
 import os
 import uuid
@@ -96,3 +97,9 @@ class MakeListNode(template.Node):
         items = map(template.Variable, self.items)
         context[self.varname] = [ i.resolve(context) for i in items ]
         return ""
+
+
+@register.simple_tag
+def free_disk_space():
+    s = os.statvfs(settings.TASKS_PATH)
+    return s.f_bavail*s.f_frsize
