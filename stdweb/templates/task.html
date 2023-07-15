@@ -93,6 +93,12 @@
      }
    });
 
+   {% if not task.config.target_ra and not task.config.target_dec %}
+   $(function(){
+     // Disable target photometry radio button
+     $('#id_subtraction_mode_0').prop('disabled', true);
+   });
+   {% endif %}
   </script>
 
 {% endblock %}
@@ -115,11 +121,11 @@
     </h2>
 
     {% if task.title %}
-    <p class="fst-italic">
+    <div class="fst-italic mb-2">
       {{ task.title }}
-    </p>
+    </div>
     {% endif %}
-    <p>
+    <div class="mb-4">
       Task {{ task.id }} created by <span class="text-primary fw-bold">{{ task.user|user }}</span> on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
       {% if not user_may_submit %}
         <br>
@@ -128,12 +134,22 @@
       <br>
       State:
       {% if task.celery_id %}
-      <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+        <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
       {% endif %}
       <b class="text-{% if task.state == 'failed' %}danger{% elif task.celery_id %}primary{% else %}success{% endif %}">{{ task.state }}</b> on {{ task.modified|timestamp }} - {{ task.modified|naturaltime }}
       {% if task.celery_id %}
+        <!-- Help popover -->
+        <div class="span-help-popover d-inline float-end" title="Task is running">
+          <p>
+            The image processing task is running on the server. The page will be automatically re-loaded when processing is finished.
+          </p>
+          <p>
+            If necessary, you may cancel the running task by clicking on the running task queue id and using corresponding button on the running task page.
+          </p>
+        </div>
+
         <br>
-        Queue task:
+        Queue task id:
         <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
         (<span id="celery_state"></span>)
         {% if user_may_submit and False %}
@@ -143,7 +159,7 @@
           </form>
         {% endif %}
       {% endif %}
-    </p>
+    </div>
 
     <!-- Header -->
     {% if 'image.fits' in files %}
@@ -153,7 +169,23 @@
     {% endif %}
 
     <hr>
-    <h3>Initial inspection and masking</h3>
+    <h3>Initial inspection and masking
+      <!-- Help popover -->
+      <span class="span-help-popover float-end" title="Initial inspection and masking">
+        <p>
+          On this stage, several important parameters (gain, saturation level, filter name, etc) are extracted from FITS header. Also, the target name is resolved to coordinates, to be used later for forced photometry. All values may be overwritten by filling the form values.
+        </p>
+        <p>
+        The mask is created from NaN values in the image, pixels above saturation level, and from optional cosmic ray detection. The latter is not always working perfectly, so disable it if it starts masking the actual stars! If the image has unusable regions (e.g. overscans) around it - you may mask them manually using custom map editor.
+        </p>
+        <p>
+          Cleanup operation will remove all processing results and settings, except for the image itself.
+        </p>
+        <p>
+          Original image may be modified by the operations hidden under Unsafe controls. There you may either crop the image (using actual pixel coordinates or offsets from the edges), or incorporate refined / blind-matched WCS into the header, so that image with proper astrometry may be downloaded. Also, you may delete the processing task completely if you are done with this image.
+        </p>
+      </span>
+    </h3>
 
     {% if user_may_submit %}
       <form action="" method="POST" class="mb-2">
@@ -264,7 +296,28 @@
     <!-- Photometry and astrometry -->
     {% if 'inspect.log' in files and 'mask.fits' in files %}
       <hr>
-      <h3>Photometry and astrometry</h3>
+      <h3>Photometry and astrometry
+        <!-- Help popover -->
+        <span class="span-help-popover float-end" title="Object detection, astrometry and photometry">
+          <p>
+            Object detection is controlled by the first row of values. S/N here influences both rejection of detections with too large errors, and magnitude limit estimations.
+          </p>
+          <p>
+            Second row controls aperture photometry at the positions of detected objects. The sizes of apertures, and optionally local sky background estimation annuli, are specified in units of average FWHM measured on the detection step. It is also possible to manually override FWHM value by setting it here.
+          </p>
+          <p>
+            Photometric calibration (third row) depends on the selection of primary filter and reference catalogue. The catalogue will be downloaded from Vizier, with optionally limiting it to only have stars brighter than given magnitude. Photometric solution will use specified polynomial order of zero point spatial dependency, and if requested will use color term relevant for the specified catalogue. Supported catalogues and filters are:
+            <ul class="mb-1">
+              {% for cat in supported_catalogs.values %}
+                <li><b>{{ cat.name }}</b> [{{ cat.filters|join:", " }}]</li>
+              {% endfor %}
+            </ul>
+          </p>
+          <p>
+            Astrometric refinement uses positions of detected objects and reference catalogue to refine existing astrometric solution from FITS header. The results are stored to the file, and will be re-used on subsequent processing runs. If no initial astrometric solution exist, WCS blind-matching may be initiated. The process may be limited to specific part of the sky, as well as to a range of pixel scales.
+          </p>
+        </span>
+      </h3>
 
       {% if user_may_submit %}
         <form action="" method="POST" class="mb-2">
@@ -305,7 +358,18 @@
     <!-- Target cutout -->
     {% if 'target.cutout' in files %}
       <hr>
-      <h3>Target on direct image</h3>
+      <h3>
+        Target in direct image
+        <!-- Help popover -->
+        <span class="span-help-popover float-end" title="Target in direct image">
+          <p>
+            Cutouts show the target position in the original image, along with the same part of the sky from Pan-STARRS or SkyMapper (depending on the hemisphere) surveys, and the mask. The latter helps identifying possible problems due to cosmic rays or saturation.
+          </p>
+          <p>
+            Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
+          </p>
+        </span>
+      </h3>
 
       <div class="text-center">
         {% include "task_block_image.html" with cutout='target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
@@ -316,7 +380,35 @@
     <!-- Image subtraction -->
     {% if 'photometry.pickle' in files %}
       <hr>
-      <h3>Template subtraction</h3>
+      <h3>
+        Template subtraction
+        <!-- Help popover -->
+        <span class="span-help-popover float-end" title="Template subtraction and transient detection">
+          <p>
+            The template may be either uploaded as a FITS file (then you may wish to specify correct gain and saturation level for it to ensure reliable subtraction), or downloaded from one of online sources:
+            <ul class="mb-2">
+              {% for tmpl in supported_templates.values %}
+                {% if 'filters' in tmpl %}
+                  <li><b>{{ tmpl.name }}</b> [{{ tmpl.filters|join:", " }}]</li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+            HiPS surveys do not have proper masks for saturated objects or cosmetic defects, so results will be less reliable.
+          </p>
+          <p>
+            To ease the subtraction, the image will be split into sub-images with approximately the specified size. Sub-images will overlap by the specified amount of pixels for improving the stability of subtraction routine near sub-image edges, but these regions will be excluded from actual transient detection, so no repeating transients will appear in the output. In the target photometry mode, just a single sub-image around it will be selected.
+          </p>
+          <p>
+            Image subtraction will be handled by HOTPANTS. The code will try to automatically create proper noise maps for both image and the template, and select optimal HOTPANTS parameters for the subtraction. However, you may override them, or add extra parameters, by providing them as a JSON string. The most important parameters to adjust are <code>ko</code> and <code>bgo</code> that control the spatial orders of convolution kernel and backround inside the regions used for constructing the subtraction model.
+          </p>
+          <p>
+            Transient detection is performed in a difference image using noise model produced by HOTPANTS and combined mask. Parameters for the detection and measurement, as well as photometric calibration of the candidates are the same as used for photometric calibration above.
+          </p>
+          <p>
+            Transient candidates will be filtered to exclude the ones with masked pixels within the aperture, as well as the ones positionally coincident (within half FWHM radius) with the objects from Pan-STARRS DR1 and SkyMapper DR1.1 catalogues.
+          </p>
+        </span>
+      </h3>
 
       {% if user_may_submit %}
         <form action="" method="POST" class="mb-2" enctype="multipart/form-data">
@@ -357,7 +449,20 @@
     <!-- Target cutout -->
     {% if 'sub_target.cutout' in files %}
       <hr>
-      <h3>Target on difference (template-subtracted) image</h3>
+      <h3>
+        Target in difference (template-subtracted) image
+        <span class="span-help-popover float-end" title="Target in difference image">
+          <p>
+            Cutouts show the target position in the original image, template, template convolved with matching kernel which is used for actual subtraction, difference image, and the mask. The latter helps identifying possible problems due to cosmic rays or saturation.
+          </p>
+          <p>
+            The measurements above cutouts correspond to forced photometry at the target position in the difference image, with the same parameters as used above for photometric calibration, so the resulting magnitude (if measured) is in the same system. Upper limit is derived from the locally estimated background noise and corresonds to the same S/N level as used for object detection above.
+          </p>
+          <p>
+            Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
+          </p>
+        </span>
+      </h3>
 
       <div class="text-center">
         {% include "task_block_image.html" with cutout='sub_target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
@@ -368,7 +473,23 @@
     <!-- Transient candidates -->
     {% if candidates %}
       <hr>
-      <h3>Transient candidates on difference (template-subtracted) image</h3>
+      <h3>
+        Transient candidates in difference (template-subtracted) image
+        <span class="span-help-popover float-end" title="Transient candidates in difference image">
+          <p>
+            Cutouts show the target position in the original image, template, template convolved with matching kernel which is used for actual subtraction, difference image, detection footprint, and the mask. The latter helps identifying possible problems due to template bad regions, cosmic rays or saturation, while the footprint displays the spread of the pixels above detection threshold useful for understanding what exactly triggered the detection.
+          </p>
+          <p>
+            The measurements above cutouts correspond to aperture photometry at the candidate position in the difference image, with the same parameters as used above for photometric calibration, so the resulting magnitude (if measured) is in the same system. Detection limit is derived from the locally estimated background noise and corresonds to the same S/N level as used for object detection above.
+          </p>
+          <p>
+            Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
+          </p>
+          <p>
+            The link below the cutouts allows to download single multi-extension FITS file containing all the cutouts, along with the information on transient position and metadata in the header.
+          </p>
+        </span>
+      </h3>
 
       {% for cand in candidates %}
         <div class="text-center">

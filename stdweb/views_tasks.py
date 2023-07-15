@@ -143,6 +143,11 @@ def tasks(request, id=None):
 
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
+        # Additional info
+        context['supported_filters'] = processing.supported_filters
+        context['supported_catalogs'] = processing.supported_catalogs
+        context['supported_templates'] = processing.supported_templates
+
         if 'candidates.vot' in context['files']:
             # candidates = sorted(glob.glob(os.path.join(path, 'candidates', '*.cutout')))
             # context['candidates'] = [os.path.join('candidates', os.path.split(_)[1]) for _ in candidates]

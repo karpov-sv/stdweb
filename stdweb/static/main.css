@@ -79,3 +79,19 @@
 .form-label {
     margin-bottom: 0.1em;
 }
+
+.help-popover {
+    --bs-popover-max-width: 500px;
+    --bs-popover-border-color: var(--bs-info);
+    --bs-popover-header-bg: var(--bs-info);
+    --bs-popover-header-color: var(--bs-white);
+    --bs-popover-font-size: 9pt;
+    --bs-popover-body-padding-x: 1rem;
+    --bs-popover-body-padding-y: .5rem;
+    box-shadow: var(--bs-box-shadow);
+    /* font-size: 8pt; /\*var(--bs-font-size-sm);*\/ */
+}
+
+.help-popover p {
+    margin-bottom: .5rem;
+}
