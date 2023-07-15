@@ -1,6 +1,7 @@
 from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.conf import settings
 
 from django.contrib import messages
 
@@ -23,7 +24,6 @@ from matplotlib.patches import Circle
 
 from stdpipe import cutouts, plots
 
-from . import settings
 from . import forms
 from . import models
 

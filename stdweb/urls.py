@@ -16,10 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, re_path, include
+from django.conf import settings
 
 from django.contrib.auth import views as auth_views
 
-from . import settings
 from . import views
 from . import views_tasks
 from . import views_celery

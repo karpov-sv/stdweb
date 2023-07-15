@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import cache_page
+from django.conf import settings
 
 import os, glob
 import json
@@ -13,7 +14,6 @@ import numpy as np
 from astropy.table import Table
 from astropy.io import fits
 
-from . import settings
 from . import views
 from . import models
 from . import forms

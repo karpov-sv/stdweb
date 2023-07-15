@@ -1,3 +1,5 @@
+from django.conf import settings
+
 import os, glob, shutil
 
 from functools import partial
@@ -21,8 +23,6 @@ import sep
 import reproject
 
 import dill as pickle
-
-from . import settings
 
 # STDPipe
 from stdpipe import astrometry, photometry, catalogs, cutouts

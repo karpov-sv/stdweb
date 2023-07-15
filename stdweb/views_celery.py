@@ -7,9 +7,10 @@ from django.contrib import messages
 
 from django.core import management
 
+from django.conf import settings
+
 import os, glob
 
-from . import settings
 from . import models
 from . import celery
 

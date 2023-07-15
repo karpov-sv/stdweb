@@ -2,13 +2,11 @@ from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils.timezone import now
-
 from django.contrib.auth.models import User
+from django.conf import settings
 
 import os, shutil
 import datetime
-
-from . import settings
 
 
 class Task(models.Model):
