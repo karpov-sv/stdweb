@@ -293,7 +293,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['sub_size'] = config.get('sub_size', 1000)
     config['sub_overlap'] = config.get('sub_overlap', 50)
     config['sub_verbose'] = config.get('sub_verbose', False)
-    config['detect_transients'] = config.get('detect_transients', False)
+    config['subtraction_mode'] = config.get('subtraction_mode', 'detection')
 
     # Load the image
     log(f'Inspecting {filename}')
@@ -433,6 +433,10 @@ def inspect_image(filename, config, verbose=True, show=False):
             target = SkyCoord.from_name(config['target'])
             config['target_ra'] = target.ra.deg
             config['target_dec'] = target.dec.deg
+
+            # Activate target photometry mode
+            config['subtraction_mode'] = 'target'
+
             log(f"Resolved to RA={config['target_ra']:.4f} Dec={config['target_dec']:.4f}")
         except:
             log("Target not resolved")
@@ -910,7 +914,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         _cachedir = os.path.join(basepath, 'cache')
 
     sub_verbose = verbose if config.get('sub_verbose') else False
-    detect_transients = config.get('detect_transients', False)
+    subtraction_mode = config.get('subtraction_mode', 'detection')
 
     # Cleanup stale plots and files
     cleanup_paths(cleanup_subtraction, basepath=basepath)
@@ -985,7 +989,7 @@ def subtract_image(filename, config, verbose=True, show=False):
     sub_size = config.get('sub_size', 1000)
     sub_overlap = config.get('sub_overlap', 50)
 
-    if detect_transients:
+    if subtraction_mode == 'detection':
         log('Transient detection mode activated')
         # We will split the image into nx x ny blocks
         nx = max(1, int(np.round(image.shape[1] / sub_size)))
@@ -1114,7 +1118,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         else:
             rel_bkgann = None
 
-        if config.get('target_ra') is not None and config.get('target_dec') is not None and not detect_transients:
+        if config.get('target_ra') is not None and config.get('target_dec') is not None and subtraction_mode == 'target':
         # Target forced photometry
             log(f"\n---- Target forced photometry ----\n")
 
@@ -1185,7 +1189,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             else:
                 log("Target not detected")
 
-        elif detect_transients:
+        elif subtraction_mode == 'detection':
             # Transient detection mode
             log(f"Starting transient detection using edge size {sub_overlap}")
 
@@ -1271,7 +1275,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 all_candidates.append(cand)
                 cutout_names.append(os.path.join('candidates', jname + '.cutout'))
 
-    if detect_transients:
+    if subtraction_mode == 'detection':
         log("\n---- Final list of candidates ----\n")
 
         if len(all_candidates):

@@ -2,7 +2,7 @@ from django import forms
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit
-from crispy_forms.bootstrap import InlineField, PrependedText
+from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 
 from .processing import supported_filters, supported_catalogs, supported_templates
 
@@ -25,6 +25,7 @@ class TasksFilterForm(forms.Form):
                 InlineField(PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames')),
             )
         )
+
 
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
@@ -139,7 +140,8 @@ class TaskSubtractionForm(forms.Form):
     custom_template_gain = forms.FloatField(min_value=0, required=False, label="Custom template gain, e/ADU")
     custom_template_saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
 
-    detect_transients = forms.BooleanField(required=False, label="Detect transients")
+    subtraction_mode = forms.ChoiceField(choices=[('target', 'Target photometry'), ('detection', 'Transient detection')],
+                                         initial='detection', required=True, label="", widget=forms.RadioSelect)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -165,7 +167,7 @@ class TaskSubtractionForm(forms.Form):
                 id='custom_row',
             ),
             Row(
-                Column('detect_transients'),
+                Column(InlineRadios('subtraction_mode', template='crispy_radioselect_inline.html'), css_class='form-group'),
                 Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-end'
             ),
