@@ -58,7 +58,7 @@ supported_filters = {
 
 supported_catalogs = {
     'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
-                   'limit': 'Gmag'},
+                   'limit': 'rmag'},
     'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
             'limit':'rmag'},
     'skymapper': {'name':'SkyMapper DR1.1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
@@ -715,8 +715,12 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log("\n---- Photometric calibration ----\n")
 
+    sr = config.get('sr_override')
+    if sr:
+        sr /= 3600 # Arcseconds to degrees
+
     # Photometric calibration
-    m = pipeline.calibrate_photometry(obj, cat, pixscale=pixscale,
+    m = pipeline.calibrate_photometry(obj, cat, sr=sr, pixscale=pixscale,
                                       cat_col_mag=config.get('cat_col_mag'),
                                       cat_col_mag_err=config.get('cat_col_mag_err'),
                                       cat_col_mag1=config.get('cat_col_color_mag1'),

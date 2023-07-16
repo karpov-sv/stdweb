@@ -65,7 +65,7 @@ class TaskPhotometryForm(forms.Form):
     bg_size = forms.IntegerField(min_value=0, required=False, label="Background mesh size")
     minarea = forms.IntegerField(min_value=0, required=False, label="Minimal object area")
     rel_aper = forms.FloatField(min_value=0, required=False, label="Relative aperture, FWHM")
-    rel_bg1 = forms.FloatField(min_value=0, required=False, label="Local background inner annulus, FWHM")
+    rel_bg1 = forms.FloatField(min_value=0, required=False, label="Sky inner annulus, FWHM")
     rel_bg2 = forms.FloatField(min_value=0, required=False, label="Outer annulus, FWHM")
     fwhm_override = forms.FloatField(min_value=0, required=False, label="FWHM override, pixels")
 
@@ -77,6 +77,8 @@ class TaskPhotometryForm(forms.Form):
 
     spatial_order = forms.IntegerField(min_value=0, required=False, label="Zeropoint spatial order")
     use_color = forms.BooleanField(required=False, label="Use color term")
+    sr_override = forms.FloatField(min_value=0, required=False, label="Matching radius, arcsec")
+
     refine_wcs = forms.BooleanField(required=False, label="Refine astrometry")
     blind_match_wcs = forms.BooleanField(required=False, label="Blind match")
 
@@ -106,6 +108,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('rel_bg1'),
                 Column('rel_bg2'),
                 Column('fwhm_override'),
+                Column('sr_override'),
                 css_class='align-items-end'
             ),
             Row(
