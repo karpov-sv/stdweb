@@ -114,6 +114,9 @@ filter_mappings = {
     'r': ['r', 'i'],
     'i': ['i', 'r'],
     'z': ['z', 'r'],
+    'G': ['r', 'g'],
+    'BP': ['g'],
+    'RP': ['i', 'r'],
 }
 
 
@@ -696,6 +699,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config.get('refine_wcs', False):
         log("\n---- Astrometric refinement ----\n")
 
+        # FIXME: make the order configurable
         wcs1 = pipeline.refine_astrometry(obj, cat, fwhm*pixscale,
                                           wcs=wcs, order=3, method='scamp',
                                           cat_col_mag=config.get('cat_col_mag'),
