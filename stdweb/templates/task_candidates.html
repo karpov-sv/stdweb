@@ -1,0 +1,67 @@
+{% extends "template.html" %}
+
+{% load el_pagination_tags %}
+{% load tags %}
+{% load filters %}
+
+{% block head %}
+{% endblock %}
+
+{% block ptitle %}
+  Candidates : Task {{ task.id }} : STDWeb
+{% endblock %}
+
+{% block content %}
+
+  {% if not task %}
+    <p>Task not found</p>
+  {% else %}
+
+    <h2>
+      {{ task.original_name }}
+    </h2>
+
+    {% if task.title %}
+    <div class="fst-italic mb-2">
+      {{ task.title }}
+    </div>
+    {% endif %}
+
+    <!-- Transient candidates -->
+    {% if candidates %}
+      <hr>
+      <h3>
+        {{ candidates|length }} transient candidates in difference (template-subtracted) image
+        <span class="span-help-popover float-end" title="Transient candidates in difference image">
+          <p>
+            Cutouts show the target position in the original image, template, template convolved with matching kernel which is used for actual subtraction, difference image, detection footprint, and the mask. The latter helps identifying possible problems due to template bad regions, cosmic rays or saturation, while the footprint displays the spread of the pixels above detection threshold useful for understanding what exactly triggered the detection.
+          </p>
+          <p>
+            The measurements above cutouts correspond to aperture photometry at the candidate position in the difference image, with the same parameters as used above for photometric calibration, so the resulting magnitude (if measured) is in the same system. Detection limit is derived from the locally estimated background noise and corresonds to the same S/N level as used for object detection above.
+          </p>
+          <p>
+            Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
+          </p>
+          <p>
+            The link below the cutouts allows to download single multi-extension FITS file containing all the cutouts, along with the information on transient position and metadata in the header.
+          </p>
+        </span>
+      </h3>
+
+      {% paginate step candidates %}
+
+      {% for cand in candidates %}
+        <div class="text-center">
+          {% include "task_block_image.html" with cutout=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+        </div>
+      {% endfor %}
+
+      {% show_pages %}
+
+    {% else %}
+      No transient candidates found
+    {% endif %}
+
+  {% endif %}
+
+{% endblock %}

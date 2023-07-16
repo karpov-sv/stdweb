@@ -257,3 +257,22 @@ def task_mask(request, id=None, path=''):
     context['task'] = task
 
     return TemplateResponse(request, 'task_mask.html', context=context)
+
+
+def task_candidates(request, id):
+    context = {}
+
+    task = models.Task.objects.get(id=id)
+    path = task.path()
+
+    context['task'] = task
+
+    context['step'] = request.GET.get('step', 100)
+
+    if os.path.exists(os.path.join(path, 'candidates.vot')):
+        candidates = Table.read(os.path.join(path, 'candidates.vot'))
+        if candidates:
+            candidates.sort('flux', reverse=True)
+            context['candidates'] = candidates
+
+    return TemplateResponse(request, 'task_candidates.html', context=context)
