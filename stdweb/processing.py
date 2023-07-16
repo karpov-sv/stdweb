@@ -630,6 +630,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             astrometry.clear_wcs(header)
             header += wcs.to_header(relax=True)
             config['blind_match_wcs'] = False
+            config['refine_wcs'] = True # We need to do it as we got SIP solution
             log("Blind matched WCS stored to file:image.wcs")
         else:
             log("Blind matching failed")
@@ -729,6 +730,26 @@ def photometry_image(filename, config, verbose=True, show=False):
     if m is None:
         raise RuntimeError('Photometric match failed')
 
+    # Check photometric correlation (instrumental vs catalogue)
+    if True:
+        a0, b0 = (m['omag']+m['zero_model'])[m['idx0']], m['cmag'][m['idx0']]
+        c0 = np.corrcoef(a0, b0)[0, 1]
+
+        b1 = np.array(b0.copy())
+        cs = []
+
+        for i in range(10000):
+            np.random.shuffle(b1)
+            cs.append(np.corrcoef(a0, b1)[0, 1])
+
+        from scipy import stats
+        qval = stats.percentileofscore(np.abs(cs), np.abs(c0))
+        pval = 1 - 0.01*qval
+
+        log(f"Instr / Cat correlation is {c0:.2f} which corresponds to p-value {pval:.2g}")
+        if pval > 0.05:
+            log(f"Warning: the correlation is not significant, probably the astrometry is wrong!")
+
     # Store photometric solution
     pickle_to_file(os.path.join(basepath, 'photometry.pickle'), m)
     log("Photometric solution stored to photometry.pickle")
@@ -789,7 +810,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Check the filter
     if config.get('use_color', True) and np.abs(m['color_term']) > 0.5:
-        log("Color term is too large, checking whether other filters would work better")
+        log("Warning: color term is too large, checking whether other filters would work better")
 
         for fname in supported_catalogs[config['cat_name']].get('filters', []):
             m1 = pipeline.calibrate_photometry(
@@ -804,7 +825,10 @@ def photometry_image(filename, config, verbose=True, show=False):
                 accept_flags=0x02, max_intrinsic_rms=0.01,
                 verbose=False)
 
-            log(f"filter {fname}: color term {m1['color_term']:.2f}")
+            if m1 is not None:
+                log(f"filter {fname}: color term {m1['color_term']:.2f}")
+            else:
+                log(f"filter {fname}: match failed")
 
     # Detection limits
     log("\n---- Global detection limit ----\n")
