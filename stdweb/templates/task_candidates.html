@@ -27,6 +27,13 @@
     </div>
     {% endif %}
 
+    <div>
+      <a class="btn btn-light" role="button" href="{% url 'tasks' id=task.id %}">
+        <span class="fa fa-chevron-left me-2"></span>
+        Back to task page
+      </a>
+    </div>
+
     <!-- Transient candidates -->
     {% if candidates %}
       <hr>
