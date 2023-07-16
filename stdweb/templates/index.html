@@ -3,12 +3,12 @@
 {% load crispy_forms_tags %}
 {% load filters %}
 
-{% block title %}STDWeb - STDPipe on the Web{% endblock %}
+{% block title %}Simple Transient Detection for the Web{% endblock %}
 
 {% block content %}
 
   <p>
-    This is a simple web-based tool for a quick-look photometry and transient detection on astronomical images. It is based on <a href="https://github.com/karpov-sv/stdpipe">STDPipe</a> library and tries to implement a self-consistent and mostly automatic data analysis workflow from its routines.
+    This is a simple web-based tool for a quick-look photometry and transient detection in astronomical images. It is based on <a href="https://github.com/karpov-sv/stdpipe">STDPipe</a> library and tries to implement a self-consistent and mostly automatic data analysis workflow from its routines.
   </p>
 
   <p>
@@ -16,11 +16,11 @@
     <ul>
       <li>Upload your own FITS files, or analyze some files already on the server</li>
       <li>Do basic pre-processing and masking</li>
-      <li>Detect objects on the image and do astrometric calibration, either by blind mathcing or refining existing solution</li>
+      <li>Detect objects in the image and do astrometric calibration, either by blind mathcing or refining existing solution</li>
       <li>Photometrically calibrate the image using one of supported reference catalogues</li>
       <li>Subtract either user-provided or automatically downloaded template images</li>
-      <li>Do forced photometry for a specified target on either original or difference image</li>
-      <li>Do (experimental) transient detection on difference image</li>
+      <li>Do forced photometry for a specified target in either original or difference image</li>
+      <li>Do (experimental) transient detection in difference image</li>
     </ul>
   </p>
 
