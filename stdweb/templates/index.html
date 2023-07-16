@@ -28,11 +28,15 @@
     If you want to better understand the routines used for it, please consult STDPipe <a href="https://stdpipe.readthedocs.io/">documentation</a> and <a href="https://github.com/karpov-sv/stdpipe/tree/master/notebooks">example notebooks</a>, as well as the <a href="https://github.com/karpov-sv/stdweb">actual source code</a> behind this website.
   </p>
 
-  <h3>Image upload</h3>
-
-  <p>
-    You may upload new FITS image here. Upon uploading, you will be redirected to the dedicated task page for this image, where you may analyze it.
-  </p>
+  <h3>
+    Image upload
+    <!-- Help popover -->
+    <span class="span-help-popover float-end" title="Upload new FITS file">
+      <p>
+        You may upload new FITS image here. Upon uploading, you will be redirected to the dedicated task page for this image, where you may analyze it.
+      </p>
+    </span>
+  </h3>
 
   {% if user.is_authenticated %}
 
@@ -40,15 +44,8 @@
     <form class="mb-4" enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
       {% csrf_token %}
       <input type="hidden" name="type" value="image"/>
-      <div class="card">
-        <div class="card-header">
-          Upload new FITS file to be processed
-        </div>
-        <div class="card-body">
-          {{ form|crispy }}
-          <button type="submit" class="btn btn-primary">Upload</button>
-        </div>
-      </div>
+      {{ form|crispy }}
+      <button type="submit" class="btn btn-primary">Upload</button>
     </form>
 
   {% else %}
