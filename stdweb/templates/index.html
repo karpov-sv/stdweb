@@ -28,14 +28,17 @@
     If you want to better understand the routines used for it, please consult STDPipe <a href="https://stdpipe.readthedocs.io/">documentation</a> and <a href="https://github.com/karpov-sv/stdpipe/tree/master/notebooks">example notebooks</a>, as well as the <a href="https://github.com/karpov-sv/stdweb">actual source code</a> behind this website.
   </p>
 
+  <hr>
   <h3>
     Image upload
-    <!-- Help popover -->
-    <span class="span-help-popover float-end" title="Upload new FITS file">
-      <p>
-        You may upload new FITS image here. Upon uploading, you will be redirected to the dedicated task page for this image, where you may analyze it.
-      </p>
-    </span>
+    {% if user.is_authenticated %}
+      <!-- Help popover -->
+      <span class="span-help-popover float-end" title="Upload new FITS file">
+        <p>
+          You may upload new FITS image here. Upon uploading, you will be redirected to the dedicated task page for this image, where you may analyze it.
+        </p>
+      </span>
+    {% endif %}
   </h3>
 
   {% if user.is_authenticated %}
