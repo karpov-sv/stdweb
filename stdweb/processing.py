@@ -527,6 +527,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                                             gain=config.get('gain', 1.0),
                                             extra={'BACK_SIZE': config.get('bg_size', 256)},
                                             minarea=config.get('minarea', 3),
+                                            r0=config.get('initial_r0', 0.0),
                                             mask_to_nans=True,
                                             verbose=verbose,
                                             _tmpdir=settings.STDPIPE_TMPDIR,
