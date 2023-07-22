@@ -1068,8 +1068,35 @@ def subtract_image(filename, config, verbose=True, show=False):
                 _exe=settings.STDPIPE_SWARP,
                 verbose=sub_verbose)
             if tmask is not None and tmpl is not None:
-                # TODO: properly interpret per-band Legacy Survey flags
-                tmask = tmask > 0
+                if tname == 'ps1':
+                    tmask = tmask > 0
+                elif tname == 'ls':
+                    # Bitmask for a given band, as described at https://www.legacysurvey.org/dr10/bitmasks/
+                    imask = 0x0000
+                    imask |= 0x0001 # not primary brick area
+                    # imask |= 0x0002 # bright star nearby
+                    # imask |= 0x0100 # WISE W1 (all masks)
+                    # imask |= 0x0200 # WISE W2 (all masks)
+                    imask |= 0x0400 # Bailed out processing
+                    # imask |= 0x0800 # medium-bright star
+                    # imask |= 0x1000 # SGA large galaxy
+                    # imask |= 0x2000 # Globular cluster
+
+                    if tfilter == 'g':
+                        imask |= 0x0004 # g band saturated
+                        imask |= 0x0020 # any ALLMASK_G bit set
+                    elif tfilter == 'r':
+                        imask |= 0x0008 # r band saturated
+                        imask |= 0x0040 # any ALLMASK_R bit set
+                    elif tfilter == 'i':
+                        imask |= 0x4000 # i band saturated
+                        imask |= 0x8000 # any ALLMASK_I bit set
+                    elif tfilter == 'z':
+                        imask |= 0x0010 # z band saturated
+                        imask |= 0x0080 # any ALLMASK_Z bit set
+
+                    tmask = (tmask & imask) > 0
+
                 tmask |= np.isnan(tmpl)
             else:
                 raise RuntimeError(f"Error getting the template from {tconf['name']}")
