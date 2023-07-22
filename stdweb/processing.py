@@ -507,6 +507,15 @@ def inspect_image(filename, config, verbose=True, show=False):
 
         log(f"Suggested template is {supported_templates[config['template']]['name']}")
 
+    # Time
+    if not config.get('time'):
+        time = utils.get_obs_time(header=header, verbose=verbose)
+
+        if time is not None:
+            config['time'] = time.iso
+
+    if config.get('time'):
+        log(f"Time is {config.get('time')}")
 
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
@@ -521,6 +530,9 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Mask
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+
+    # Time
+    time = Time(config.get('time')) if config.get('time') else None
 
     # Cleanup stale plots
     cleanup_paths(cleanup_photometry, basepath=basepath)
@@ -918,7 +930,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         log("Measured target stored to file:target.vot")
 
         # Create the cutout from image based on the candidate
-        cutout = cutouts.get_cutout(image, target_obj[0], 30, mask=mask, header=header)
+        cutout = cutouts.get_cutout(image, target_obj[0], 30, mask=mask, header=header, time=time)
         # Cutout from relevant HiPS survey
         if target_obj['dec'][0] > -30:
             cutout['template'] = templates.get_hips_image('PanSTARRS/DR1/r', header=cutout['header'])[0]
@@ -991,6 +1003,9 @@ def subtract_image(filename, config, verbose=True, show=False):
         raise RuntimeError('No WCS astrometric solution')
 
     pixscale = astrometry.get_pixscale(wcs=wcs)
+
+    # Time
+    time = Time(config.get('time')) if config.get('time') else None
 
     log("\n---- Template selection ----\n")
 
@@ -1238,7 +1253,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             # Create the cutout from image based on the candidate
             cutout = cutouts.get_cutout(image1, target_obj[0], 30,
-                                        mask=fullmask1, header=header1,
+                                        mask=fullmask1, header=header1, time=time,
                                         diff=diff, template=tmpl, convolved=conv, err=ediff)
             cutouts.write_cutout(cutout, os.path.join(basepath, 'sub_target.cutout'))
             log("Target cutouts stored to file:sub_target.cutout")
@@ -1311,10 +1326,10 @@ def subtract_image(filename, config, verbose=True, show=False):
             candidates = pipeline.filter_transient_candidates(sobj, cat=cat,
                                                               sr=0.5*pixscale*config.get('fwhm', 1.0),
                                                               pixscale=pixscale,
-                                                              time=None,
                                                               vizier=vizier,
                                                               # Filter out any flags except for 0x100 which is isophotal masked
                                                               flagged=True, flagmask=0xfe00,
+                                                              time=time,
                                                               skybot=config.get('filter_skybot', False),
                                                               verbose=verbose)
 
@@ -1328,6 +1343,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                                             convolved=conv,
                                             err=ediff,
                                             footprint=(segm==cand['NUMBER']),
+                                            time=time,
                                             header=header1)
 
                 jname = utils.make_jname(cand['ra'], cand['dec'])

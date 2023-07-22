@@ -30,6 +30,7 @@ class TasksFilterForm(forms.Form):
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
     target = forms.CharField(max_length=50, required=False, empty_value=None, label="Target name or coordinates")
+    time = forms.CharField(max_length=30, required=False, empty_value=None, label="Time")
     gain = forms.FloatField(min_value=0, required=False, label="Gain, e/ADU")
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
     mask_cosmics = forms.BooleanField(initial=True, required=False, label="Mask cosmics")
@@ -44,9 +45,10 @@ class TaskInspectForm(forms.Form):
         self.helper.layout = Layout(
             'form_type',
             Row(
-                Column('target', css_class="col-md-6"),
-                Column('gain', css_class="col-md-3"),
-                Column('saturation', css_class="col-md-3"),
+                Column('target', css_class="col-md-5"),
+                Column('time', css_class="col-md-3"),
+                Column('gain', css_class="col-md-2"),
+                Column('saturation', css_class="col-md-2"),
                 css_class='align-items-end'
             ),
             Row(
