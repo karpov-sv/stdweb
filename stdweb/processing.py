@@ -1132,7 +1132,9 @@ def subtract_image(filename, config, verbose=True, show=False):
         if res is not None:
             diff,conv,sdiff,ediff = res
         else:
-            raise RuntimeError('Subtraction failed')
+            # raise RuntimeError('Subtraction failed')
+            log("Warning: Subtraction failed")
+            continue
 
         dmask = diff == 1e-30 # Bad pixels
 
