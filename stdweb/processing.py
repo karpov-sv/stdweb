@@ -72,6 +72,7 @@ supported_catalogs = {
 supported_templates = {
     'custom': {'name': 'Custom template'},
     'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},
+    'ls': {'name': 'Legacy Survey DR10', 'filters': {'g', 'r', 'i', 'z'}},
     'skymapper': {'name': 'SkyMapper DR1 (HiPS)', 'filters': {
         'u': 'CDS/P/skymapper-U',
         'g': 'CDS/P/skymapper-G',
@@ -85,10 +86,10 @@ supported_templates = {
         'i': 'CDS/P/DES-DR2/i',
         'z': 'CDS/P/DES-DR2/z',
     }},
-    'legacy': {'name': 'DESI Legacy Surveys DR10 (HiPS)', 'filters': {
-        'g': 'CDS/P/DESI-Legacy-Surveys/DR10/g',
-        'i': 'CDS/P/DESI-Legacy-Surveys/DR10/i',
-    }},
+    # 'legacy': {'name': 'DESI Legacy Surveys DR10 (HiPS)', 'filters': {
+    #     'g': 'CDS/P/DESI-Legacy-Surveys/DR10/g',
+    #     'i': 'CDS/P/DESI-Legacy-Surveys/DR10/i',
+    # }},
     'decaps': {'name': 'DECaPS DR2 (HiPS)', 'filters': {
         'g': 'CDS/P/DECaPS/DR2/g',
         'r': 'CDS/P/DECaPS/DR2/r',
@@ -417,9 +418,7 @@ def inspect_image(filename, config, verbose=True, show=False):
         log(f"Field center is at {ra0:.3f} {dec0:.3f}, radius {sr0:.2f} deg")
         log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
 
-        if wcs.sip is not None:
-            log("WCS uses SIP polynomials, enabling refinement for SWarp inter-operability")
-            config['refine_wcs'] = True
+        config['refine_wcs'] = True
     else:
         ra0,dec0,sr0 = None,None,None
         config['blind_match_wcs'] = True
@@ -494,10 +493,13 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Suggested template
     if not config.get('template'):
-        if (dec0 is not None and dec0 < -30) or config.get('target_dec', 0) < -30:
+        config['template'] = 'ps1' # Default choice
+
+        if ((dec0 is not None and templates.point_in_ls(ra0, dec0)) or
+            (config.get('target_dec') and templates.point_in_ls(config.get('target_ra'), config.get('target_dec')))):
+            config['template'] = 'ls'
+        elif (dec0 is not None and dec0 < -30) or config.get('target_dec', 0) < -30:
             config['template'] = 'skymapper'
-        else:
-            config['template'] = 'ps1'
 
         log(f"Suggested template is {supported_templates[config['template']]['name']}")
 
@@ -1057,24 +1059,20 @@ def subtract_image(filename, config, verbose=True, show=False):
         fits.writeto(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.int8), header1, overwrite=True)
 
         # Get the template
-        if tname == 'ps1':
-            log("Getting the template from original Pan-STARRS archive")
-            tmpl = templates.get_ps1_image(tfilter, wcs=wcs1, shape=image1.shape,
-                                           _cachedir=_cachedir,
-                                           _tmpdir=settings.STDPIPE_TMPDIR,
-                                           _exe=settings.STDPIPE_SWARP,
-                                           verbose=sub_verbose)
-            tmask = templates.get_ps1_image(tfilter, ext='mask', wcs=wcs1, shape=image1.shape,
-                                            extra={'COMBINE_TYPE':'AND'},
-                                            _cachedir=_cachedir,
-                                           _tmpdir=settings.STDPIPE_TMPDIR,
-                                            _exe=settings.STDPIPE_SWARP,
-                                            verbose=sub_verbose)
+        if tname == 'ps1' or tname == 'ls':
+            log(f"Getting the template from original {tconf['name']} archive")
+            tmpl,tmask = templates.get_survey_image_and_mask(
+                tfilter, survey=tname, wcs=wcs1, shape=image1.shape,
+                _cachedir=_cachedir, _cache_downscale = 1 if pixscale*3600 < 0.6 else 2,
+                _tmpdir=settings.STDPIPE_TMPDIR,
+                _exe=settings.STDPIPE_SWARP,
+                verbose=sub_verbose)
             if tmask is not None and tmpl is not None:
-                tmask = (tmask & ~0x8000) > 0
+                # TODO: properly interpret per-band Legacy Survey flags
+                tmask = tmask > 0
                 tmask |= np.isnan(tmpl)
             else:
-                raise RuntimeError('Error getting the template from Pan-STARRS')
+                raise RuntimeError(f"Error getting the template from {tconf['name']}")
 
         elif tname == 'custom':
             log("Re-projecting custom template onto sub-image")
@@ -1273,7 +1271,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             log(f"{len(sobj)} transient candidates found in difference image")
 
             # Filter out catalogue objects
-            candidates = pipeline.filter_transient_candidates(sobj, cat=None,
+            candidates = pipeline.filter_transient_candidates(sobj, cat=cat,
                                                               sr=0.5*pixscale*config.get('fwhm', 1.0),
                                                               pixscale=pixscale,
                                                               time=None,
