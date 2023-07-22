@@ -43,6 +43,11 @@ def tasks(request, id=None):
                 task.complete()
                 task.save()
 
+        # Prevent task operations if it is still running
+        if task.celery_id is not None and request.method == 'POST':
+            messages.warning(request, f"Task {id} is already running")
+            return HttpResponseRedirect(request.path_info)
+
         all_forms = {}
 
         all_forms['inspect'] = forms.TaskInspectForm(request.POST or None, initial = task.config)
