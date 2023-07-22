@@ -27,6 +27,7 @@ import dill as pickle
 # STDPipe
 from stdpipe import astrometry, photometry, catalogs, cutouts
 from stdpipe import templates, subtraction, plots, pipeline, utils, psf
+from stdpipe import resolve
 
 # Disable some annoying warnings from astropy
 import warnings
@@ -426,13 +427,12 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Target?..
     if not 'target' in config:
-        # TODO: resolve target from the header
         config['target'] = header.get('TARGET')
 
     if config.get('target'):
         log(f"Target is {config['target']}")
         try:
-            target = SkyCoord.from_name(config['target'])
+            target = resolve.resolve(config['target'])
             config['target_ra'] = target.ra.deg
             config['target_dec'] = target.dec.deg
 
@@ -493,13 +493,17 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Suggested template
     if not config.get('template'):
-        config['template'] = 'ps1' # Default choice
-
-        if ((dec0 is not None and templates.point_in_ls(ra0, dec0)) or
+        if ((dec0 is not None and templates.point_in_ps1(ra0, dec0)) or
+            (config.get('target_dec') and templates.point_in_ps1(config.get('target_ra'), config.get('target_dec')))):
+            # Always try PS1 first, even when LS is available?..
+            config['template'] = 'ps1'
+        elif ((dec0 is not None and templates.point_in_ls(ra0, dec0)) or
             (config.get('target_dec') and templates.point_in_ls(config.get('target_ra'), config.get('target_dec')))):
             config['template'] = 'ls'
         elif (dec0 is not None and dec0 < -30) or config.get('target_dec', 0) < -30:
             config['template'] = 'skymapper'
+        else:
+            config['template'] = 'ps1' # Fallback
 
         log(f"Suggested template is {supported_templates[config['template']]['name']}")
 
@@ -775,8 +779,10 @@ def photometry_image(filename, config, verbose=True, show=False):
     with plots.figure_saver(os.path.join(basepath, 'photometry_unmasked.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(2, 1, 1)
         plots.plot_photometric_match(m, mode='mag', show_masked=False, ax=ax)
+        ax.set_ylim(-0.4, 0.4)
         ax = fig.add_subplot(2, 1, 2)
         plots.plot_photometric_match(m, mode='color', show_masked=False, ax=ax)
+        ax.set_ylim(-0.4, 0.4)
 
     with plots.figure_saver(os.path.join(basepath, 'photometry_zeropoint.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
@@ -1299,15 +1305,17 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             log(f"{len(sobj)} transient candidates found in difference image")
 
+            vizier = ['ps1', 'skymapper', ] if config.get('filter_vizier') else []
+
             # Filter out catalogue objects
             candidates = pipeline.filter_transient_candidates(sobj, cat=cat,
                                                               sr=0.5*pixscale*config.get('fwhm', 1.0),
                                                               pixscale=pixscale,
                                                               time=None,
-                                                              vizier=['ps1', 'skymapper'],
+                                                              vizier=vizier,
                                                               # Filter out any flags except for 0x100 which is isophotal masked
                                                               flagged=True, flagmask=0xfe00,
-                                                              skybot=False,
+                                                              skybot=config.get('filter_skybot', False),
                                                               verbose=verbose)
 
             diff[fullmask1] = np.nan # For better visuals
