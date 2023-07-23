@@ -352,7 +352,11 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
     # Load the cutout
     cutout = cutouts.load_cutout(fullpath)
 
-    planes = ['image', 'template', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']
+    if request.GET.get('adjust'):
+        planes = ['image', 'template', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']
+    else:
+        planes = ['image', 'template', 'convolved', 'diff', 'footprint', 'mask']
+
     planes = [_ for _ in planes if _ in cutout]
 
     figsize = [256*len(planes), 256+40]

@@ -150,7 +150,7 @@ class TaskSubtractionForm(forms.Form):
 
     filter_vizier = forms.BooleanField(initial=False, required=False, label="Vizier")
     filter_skybot = forms.BooleanField(initial=False, required=False, label="SkyBoT")
-    filter_cutouts = forms.BooleanField(initial=False, required=False, label="Cutouts")
+    filter_adjust = forms.BooleanField(initial=False, required=False, label="Adjust")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -179,7 +179,7 @@ class TaskSubtractionForm(forms.Form):
                 Column(InlineRadios('subtraction_mode', template='crispy_radioselect_inline.html'), css_class='form-group'),
                 Column('filter_vizier', css_class="col-md-1"),
                 Column('filter_skybot', css_class="col-md-1"),
-                Column('filter_cutouts', css_class="col-md-1"),
+                Column('filter_adjust', css_class="col-md-1"),
                 Div(css_class="col-md"),
                 Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-end'

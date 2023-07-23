@@ -1155,21 +1155,24 @@ def subtract_image(filename, config, verbose=True, show=False):
         tobj = tobj[tobj['flags'] == 0]
 
         t_fwhm = np.median(tobj['fwhm'])
-        i_fwhm = config.get('fwhm', 3.0)
+        fwhm = config.get('fwhm', 3.0)
 
-        log(f"Using template FWHM = {t_fwhm:.1f} pix and image FWHM = {i_fwhm:.1f} pix")
+        log(f"Using template FWHM = {t_fwhm:.1f} pix and image FWHM = {fwhm:.1f} pix")
 
-        bg = sep.Background(image1, mask=mask1,
-                            bw=config.get('bg_size', 128),
-                            bh=config.get('bg_size', 128))
+        bg = sep.Background(image1.astype(np.double), mask=mask1,
+                            bw=32 if fwhm < 4 else 64,
+                            bh=32 if fwhm < 4 else 64)
+        tbg = sep.Background(tmpl.astype(np.double), mask=tmask,
+                             bw=32 if t_fwhm < 4 else 64,
+                             bh=32 if t_fwhm < 4 else 64)
 
-        res = subtraction.run_hotpants(image1-bg, tmpl,
+        res = subtraction.run_hotpants(image1-bg, tmpl-tbg,
                                        mask=mask1, template_mask=tmask,
                                        get_convolved=True,
                                        get_scaled=True,
                                        get_noise=True,
                                        verbose=verbose,
-                                       image_fwhm=i_fwhm,
+                                       image_fwhm=fwhm,
                                        template_fwhm=t_fwhm,
                                        image_gain=config.get('gain', 1.0),
                                        template_gain=template_gain,
@@ -1335,6 +1338,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             diff[fullmask1] = np.nan # For better visuals
 
+            Ngood = 0
             for cand in candidates:
                 cutout = cutouts.get_cutout(image1 - bg, cand, 30,
                                             mask=fullmask1,
@@ -1345,6 +1349,16 @@ def subtract_image(filename, config, verbose=True, show=False):
                                             footprint=(segm==cand['NUMBER']),
                                             time=time,
                                             header=header1)
+
+                if config.get('filter_adjust'):
+                    # Try to apply some sub-pixel adjustments to fix dipoles etc
+                    if cutouts.adjust_cutout(cutout, max_shift=1, max_scale=1.1,
+                                             inner=int(np.ceil(2.0*fwhm)),
+                                             normalize=False, verbose=False):
+                        if cutout['meta']['adjust_pval'] > 0.01:
+                            continue
+                        if cutout['meta']['adjust_chi2'] < 0.33*cutout['meta']['adjust_chi2_0']:
+                            continue
 
                 jname = utils.make_jname(cand['ra'], cand['dec'])
                 cutout_name = os.path.join(basepath, 'candidates', jname + '.cutout')
@@ -1358,6 +1372,11 @@ def subtract_image(filename, config, verbose=True, show=False):
 
                 all_candidates.append(cand)
                 cutout_names.append(os.path.join('candidates', jname + '.cutout'))
+
+                Ngood += 1
+
+            if config.get('filter_adjust'):
+                log(f"{Ngood} candidates remaining after sub-pixel adjustment routine")
 
     if subtraction_mode == 'detection':
         log("\n---- Final list of candidates ----\n")
