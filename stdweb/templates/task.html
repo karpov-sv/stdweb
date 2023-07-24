@@ -125,13 +125,14 @@
       {{ task.title }}
     </div>
     {% endif %}
-    <div class="mb-4">
+    <div>
       Task {{ task.id }} created by <span class="text-primary fw-bold">{{ task.user|user }}</span> on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
       {% if not user_may_submit %}
         <br>
         <span class="text-danger fw-bold">Task is read-only</span>
       {% endif %}
-      <br>
+    </div>
+    <div class="mb-4 {% if task.celery_id %}sticky-top bg-white border-bottom pb-2{% endif %}">
       State:
       {% if task.celery_id %}
         <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
