@@ -865,9 +865,9 @@ def photometry_image(filename, config, verbose=True, show=False):
     config['mag_limit'] = mag0
 
     if 'bg_fluxerr' in obj.colnames and np.any(obj['bg_fluxerr'] > 0):
-        fluxerr = obj['fluxerr']
+        fluxerr = obj['bg_fluxerr']
         maglim = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](obj['x'], obj['y'], obj['mag'])
-        log(f"Local background RMS detection limit is {np.median(maglim):.2f} +/- {np.std(maglim):.2f}")
+        log(f"Local background RMS detection limit is {np.nanmedian(maglim):.2f} +/- {np.nanstd(maglim):.2f}")
 
     # Plot detection limit estimators
     with plots.figure_saver(os.path.join(basepath, 'limit_hist.png'), figsize=(8, 6), show=show) as fig:
