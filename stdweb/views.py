@@ -220,7 +220,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         dx = 40/figsize[0]
         dy = 20/figsize[1]
         ax = Axes(fig, [dx, dy, 0.99 - dx, 0.99 - dy])
-        ax.grid(color='white')
+        ax.grid(color='white', alpha=0.3)
     else:
         # No axes, just the image
         ax = Axes(fig, [0., 0., 1., 1.])

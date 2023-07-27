@@ -49,7 +49,13 @@ overlay_stdview_images = function() {
             for (i=0; i<scvals.length; i++)
     	        zoom.append($('<option/>').val(zvals[i]).html('x'+zvals[i].toString()));
 
-            zoom.on('change', function() {update_image_get_params(image, {zoom: this.value})});
+            zoom.on('change', function() {
+                if (this.value == 1) {
+                    update_image_get_params(image, {zoom: this.value, dx: null, dy: null});
+                } else {
+                    update_image_get_params(image, {zoom: this.value});
+                }
+            });
             zoom.on('click', function() {return false});
 
             image.on('click', function(evt) {update_image_pos(image, evt)});
