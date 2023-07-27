@@ -100,6 +100,25 @@ overlay_stdview_images = function() {
   	    overlay.append(checkbox);
 
         }
+
+        /* objects */
+        if ('obj' in image.data()) {
+  	    var checkbox = $('<input type="checkbox" id="checkbox_obj"/>');
+            var label = $('<i class="fa fa-star-half-o" style="padding-left: 0.3em;  padding-right: 0.1em;">');
+
+  	    checkbox.on('click', function() {
+    	        if (this.checked)
+      	            update_image_get_params(image, {obj: 1});
+                else
+      	            update_image_get_params(image, {obj: null});
+            });
+
+            checkbox.attr('title', 'Click to show detected objects');
+
+  	    overlay.append(label);
+  	    overlay.append(checkbox);
+
+        }
     });
 }
 

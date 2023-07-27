@@ -13,6 +13,7 @@ import shutil
 import mimetypes
 import magic
 
+from astropy.table import Table
 from astropy.time import Time
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -236,10 +237,28 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
         # Show the position of the object
-        header = fits.getheader(fullpath, ext)
+
+        # Special handling of external WCS solution in .wcs file alongside with image
+        wcsname = os.path.splitext(fullpath)[0] + '.wcs'
+        if os.path.exists(wcsname):
+            header = fits.getheader(wcsname)
+        else:
+            header = fits.getheader(fullpath, ext)
         wcs = WCS(header)
-        x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
-        ax.add_artist(Circle((x, y), 5.0, edgecolor='red', facecolor='none', ls='-', lw=2))
+        if wcs is not None and wcs.is_celestial:
+            x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
+            ax.add_artist(Circle((x, y), 5.0, edgecolor='red', facecolor='none', ls='-', lw=2))
+
+    if request.GET.get('obj'):
+        # Overplot list of objects from the file
+        objname = os.path.join(os.path.dirname(fullpath), 'objects.vot')
+        if os.path.exists(objname):
+            obj = Table.read(objname)
+
+            if obj is not None:
+                idx = obj['flags'] == 0
+                ax.plot(obj['x'][idx], obj['y'][idx], '.', color='red')
+                ax.plot(obj['x'][~idx], obj['y'][~idx], '.', color='orange')
 
     if zoom > 1:
         x0,width = data.shape[1]/2, data.shape[1]
