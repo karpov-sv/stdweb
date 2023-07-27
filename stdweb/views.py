@@ -199,9 +199,11 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     else:
         show_grid = False
 
+    zoom = float(request.GET.get('zoom', 1))
+
     data = fits.getdata(fullpath, ext)
 
-    figsize = [data.shape[1], data.shape[0]]
+    figsize = [data.shape[1]*zoom, data.shape[0]*zoom]
 
     if width is None:
         if figsize[0] < minwidth:
@@ -227,6 +229,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     plots.imshow(data, ax=ax, show_axis=True if show_grid else False, show_colorbar=False,
                  origin='lower',
+                 interpolation='nearest' if data.shape[1]/zoom < 0.5*width else 'bicubic',
                  cmap=request.GET.get('cmap', 'Blues_r'),
                  stretch=request.GET.get('stretch', 'linear'),
                  qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))])
@@ -237,6 +240,16 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         wcs = WCS(header)
         x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
         ax.add_artist(Circle((x, y), 5.0, edgecolor='red', facecolor='none', ls='-', lw=2))
+
+    if zoom > 1:
+        x0,width = data.shape[1]/2, data.shape[1]
+        y0,height = data.shape[0]/2, data.shape[0]
+
+        x0 += float(request.GET.get('dx', 0)) * width/4
+        y0 += float(request.GET.get('dy', 0)) * height/4
+
+        ax.set_xlim(x0 - 0.5*width/zoom, x0 + 0.5*width/zoom)
+        ax.set_ylim(y0 - 0.5*height/zoom, y0 + 0.5*height/zoom)
 
     buf = io.BytesIO()
     fig.savefig(buf, format=fmt, pil_kwargs={'quality':quality})

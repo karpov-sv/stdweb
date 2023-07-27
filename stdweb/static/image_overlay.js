@@ -39,6 +39,25 @@ overlay_stdview_images = function() {
   	    overlay.append(scale);
         }
 
+        /* Zoom/pan */
+        if ('zoom' in image.data()) {
+  	    var zoom = $('<select/>');
+            var zvals = [1, 2, 4, 8, 16, 32];
+
+            zoom.append($('<option disabled selected>').html('Zoom'));
+
+            for (i=0; i<scvals.length; i++)
+    	        zoom.append($('<option/>').val(zvals[i]).html('x'+zvals[i].toString()));
+
+            zoom.on('change', function() {update_image_get_params(image, {zoom: this.value})});
+            zoom.on('click', function() {return false});
+
+            image.on('click', function(evt) {update_image_pos(image, evt)});
+
+  	    overlay.append(zoom);
+
+        }
+
         /* data-mark-ra and data-mark-dec parameters */
         if ('markRa' in image.data() && 'markDec' in image.data()) {
   	    var checkbox = $('<input type="checkbox"/>');
@@ -97,4 +116,25 @@ update_image_get_params = function(id, params) {
 
         return url.href;
     });
+}
+
+update_image_pos = function(id, evt) {
+    var url = new URL($(id).attr('src'), window.location);
+
+    var zoom = Number(url.searchParams.get('zoom'));
+
+    if (zoom > 1) {
+        var x = evt.offsetX / $(id).width();
+        var y = evt.offsetY / $(id).height();
+
+        var dx = (x > 0.75) ? 1/zoom : ((x < 0.25) ? -1/zoom : 0);
+        var dy = (y < 0.25) ? 1/zoom : ((y > 0.75) ? -1/zoom : 0);
+
+        if (dx != 0 || dy != 0) {
+            dx += Number(url.searchParams.get('dx'));
+            dy += Number(url.searchParams.get('dy'));
+
+            update_image_get_params(id, {dx: dx, dy: dy});
+        }
+    }
 }
