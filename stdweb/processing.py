@@ -386,7 +386,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if config.get('inspect_bg', False):
         bg = sep.Background(image, mask=mask)
 
-        with plots.figure_saver(os.path.join(basepath, 'image_bg.png'), figsize=(8, 6), show=True) as fig:
+        with plots.figure_saver(os.path.join(basepath, 'image_bg.png'), figsize=(8, 6), show=show) as fig:
             ax = fig.add_subplot(1, 1, 1)
             plots.imshow(bg.back(), ax=ax)
             ax.set_aspect(1)
@@ -394,7 +394,7 @@ def inspect_image(filename, config, verbose=True, show=False):
             ax.set_ylim(0, image.shape[0])
             ax.set_title(f"Background: median {np.median(bg.back()):.2f} RMS {np.std(bg.back()):.2f}")
 
-        with plots.figure_saver(os.path.join(basepath, 'image_rms.png'), figsize=(8, 6), show=True) as fig:
+        with plots.figure_saver(os.path.join(basepath, 'image_rms.png'), figsize=(8, 6), show=show) as fig:
             ax = fig.add_subplot(1, 1, 1)
             plots.imshow(bg.rms(), ax=ax)
             ax.set_aspect(1)
@@ -598,7 +598,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_title(f"Detected objects: {np.sum(idx)} unmasked, {np.sum(~idx)} masked")
 
     # Plot FWHM
-    with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=True) as fig:
+    with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
         idx = obj['flags'] == 0
         plots.binned_map(obj[idx]['x'], obj[idx]['y'], obj[idx]['fwhm'], bins=8, statistic='median', show_dots=True, ax=ax)

@@ -10,5 +10,5 @@ redis
 humanize
 astroscrappy
 dill
-astropy==5.2
+astropy<5.3
 reproject
