@@ -211,6 +211,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
             width = minwidth
         elif figsize[0] > maxwidth:
             width = maxwidth
+        else:
+            width = figsize[0]
 
     if width is not None and figsize[0] != width:
         figsize[1] = width*figsize[1]/figsize[0]
