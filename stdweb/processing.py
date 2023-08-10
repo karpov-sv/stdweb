@@ -147,6 +147,7 @@ files_subtraction = [
     'sub_image.fits', 'sub_mask.fits',
     'sub_template.fits', 'sub_template_mask.fits',
     'sub_diff.fits', 'sub_sdiff.fits', 'sub_conv.fits', 'sub_ediff.fits',
+    'sub_scorr.fits', 'sub_fpsf.fits', 'sub_fpsferr.fits',
     'sub_target.vot', 'sub_target.cutout',
     'candidates', 'candidates.vot'
 ]
@@ -969,6 +970,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
     sub_verbose = verbose if config.get('sub_verbose') else False
     subtraction_mode = config.get('subtraction_mode', 'detection')
+    subtraction_method = config.get('subtraction_method', 'zogy')
 
     # Cleanup stale plots and files
     cleanup_paths(cleanup_subtraction, basepath=basepath)
@@ -1057,10 +1059,11 @@ def subtract_image(filename, config, verbose=True, show=False):
     elif config.get('target_ra') is not None:
         log('Forced photometry mode activated')
         # We will just crop the image
+        nx, ny = 1, 1
         x0,y0 = wcs.all_world2pix(config['target_ra'], config['target_dec'], 0)
         log(f"Will crop the sub-image centered at {x0:.1f} {y0:.1f}")
-        def split_fn(image, **kwargs):
-            result = pipeline.get_subimage_centered(image, x0, y0, sub_size, **kwargs)
+        def split_fn(image, *args, **kwargs):
+            result = pipeline.get_subimage_centered(image, *args, x0=x0, y0=y0, width=sub_size, **kwargs)
 
             yield [0] + result
 
@@ -1068,11 +1071,34 @@ def subtract_image(filename, config, verbose=True, show=False):
         log('No target provided and transient detection is disabled, nothing to do')
         return
 
+    if subtraction_method == 'zogy':
+        log(f"\n---- Science image PSF ----\n")
+        # Get global PSF model and object list with large aperture for flux normalization
+        image_psf, image_psf_obj = psf.run_psfex(
+            image, mask=mask,
+            # Use spatially varying PSF if we have enough stars
+            order=0 if len(obj[obj['flags'] == 0]) < 100 else 2,
+            aper=2.0*config.get('fwhm', 3.0),
+            gain=config.get('gain', 1.0),
+            minarea=config.get('minarea', 3),
+            r0=config.get('initial_r0', 0.0),
+            sex_extra={'BACK_SIZE': config.get('bg_size', 256)},
+            verbose=verbose,
+            get_obj=True,
+            _tmpdir=settings.STDPIPE_TMPDIR,
+            _sex_exe=settings.STDPIPE_SEXTRACTOR,
+            _exe=settings.STDPIPE_PSFEX)
+
+        image_psf_obj = image_psf_obj[image_psf_obj['flags'] == 0]
+
+    else:
+        image_psf, image_psf_obj = None, None
+
     all_candidates = []
     cutout_names = []
 
-    for i, x0, y0, image1, mask1, header1, wcs1, obj1, cat1 in split_fn(
-            image, mask=mask, header=header, wcs=wcs, obj=obj, cat=cat,
+    for i, x0, y0, image1, mask1, header1, wcs1, obj1, cat1, image_psf1, image_psf_obj1 in split_fn(
+            image, mask, header, wcs, obj, cat, image_psf, image_psf_obj,
             get_origin=True, verbose=False):
 
         log(f"\n---- Sub-image {i}: {x0} {y0} - {x0 + image1.shape[1]} {y0 + image1.shape[0]} ----\n")
@@ -1142,61 +1168,124 @@ def subtract_image(filename, config, verbose=True, show=False):
             else:
                 raise RuntimeError(f"Error getting the template from {tconf['name']}")
 
-        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, overwrite=True)
+        # Estimate template FWHM
+        tobj,tsegm = photometry.get_objects_sextractor(
+            tmpl, mask=tmask, sn=5,
+            extra_params=['NUMBER'],
+            checkimages=['SEGMENTATION'],
+            _tmpdir=settings.STDPIPE_TMPDIR,
+            _exe=settings.STDPIPE_SEXTRACTOR
+        )
 
-        tobj,tsegm = photometry.get_objects_sextractor(tmpl, mask=tmask, sn=5,
-                                                       extra_params=['NUMBER'],
-                                                       checkimages=['SEGMENTATION'],
-                                                       _tmpdir=settings.STDPIPE_TMPDIR,
-                                                       _exe=settings.STDPIPE_SEXTRACTOR)
         # Mask the footprints of masked objects
         # for _ in tobj[(tobj['flags'] & 0x100) > 0]:
         #     tmask |= tsegm == _['NUMBER']
         tobj = tobj[tobj['flags'] == 0]
+        template_fwhm = np.median(tobj['fwhm'])
 
-        t_fwhm = np.median(tobj['fwhm'])
-        fwhm = config.get('fwhm', 3.0)
+        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
+        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, overwrite=True)
 
-        log(f"Using template FWHM = {t_fwhm:.1f} pix and image FWHM = {fwhm:.1f} pix")
+        if subtraction_method == 'zogy':
+            # ZOGY
 
-        bg = sep.Background(image1.astype(np.double), mask=mask1,
-                            bw=32 if fwhm < 4 else 64,
-                            bh=32 if fwhm < 4 else 64)
-        tbg = sep.Background(tmpl.astype(np.double), mask=tmask,
-                             bw=32 if t_fwhm < 4 else 64,
-                             bh=32 if t_fwhm < 4 else 64)
+            # Estimate template PSF
+            template_psf, template_psf_obj = psf.run_psfex(
+                tmpl, mask=tmask,
+                # Use spatially varying PSF?..
+                order=0,
+                aper=2.0*template_fwhm,
+                gain=template_gain,
+                minarea=config.get('minarea', 3),
+                r0=config.get('initial_r0', 0.0),
+                sex_extra={'BACK_SIZE': config.get('bg_size', 256)},
+                verbose=sub_verbose,
+                get_obj=True,
+                _tmpdir=settings.STDPIPE_TMPDIR,
+                _sex_exe=settings.STDPIPE_SEXTRACTOR,
+                _exe=settings.STDPIPE_PSFEX)
 
-        res = subtraction.run_hotpants(image1-bg, tmpl-tbg,
-                                       mask=mask1, template_mask=tmask,
-                                       get_convolved=True,
-                                       get_scaled=True,
-                                       get_noise=True,
-                                       verbose=verbose,
-                                       image_fwhm=fwhm,
-                                       template_fwhm=t_fwhm,
-                                       image_gain=config.get('gain', 1.0),
-                                       template_gain=template_gain,
-                                       err=True,
-                                       extra=config.get('hotpants_extra', {'ko':0, 'bgo':0}),
-                                       obj=obj1[obj1['flags']==0])
+            # Do the subtraction
+            diff, S_corr, Fpsf, Fpsf_err = subtraction.run_zogy(
+                image1, tmpl,
+                mask=mask1, template_mask=tmask,
+                image_gain=config.get('gain', 1.0),
+                template_gain=template_gain,
+                image_psf=image_psf1, template_psf=template_psf,
+                image_obj=image_psf_obj1,
+                template_obj=template_psf_obj,
+                fit_scale=True, fit_shift=True,
+                get_Fpsf=True,
+                verbose=verbose
+            )
 
-        if res is not None:
-            diff,conv,sdiff,ediff = res
+            fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_scorr.fits'), S_corr, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_fpsf.fits'), Fpsf, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_fpsferr.fits'), Fpsf_err, header1, overwrite=True)
+
+            # Combined mask on the sub-image
+            fullmask1 = mask1 | tmask
+
+            conv = S_corr
+            ediff = None
         else:
-            # raise RuntimeError('Subtraction failed')
-            log("Warning: Subtraction failed")
-            continue
+            # HOTPANTS
+            fwhm = config.get('fwhm', 3.0)
 
-        dmask = diff == 1e-30 # Bad pixels
+            log(f"Using template FWHM = {template_fwhm:.1f} pix and image FWHM = {fwhm:.1f} pix")
 
-        # Combined mask on the sub-image
-        fullmask1 = mask1 | tmask | dmask
+            bg = sep.Background(
+                image1.astype(np.double), mask=mask1,
+                bw=32 if fwhm < 4 else 64,
+                bh=32 if fwhm < 4 else 64
+            )
+            tbg = sep.Background(
+                tmpl.astype(np.double), mask=tmask,
+                bw=32 if template_fwhm < 4 else 64,
+                bh=32 if template_fwhm < 4 else 64
+            )
 
-        fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header1, overwrite=True)
+            res = subtraction.run_hotpants(
+                image1 - bg.back(),
+                tmpl - tbg.back(),
+                mask=mask1,
+                template_mask=tmask,
+                get_convolved=True,
+                get_scaled=True,
+                get_noise=True,
+                verbose=verbose,
+                image_fwhm=fwhm,
+                template_fwhm=template_fwhm,
+                image_gain=config.get('gain', 1.0),
+                template_gain=template_gain,
+                err=True,
+                extra=config.get('hotpants_extra', {'ko':0, 'bgo':0}),
+                obj=obj1[obj1['flags']==0],
+                _exe=settings.STDPIPE_HOTPANTS
+            )
+
+            if res is not None:
+                diff,conv,sdiff,ediff = res
+            else:
+                # raise RuntimeError('Subtraction failed')
+                log("Warning: Subtraction failed")
+                continue
+
+            dmask = diff == 1e-30 # Bad pixels
+
+            # Combined mask on the sub-image
+            fullmask1 = mask1 | tmask | dmask
+
+            diff1 = diff.copy()
+            diff1[fullmask1] = 0.0
+
+            fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff1, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header1, overwrite=True)
+
+        # Post-subtraction steps
 
         if config.get('rel_bg1') and config.get('rel_bg2'):
             rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
@@ -1204,7 +1293,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             rel_bkgann = None
 
         if config.get('target_ra') is not None and config.get('target_dec') is not None and subtraction_mode == 'target':
-        # Target forced photometry
+            # Target forced photometry
             log(f"\n---- Target forced photometry ----\n")
 
             target_obj = Table({'ra':[config['target_ra']], 'dec':[config['target_dec']]})
@@ -1214,37 +1303,51 @@ def subtract_image(filename, config, verbose=True, show=False):
                     target_obj['y'] > 0 and target_obj['y'] < image1.shape[0]):
                 raise RuntimeError("Target is outside the sub-image")
 
-            log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
+            log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f}"
+                f" -> "
+                f"{target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
 
-            target_obj = photometry.measure_objects(target_obj, diff, mask=fullmask1,
-                                                    # FWHM should match the one used for calibration
-                                                    fwhm=config.get('fwhm'),
-                                                    aper=config.get('rel_aper', 1.0),
-                                                    bkgann=rel_bkgann,
-                                                    sn=0,
-                                                    # We assume no background
-                                                    bg=None,
-                                                    # ..and known error model
-                                                    err=ediff,
-                                                    gain=config.get('gain', 1.0),
-                                                    verbose=sub_verbose)
+            target_obj = photometry.measure_objects(
+                target_obj, diff, mask=fullmask1,
+                # FWHM should match the one used for calibration
+                fwhm=config.get('fwhm'),
+                aper=config.get('rel_aper', 1.0),
+                bkgann=rel_bkgann,
+                sn=0,
+                # We assume no background
+                bg=None,
+                # ..and known error model
+                err=ediff,
+                gain=config.get('gain', 1.0),
+                verbose=sub_verbose
+            )
 
-            target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'] + x0,
-                                                                       target_obj['y'] + y0,
-                                                                       target_obj['mag'])
+            target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](
+                target_obj['x'] + x0,
+                target_obj['y'] + y0,
+                target_obj['mag']
+            )
 
-            target_obj['mag_calib_err'] = np.hypot(target_obj['magerr'],
-                                                   m['zero_fn'](target_obj['x'] + x0,
-                                                                target_obj['y'] + y0,
-                                                                target_obj['mag'],
-                                                                get_err=True))
+            target_obj['mag_calib_err'] = np.hypot(
+                target_obj['magerr'],
+                m['zero_fn'](
+                    target_obj['x'] + x0,
+                    target_obj['y'] + y0,
+                    target_obj['mag'],
+                    get_err=True
+                )
+            )
 
             # Local detection limit from background rms, if available
             if 'bg_fluxerr' in target_obj.colnames and np.any(target_obj['bg_fluxerr'] > 0):
                 fluxerr = target_obj['bg_fluxerr']
             else:
                 fluxerr = target_obj['fluxerr']
-            target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](target_obj['x'], target_obj['y'], target_obj['mag'])
+            target_obj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](
+                target_obj['x'],
+                target_obj['y'],
+                target_obj['mag']
+            )
 
             target_obj['mag_filter_name'] = m['cat_col_mag']
 
@@ -1256,9 +1359,16 @@ def subtract_image(filename, config, verbose=True, show=False):
             log("Measured target stored to file:sub_target.vot")
 
             # Create the cutout from image based on the candidate
-            cutout = cutouts.get_cutout(image1, target_obj[0], 30,
-                                        mask=fullmask1, header=header1, time=time,
-                                        diff=diff, template=tmpl, convolved=conv, err=ediff)
+            cutout = cutouts.get_cutout(
+                image1, target_obj[0], 30,
+                mask=fullmask1,
+                header=header1,
+                time=time,
+                diff=diff,
+                template=tmpl,
+                convolved=conv,
+                err=ediff
+            )
             cutouts.write_cutout(cutout, os.path.join(basepath, 'sub_target.cutout'))
             log("Target cutouts stored to file:sub_target.cutout")
 
@@ -1278,43 +1388,82 @@ def subtract_image(filename, config, verbose=True, show=False):
             # Transient detection mode
             log(f"Starting transient detection using edge size {sub_overlap}")
 
-            sobj,segm = photometry.get_objects_sextractor(diff, mask=fullmask1,
-                                                          err=ediff,
-                                                          wcs=wcs1, edge=sub_overlap,
-                                                          aper=config.get('initial_aper', 3.0),
-                                                          gain=config.get('gain', 1.0),
-                                                          sn=config.get('sn', 5.0),
-                                                          minarea=config.get('minarea', 3),
-                                                          extra_params=['NUMBER'],
-                                                          extra={'BACK_SIZE': config.get('bg_size', 256)},
-                                                          checkimages=['SEGMENTATION'],
-                                                          verbose=sub_verbose,
-                                                          _tmpdir=settings.STDPIPE_TMPDIR,
-                                                          _exe=settings.STDPIPE_SEXTRACTOR)
+            if subtraction_method == 'zogy':
+                # ZOGY
+                sobj,segm = photometry.get_objects_sextractor(
+                    S_corr,
+                    mask=fullmask1,
+                    thresh=config.get('sn', 5.0),
+                    wcs=wcs1, edge=sub_overlap,
+                    minarea=config.get('minarea', 1),
+                    extra_params=['NUMBER'],
+                    extra={
+                        'ANALYSIS_THRESH': config.get('sn', 5.0),
+                        'THRESH_TYPE': 'ABSOLUTE',
+                        'BACK_TYPE': 'MANUAL',
+                        'BACK_VALUE': 0,
+                    },
+                    checkimages=['SEGMENTATION'],
+                    verbose=sub_verbose,
+                    _tmpdir=settings.STDPIPE_TMPDIR,
+                    _exe=settings.STDPIPE_SEXTRACTOR
+                )
+            else:
+                # HOTPANTS
+                sobj,segm = photometry.get_objects_sextractor(
+                    diff,
+                    mask=fullmask1,
+                    err=ediff,
+                    wcs=wcs1, edge=sub_overlap,
+                    aper=config.get('initial_aper', 3.0),
+                    gain=config.get('gain', 1.0),
+                    sn=config.get('sn', 5.0),
+                    minarea=config.get('minarea', 3),
+                    extra_params=['NUMBER'],
+                    extra={'BACK_SIZE': config.get('bg_size', 256)},
+                    checkimages=['SEGMENTATION'],
+                    verbose=sub_verbose,
+                    _tmpdir=settings.STDPIPE_TMPDIR,
+                    _exe=settings.STDPIPE_SEXTRACTOR
+                )
 
-            sobj = photometry.measure_objects(sobj, diff, mask=fullmask1,
-                                              # FWHM should match the one used for calibration
-                                              fwhm=config.get('fwhm'),
-                                              aper=config.get('rel_aper', 1.0),
-                                              bkgann=rel_bkgann,
-                                              sn=config.get('sn', 5.0),
-                                              # We assume no background
-                                              bg=None,
-                                              # ..and known error model
-                                              err=ediff,
-                                              gain=config.get('gain', 1.0),
-                                              verbose=sub_verbose)
+            sobj = photometry.measure_objects(
+                sobj, diff, mask=fullmask1,
+                # FWHM should match the one used for calibration
+                fwhm=config.get('fwhm'),
+                aper=config.get('rel_aper', 1.0),
+                bkgann=rel_bkgann,
+                sn=config.get('sn', 5.0),
+                # We assume no background
+                bg=None,
+                # ..and known error model
+                err=ediff,
+                gain=config.get('gain', 1.0),
+                verbose=sub_verbose
+            )
 
             if len(sobj):
-                sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](sobj['x'] + x0, sobj['y'] + y0, sobj['mag'])
-                sobj['mag_calib_err'] = np.hypot(sobj['magerr'],
-                                                 m['zero_fn'](sobj['x'] + x0,
-                                                              sobj['y'] + y0,
-                                                              sobj['mag'],
-                                                              get_err=True))
+                sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](
+                    sobj['x'] + x0,
+                    sobj['y'] + y0,
+                    sobj['mag']
+                )
+                sobj['mag_calib_err'] = np.hypot(
+                    sobj['magerr'],
+                    m['zero_fn'](
+                        sobj['x'] + x0,
+                        sobj['y'] + y0,
+                        sobj['mag'],
+                        get_err=True
+                    )
+                )
 
                 # TODO: Improve limiting mag estimate
-                sobj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*sobj['fluxerr']) + m['zero_fn'](sobj['x'], sobj['y'], sobj['mag'])
+                sobj['mag_limit'] = -2.5*np.log10(config.get('sn', 5)*sobj['fluxerr']) + m['zero_fn'](
+                    sobj['x'],
+                    sobj['y'],
+                    sobj['mag']
+                )
 
                 sobj['mag_filter_name'] = m['cat_col_mag']
 
@@ -1327,35 +1476,42 @@ def subtract_image(filename, config, verbose=True, show=False):
             vizier = ['ps1', 'skymapper', ] if config.get('filter_vizier') else []
 
             # Filter out catalogue objects
-            candidates = pipeline.filter_transient_candidates(sobj, cat=cat,
-                                                              sr=0.5*pixscale*config.get('fwhm', 1.0),
-                                                              pixscale=pixscale,
-                                                              vizier=vizier,
-                                                              # Filter out any flags except for 0x100 which is isophotal masked
-                                                              flagged=True, flagmask=0xfe00,
-                                                              time=time,
-                                                              skybot=config.get('filter_skybot', False),
-                                                              verbose=verbose)
+            candidates = pipeline.filter_transient_candidates(
+                sobj,
+                cat=None, # cat,
+                sr=0.5*pixscale*config.get('fwhm', 1.0),
+                pixscale=pixscale,
+                vizier=vizier,
+                # Filter out any flags except for 0x100 which is isophotal masked
+                flagged=True, flagmask=0xfe00,
+                time=time,
+                skybot=config.get('filter_skybot', False),
+                verbose=verbose
+            )
 
-            diff[fullmask1] = np.nan # For better visuals
+            # diff[fullmask1] = np.nan # For better visuals
 
             Ngood = 0
             for cand in candidates:
-                cutout = cutouts.get_cutout(image1 - bg, cand, 30,
-                                            mask=fullmask1,
-                                            diff=diff,
-                                            template=tmpl,
-                                            convolved=conv,
-                                            err=ediff,
-                                            footprint=(segm==cand['NUMBER']),
-                                            time=time,
-                                            header=header1)
+                cutout = cutouts.get_cutout(
+                    image1, cand, 30,
+                    mask=fullmask1,
+                    diff=diff,
+                    template=tmpl,
+                    convolved=conv,
+                    err=ediff,
+                    footprint=(segm==cand['NUMBER']) if segm is not None else None,
+                    time=time,
+                    header=header1
+                )
 
                 if config.get('filter_adjust'):
                     # Try to apply some sub-pixel adjustments to fix dipoles etc
-                    if cutouts.adjust_cutout(cutout, max_shift=1, max_scale=1.1,
-                                             inner=int(np.ceil(2.0*fwhm)),
-                                             normalize=False, verbose=False):
+                    if cutouts.adjust_cutout(
+                            cutout, max_shift=1, max_scale=1.1,
+                            inner=int(np.ceil(2.0*fwhm)),
+                            normalize=False, verbose=False
+                    ):
                         if cutout['meta']['adjust_pval'] > 0.01:
                             continue
                         if cutout['meta']['adjust_chi2'] < 0.33*cutout['meta']['adjust_chi2_0']:

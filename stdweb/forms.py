@@ -148,6 +148,9 @@ class TaskSubtractionForm(forms.Form):
     subtraction_mode = forms.ChoiceField(choices=[('target', 'Target photometry'), ('detection', 'Transient detection')],
                                          initial='detection', required=True, label="", widget=forms.RadioSelect)
 
+    subtraction_method = forms.ChoiceField(choices=[('zogy', 'ZOGY'), ('hotpants', 'HOTPANTS')],
+                                         initial='zogy', required=False, label="Method")
+
     filter_vizier = forms.BooleanField(initial=False, required=False, label="Vizier")
     filter_skybot = forms.BooleanField(initial=False, required=False, label="SkyBoT")
     filter_adjust = forms.BooleanField(initial=False, required=False, label="Adjust")
@@ -165,7 +168,8 @@ class TaskSubtractionForm(forms.Form):
                 # Column('file'),
                 Column('sub_size', css_class="col-md-2"),
                 Column('sub_overlap', css_class="col-md-2"),
-                Column('hotpants_extra'),
+                Column('subtraction_method', css_class="col-md-2"),
+                Column('hotpants_extra', id='hotpants_extra_col'),
                 css_class='align-items-end'
             ),
             Row(

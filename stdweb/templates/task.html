@@ -99,6 +99,25 @@
      $('#id_subtraction_mode_0').prop('disabled', true);
    });
    {% endif %}
+
+   check_sub_method_visibility = function(){
+     var selected = $('#id_subtraction_method').find(":selected").val();
+     var row = $('#hotpants_extra_col');
+
+     if (selected == 'hotpants' && row.is(':hidden')){
+       row.show();
+     } else if (selected != 'hotpants' && row.is(':visible')){
+       row.hide();
+     }
+   }
+
+   // Toggle visibility of custom template options depending on the checkbox
+   $(function(){
+     $('#id_subtraction_method').on('change', check_sub_method_visibility);
+     check_sub_method_visibility();
+   });
+
+
   </script>
 
 {% endblock %}
@@ -438,7 +457,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' as list %}
+              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">

@@ -183,6 +183,10 @@ STDPIPE_SOLVE_FIELD_CONFIG = config('STDPIPE_SOLVE_FIELD_CONFIG', default=None)
 STDPIPE_SEXTRACTOR = config('STDPIPE_SEXTRACTOR', default=None)
 # Path to SCAMP executable
 STDPIPE_SCAMP = config('STDPIPE_SCAMP', default=None)
+# Path to PSFEx executable
+STDPIPE_PSFEX = config('STDPIPE_PSFEX', default=None)
+# Path to PSFEx executable
+STDPIPE_HOTPANTS = config('STDPIPE_HOTPANTS', default=None)
 # Path to SWarp executable
 STDPIPE_SWARP = config('STDPIPE_SWARP', default=None)
 # Path to store PS1 download cache (if not set, use task-local cache)

@@ -27,7 +27,7 @@ overlay_stdview_images = function() {
 
             /* Now scaling part */
             var scale = $('<select/>');
-            var scvals = [90, 95, 99, 99.5, 99.9, 100];
+            var scvals = [90, 95, 99, 99.5, 99.9, 99.995, 100];
 
             scale.append($('<option disabled selected>').html('Scale'));
 
@@ -46,7 +46,7 @@ overlay_stdview_images = function() {
 
             zoom.append($('<option disabled selected>').html('Zoom'));
 
-            for (i=0; i<scvals.length; i++)
+            for (i=0; i<zvals.length; i++)
     	        zoom.append($('<option/>').val(zvals[i]).html('x'+zvals[i].toString()));
 
             zoom.on('change', function() {
