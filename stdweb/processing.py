@@ -1509,7 +1509,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                     # Try to apply some sub-pixel adjustments to fix dipoles etc
                     if cutouts.adjust_cutout(
                             cutout, max_shift=1, max_scale=1.1,
-                            inner=int(np.ceil(2.0*fwhm)),
+                            inner=int(np.ceil(2.0*config.get('fwhm'))),
                             normalize=False, verbose=False
                     ):
                         if cutout['meta']['adjust_pval'] > 0.01:
