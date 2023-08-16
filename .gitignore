@@ -116,6 +116,7 @@ tests/
 cutouts/
 data/
 tasks/
+static/
 
 db.sqlite3
 dump.rdb
