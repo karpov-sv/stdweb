@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, re_path, include
 from django.conf import settings
+from django.http import HttpResponse
 
 from django.contrib.auth import views as auth_views
 
@@ -60,6 +61,9 @@ urlpatterns = [
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 
+    # robots.txt
+    path('robots.txt', lambda r: HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")),
+    
     # Admin panel
     path('admin/', admin.site.urls),
 ]

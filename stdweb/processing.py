@@ -193,6 +193,11 @@ def fix_header(header, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
+    # Fix SCAMP headers with TAN type what are actually TPV (and thus break AstroPy WCS)
+    if header['CTYPE1'] == 'RA---TAN' and 'PV1_5' in header.keys():
+        header['CTYPE1'] = 'RA---TPV'
+        header['CTYPE2'] = 'DEC--TPV'
+
     # Fix PRISM headers
     if header.get('CTYPE2') == 'DEC---TAN':
         header['CTYPE2'] = 'DEC--TAN'
@@ -461,6 +466,7 @@ def inspect_image(filename, config, verbose=True, show=False):
                     log("Target cutout written to file:image_target.fits")
                 else:
                     log("Target is outside the image")
+                    log(f"{x0} {y0}")
             except:
                 pass
 
