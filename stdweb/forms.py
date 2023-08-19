@@ -149,7 +149,7 @@ class TaskSubtractionForm(forms.Form):
                                          initial='detection', required=True, label="", widget=forms.RadioSelect)
 
     subtraction_method = forms.ChoiceField(choices=[('zogy', 'ZOGY'), ('hotpants', 'HOTPANTS')],
-                                         initial='zogy', required=False, label="Method")
+                                         initial='hotpants', required=False, label="Method")
 
     filter_vizier = forms.BooleanField(initial=False, required=False, label="Vizier")
     filter_skybot = forms.BooleanField(initial=False, required=False, label="SkyBoT")

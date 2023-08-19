@@ -976,7 +976,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
     sub_verbose = verbose if config.get('sub_verbose') else False
     subtraction_mode = config.get('subtraction_mode', 'detection')
-    subtraction_method = config.get('subtraction_method', 'zogy')
+    subtraction_method = config.get('subtraction_method', 'hotpants')
 
     # Cleanup stale plots and files
     cleanup_paths(cleanup_subtraction, basepath=basepath)
