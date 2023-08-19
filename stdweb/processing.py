@@ -194,7 +194,7 @@ def fix_header(header, verbose=True):
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
     # Fix SCAMP headers with TAN type what are actually TPV (and thus break AstroPy WCS)
-    if header['CTYPE1'] == 'RA---TAN' and 'PV1_5' in header.keys():
+    if header.get('CTYPE1') == 'RA---TAN' and 'PV1_5' in header.keys():
         header['CTYPE1'] = 'RA---TPV'
         header['CTYPE2'] = 'DEC--TPV'
 
