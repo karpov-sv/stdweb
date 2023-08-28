@@ -382,8 +382,8 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     log(f"{np.sum(mask)} ({100*np.sum(mask)/mask.shape[0]/mask.shape[1]:.1f}%) pixels masked")
 
-    if np.sum(mask) > 0.8*mask.shape[0]*mask.shape[1]:
-        raise RuntimeError('More than 80% of the image is masked')
+    if np.sum(mask) > 0.95*mask.shape[0]*mask.shape[1]:
+        raise RuntimeError('More than 95% of the image is masked')
 
     fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
     log("Mask written to file:mask.fits")
