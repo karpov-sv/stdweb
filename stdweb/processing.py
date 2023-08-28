@@ -566,7 +566,10 @@ def photometry_image(filename, config, verbose=True, show=False):
     log("\n---- Object measurement ----\n")
 
     # FWHM
-    fwhm = np.median(obj['fwhm'][obj['flags'] == 0]) # TODO: make it position-dependent
+    idx = obj['flags'] == 0
+    idx &= obj['magerr'] < 1/20
+
+    fwhm = np.median(obj['fwhm'][idx]) # TODO: make it position-dependent
     log(f"FWHM is {fwhm:.2f} pixels")
 
     if config.get('fwhm_override'):
@@ -574,6 +577,16 @@ def photometry_image(filename, config, verbose=True, show=False):
         log(f"Overriding with user-specified FWHM value of {fwhm:.2f} pixels")
 
     config['fwhm'] = fwhm
+
+    # Plot FWHM
+    with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        plots.binned_map(obj[idx]['x'], obj[idx]['y'], obj[idx]['fwhm'], bins=8, statistic='median', show_dots=True, ax=ax)
+        ax.set_aspect(1)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])
+        # ax.legend()
+        ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
 
     if config.get('rel_bg1') and config.get('rel_bg2'):
         rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
@@ -603,17 +616,6 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_ylim(0, image.shape[0])
         # ax.legend()
         ax.set_title(f"Detected objects: {np.sum(idx)} unmasked, {np.sum(~idx)} masked")
-
-    # Plot FWHM
-    with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
-        ax = fig.add_subplot(1, 1, 1)
-        idx = obj['flags'] == 0
-        plots.binned_map(obj[idx]['x'], obj[idx]['y'], obj[idx]['fwhm'], bins=8, statistic='median', show_dots=True, ax=ax)
-        ax.set_aspect(1)
-        ax.set_xlim(0, image.shape[1])
-        ax.set_ylim(0, image.shape[0])
-        # ax.legend()
-        ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
 
     log("\n---- Initial astrometry ----\n")
 
