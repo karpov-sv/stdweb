@@ -14,7 +14,7 @@ overlay_stdview_images = function() {
         /* Streching and scaling the data, if data-stretch or data-scale parameters are set */
         if ('stretch' in image.data() || 'scale' in image.data()) {
   	    var stretch = $('<select/>');
-            var svals = ['linear', 'asinh', 'log'];
+            var svals = ['linear', 'asinh', 'log', 'sqrt', 'sinh', 'power', 'histeq'];
 
             stretch.append($('<option disabled selected>').html('Stretch'));
 
