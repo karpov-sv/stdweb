@@ -167,19 +167,20 @@ def tasks(request, id=None):
         tasks = models.Task.objects.all()
         tasks = tasks.order_by('-created')
 
-        form = forms.TasksFilterForm(request.POST)
+        form = forms.TasksFilterForm(request.GET)
         context['form'] = form
 
-        if request.method == 'POST':
+        if request.method == 'GET':
             if form.is_valid():
                 query = form.cleaned_data.get('query')
                 if query:
-                    tasks = tasks.filter(Q(original_name__icontains = query) |
-                                         Q(title__icontains = query) |
-                                         Q(user__username__icontains = query) |
-                                         Q(user__first_name__icontains = query) |
-                                         Q(user__last_name__icontains = query)
-                                         )
+                    for token in query.split():
+                        tasks = tasks.filter(Q(original_name__icontains = token) |
+                                             Q(title__icontains = token) |
+                                             Q(user__username__icontains = token) |
+                                             Q(user__first_name__icontains = token) |
+                                             Q(user__last_name__icontains = token)
+                                             )
 
 
         context['tasks'] = tasks
