@@ -215,7 +215,7 @@ def handle_task_mask_creation(task, width, height, areas):
         return False
 
     if os.path.exists(os.path.join(task.path(), 'image.fits')):
-        header = fits.getheader(os.path.join(task.path(), 'image.fits'))
+        header = fits.getheader(os.path.join(task.path(), 'image.fits'), -1)
         scale = header['NAXIS1'] / width # FIXME: Should we assume it is the same for y?..
 
         mask = np.ones(shape=(header['NAXIS2'], header['NAXIS1']), dtype=bool)

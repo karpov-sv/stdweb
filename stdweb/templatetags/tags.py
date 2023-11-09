@@ -67,7 +67,7 @@ def task_fits_header(task, filename):
     contents = ""
 
     try:
-        header = fits.getheader(path)
+        header = fits.getheader(path, -1)
         contents = header.tostring('\n')
     except:
         contents = "Cannot get FITS header from " + filename

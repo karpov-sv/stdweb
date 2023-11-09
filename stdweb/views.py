@@ -187,7 +187,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         return HttpResponse('not found')
 
     # Optional parameters
-    ext = int(request.GET.get('ext', 0))
+    ext = int(request.GET.get('ext', -1))
     fmt = request.GET.get('format', 'jpeg')
     quality = int(request.GET.get('quality', 80))
 

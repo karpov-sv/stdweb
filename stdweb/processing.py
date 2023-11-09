@@ -217,7 +217,7 @@ def fix_image(filename, config, verbose=True):
 
     basepath = os.path.dirname(filename)
 
-    image,header = fits.getdata(filename), fits.getheader(filename)
+    image,header = fits.getdata(filename, -1), fits.getheader(filename, -1)
     fix_header(header)
 
     if os.path.exists(os.path.join(basepath, 'image.wcs')):
@@ -236,7 +236,7 @@ def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=Tru
 
     basepath = os.path.dirname(filename)
 
-    image,header = fits.getdata(filename), fits.getheader(filename)
+    image,header = fits.getdata(filename, -1), fits.getheader(filename, -1)
 
     # Sanitize input
     try:
@@ -309,9 +309,16 @@ def inspect_image(filename, config, verbose=True, show=False):
     # Load the image
     log(f'Inspecting {filename}')
     try:
-        image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+        image,header = fits.getdata(filename, -1).astype(np.double), fits.getheader(filename, -1)
     except:
         raise RuntimeError('Cannot load the image')
+
+    # Handle various special cases
+    if 'BSOFTEN' in header and 'BOFFSET' in header:
+        # Pan-STARRS image in ASINH scaling, let's convert it to linear
+        log('Detected Pan-STARRS ASINH scaled image, fixing it')
+        image,header = templates.normalize_ps1_skycell(image, header, verbose=verbose)
+        fits.writeto(filename, image, header, overwrite=True)
 
     log(f"Image size is {image.shape[1]} x {image.shape[0]}")
 
@@ -385,7 +392,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if np.sum(mask) > 0.95*mask.shape[0]*mask.shape[1]:
         raise RuntimeError('More than 95% of the image is masked')
 
-    fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), header, overwrite=True)
+    fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), overwrite=True)
     log("Mask written to file:mask.fits")
 
     # Cosmics
@@ -531,7 +538,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     basepath = os.path.dirname(filename)
 
     # Image
-    image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+    image,header = fits.getdata(filename, -1).astype(np.double), fits.getheader(filename, -1)
 
     fix_header(header)
 
@@ -569,6 +576,9 @@ def photometry_image(filename, config, verbose=True, show=False):
     idx = obj['flags'] == 0
     idx &= obj['magerr'] < 1/20
 
+    if not len(obj[idx]):
+        raise RuntimeError("No stars with S/N > 20 in the image!")
+
     fwhm = np.median(obj['fwhm'][idx]) # TODO: make it position-dependent
     log(f"FWHM is {fwhm:.2f} pixels")
 
@@ -605,6 +615,9 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"{len(obj)} objects properly measured")
 
+    obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
+    log("Measured objects stored to file:objects.vot")
+
     # Plot detected objects
     with plots.figure_saver(os.path.join(basepath, 'objects.png'), figsize=(8, 6), show=show,) as fig:
         ax = fig.add_subplot(1, 1, 1)
@@ -620,15 +633,6 @@ def photometry_image(filename, config, verbose=True, show=False):
     log("\n---- Initial astrometry ----\n")
 
     # Get initial WCS
-    if os.path.exists(os.path.join(basepath, "image.wcs")):
-        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
-        astrometry.clear_wcs(header)
-        header += wcs.to_header(relax=True)
-        log("WCS loaded from image.wcs")
-    else:
-        wcs = WCS(header)
-        log("Using original WCS from FITS header")
-
     if config['blind_match_wcs']:
         # Blind match WCS
         log("Will try blind matching for WCS solution")
@@ -665,6 +669,17 @@ def photometry_image(filename, config, verbose=True, show=False):
             log("Blind matched WCS stored to file:image.wcs")
         else:
             log("Blind matching failed")
+
+    elif os.path.exists(os.path.join(basepath, "image.wcs")):
+        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
+        astrometry.clear_wcs(header)
+        header += wcs.to_header(relax=True)
+        log("WCS loaded from image.wcs")
+
+    else:
+        wcs = WCS(header)
+        log("Using original WCS from FITS header")
+
 
     if wcs is None or not wcs.is_celestial:
         raise RuntimeError('No WCS astrometric solution')
@@ -712,8 +727,12 @@ def photometry_image(filename, config, verbose=True, show=False):
         config['cat_col_mag'] = config['filter'] + 'mag'
         config['cat_col_mag_err'] = 'e_' + config['cat_col_mag']
 
-        config['cat_col_color_mag1'] = 'gmag'
-        config['cat_col_color_mag2'] = 'rmag'
+        if config['filter'] == 'z':
+            config['cat_col_color_mag1'] = 'rmag'
+            config['cat_col_color_mag2'] = 'imag'
+        else:
+            config['cat_col_color_mag1'] = 'gmag'
+            config['cat_col_color_mag2'] = 'rmag'
 
     log(f"Will use catalogue column {config['cat_col_mag']} as primary magnitude ")
     log(f"Will use catalogue columns {config['cat_col_color_mag1']} and {config['cat_col_color_mag2']} for color")
@@ -984,7 +1003,7 @@ def subtract_image(filename, config, verbose=True, show=False):
     cleanup_paths(cleanup_subtraction, basepath=basepath)
 
     # Image
-    image,header = fits.getdata(filename).astype(np.double), fits.getheader(filename)
+    image,header = fits.getdata(filename, -1).astype(np.double), fits.getheader(filename, -1)
 
     fix_header(header)
 
@@ -1029,8 +1048,8 @@ def subtract_image(filename, config, verbose=True, show=False):
         if not os.path.exists(os.path.join(basepath, 'custom_template.fits')):
             raise RuntimeError("Custom template not found")
 
-        custom_template = fits.getdata(os.path.join(basepath, 'custom_template.fits')).astype(np.double)
-        custom_header = fits.getheader(os.path.join(basepath, 'custom_template.fits'))
+        custom_template = fits.getdata(os.path.join(basepath, 'custom_template.fits'), -1).astype(np.double)
+        custom_header = fits.getheader(os.path.join(basepath, 'custom_template.fits'), -1)
         custom_wcs = WCS(custom_header)
 
         template_gain = config.get('custom_template_gain', 10000)
