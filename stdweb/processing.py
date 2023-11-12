@@ -532,6 +532,7 @@ def inspect_image(filename, config, verbose=True, show=False):
         log(f"Time is {config.get('time')}")
         log(f"MJD is {Time(config.get('time')).mjd}")
 
+
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -589,7 +590,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     config['fwhm'] = fwhm
 
-    # Plot FWHM
+    # Plot FWHM map
     with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
         plots.binned_map(obj[idx]['x'], obj[idx]['y'], obj[idx]['fwhm'], bins=8, statistic='median', show_dots=True, ax=ax)
@@ -598,6 +599,23 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_ylim(0, image.shape[0])
         # ax.legend()
         ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
+
+    # Plot FWHM vs instrumental
+    with plots.figure_saver(os.path.join(basepath, 'fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+        ax.plot(obj['fwhm'], obj['mag'], '.', label='All objects')
+        ax.plot(obj['fwhm'][idx], obj['mag'][idx], '.', label='Used for FWHM')
+
+        ax.axvline(fwhm, ls='--', color='red')
+        ax.invert_yaxis()
+        ax.legend()
+        ax.grid(alpha=0.2)
+        ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
+        ax.set_xlabel('FWHM, pixels')
+        ax.set_ylabel('Instrumental magnitude')
+        ax.set_xlim(0, np.percentile(obj['fwhm'], 98))
+
+    log(f"FWHM diagnostic plot stored to file:fwhm_mag.png")
 
     if config.get('rel_bg1') and config.get('rel_bg2'):
         rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
