@@ -530,6 +530,7 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     if config.get('time'):
         log(f"Time is {config.get('time')}")
+        log(f"MJD is {Time(config.get('time')).mjd}")
 
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
