@@ -6,6 +6,30 @@ import os, shutil
 
 from stdweb import models
 
+import argparse
+
+class store_kw(argparse.Action):
+    """
+    argparse action to split an argument into KEY=VALUE form
+    on append to a dictionary.
+    """
+
+    def __call__(self, parser, args, values, option_string=None):
+        # try:
+        #     d = dict(map(lambda x: x.split('='), values))
+        # except ValueError as ex:
+        #     raise argparse.ArgumentError(self, f"Could not parse argument \"{values}\" as k1=v1 k2=v2 ... format")
+
+        # setattr(args, self.dest, d)
+        assert(len(values) == 1)
+        try:
+            (k, v) = values[0].split("=", 2)
+        except ValueError as ex:
+            raise argparse.ArgumentError(self, f"could not parse argument \"{values[0]}\" as k=v format")
+        d = getattr(args, self.dest) or {}
+        d[k] = v
+        setattr(args, self.dest, d)
+
 class Command(BaseCommand):
     help = 'Manage image processing tasks'
 
@@ -17,6 +41,11 @@ class Command(BaseCommand):
         parser.add_argument("-i", "--import", action="store_true", dest='import', help="Import FITS files")
 
         parser.add_argument("-d", "--delete", action="store_true", dest='delete', help="Delete tasks")
+
+        parser.add_argument("--skyportal", action="store_true", dest='skyportal', help="Prepare photometry for exporting to SkyPortal")
+
+        # Config values as key-value pairs
+        parser.add_argument("-c", "--config", metavar="KEY=VALUE", action=store_kw, nargs=1, dest="config", help="Initial parameters for the task")
 
         # Positional arguments
         parser.add_argument("names", nargs="*", type=str)
@@ -45,6 +74,9 @@ class Command(BaseCommand):
 
                     shutil.copyfile(filename, os.path.join(task.path(), 'image.fits'))
 
+                    if options['config']:
+                        task.config.update(options['config'])
+
                     task.state = 'imported'
                     task.save()
 
@@ -60,3 +92,36 @@ class Command(BaseCommand):
 
                 if task:
                     task.delete()
+
+        elif options['skyportal']:
+            from astropy.table import Table
+            from stdpipe import cutouts
+
+            # Header
+            print(f"mjd,mag,magerr,limiting_mag,magsys,filter")
+
+            for name in options['names']:
+                filename = f"tasks/{name}/target.vot"
+                tobj = Table.read(filename)
+                cutout = cutouts.load_cutout(filename.replace('.vot', '.cutout'))
+                meta = cutout['meta']
+
+                # Data
+                for row in tobj:
+                    fname = row['mag_filter_name']
+
+                    magsys = 'vega' if fname in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag'] else 'ab'
+                    fname = {
+                        'Umag': 'bessellu',
+                        'Bmag': 'bessellb',
+                        'Vmag': 'bessellv',
+                        'Rmag': 'bessellr',
+                        'Imag': 'besselli',
+                        'umag': 'sdssu',
+                        'gmag': 'sdssg',
+                        'rmag': 'sdssr',
+                        'imag': 'sdssi',
+                        'zmag': 'sdssz',
+                    }.get(fname, fname)
+
+                    print(f"{meta['time'].mjd},{row['mag_calib']:.3f},{row['mag_calib_err']:.3f},{row['mag_limit']:.3f},{magsys},{fname}")
