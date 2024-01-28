@@ -75,7 +75,20 @@ class Command(BaseCommand):
                     shutil.copyfile(filename, os.path.join(task.path(), 'image.fits'))
 
                     if options['config']:
-                        task.config.update(options['config'])
+                        # Pre-process the config entries
+                        config = {}
+                        for key in options['config']:
+                            value = options['config'][key]
+
+                            # Booleans
+                            if value in ['True']:
+                                value = True
+                            elif value in ['False']:
+                                value = False
+
+                            config[key] = value
+
+                        task.config.update(config)
 
                     task.state = 'imported'
                     task.save()
