@@ -14,6 +14,7 @@ class UploadFileForm(forms.Form):
 
 class TasksFilterForm(forms.Form):
     query = forms.CharField(max_length=100, required=False, label="Filter Tasks")
+    show_all = forms.BooleanField(initial=False, required=False, label="Show all")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,7 +24,16 @@ class TasksFilterForm(forms.Form):
         self.helper.form_show_labels = False
         self.helper.layout = Layout(
             Row(
-                InlineField(PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames')),
+                Column(
+                    InlineField(
+                        PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames'),
+                    ),
+                    css_class="col-md"
+                ),
+                Column(
+                    InlineField('show_all'),
+                    css_class="col-md-auto"
+                ),
             )
         )
 
