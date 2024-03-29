@@ -64,6 +64,11 @@
             <li class="nav-item">
               <a class="nav-link {% if request.resolver_match.view_name == 'tasks' %}active{% endif %}" href="{% url 'tasks' %}">Tasks</a>
             </li>
+            {% if perms.stdweb.skyportal_upload %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'skyportal' %}">SkyPortal Upload</a>
+              </li>
+            {% endif %}
           </ul>
 
           <ul class="navbar-nav ms-auto me-2">
@@ -82,7 +87,6 @@
                       <a class="dropdown-item" href="{% url 'queue' %}">Queued Tasks</a>
                     </li>
                   {% endif %}
-
 
                   {% if user.is_staff %}
                     <li>

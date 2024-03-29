@@ -200,3 +200,36 @@ class TaskSubtractionForm(forms.Form):
                 css_class='align-items-end'
             ),
         )
+
+class SkyPortalUploadForm(forms.Form):
+    ids = forms.CharField(max_length=150, required=False, label="Task IDs to upload")
+    instrument = forms.ChoiceField(choices=[], initial=None, required=False, label="Instrument")
+
+    def __init__(self, *args, **kwargs):
+        instruments = kwargs.pop('instruments')
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.disable_csrf = True
+        self.helper.form_show_labels = False
+        self.helper.layout = Layout(
+            Row(
+                Column(
+                    InlineField(
+                        PrependedText('ids', 'IDs:', placeholder='Comma or whitespace separated list of task IDs to upload'),
+                    ),
+                    css_class="col-md"
+                ),
+                Column(
+                    'instrument',
+                    css_class="col-md-auto"
+                ),
+                Column(
+                    Submit('preview', 'Preview', css_class='btn-primary'),
+                    css_class="col-md-auto"
+                )
+            )
+        )
+
+        if instruments is not None:
+            self.fields['instrument'].choices = instruments

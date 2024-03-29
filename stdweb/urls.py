@@ -24,6 +24,7 @@ from django.contrib.auth import views as auth_views
 from . import views
 from . import views_tasks
 from . import views_celery
+from . import views_skyportal
 
 urlpatterns = [
     # path('', views.index, name='index'),
@@ -52,6 +53,8 @@ urlpatterns = [
 
     path('tasks/<int:id>/mask', views_tasks.task_mask, name='task_mask'),
 
+    path('skyportal/', views_skyportal.skyportal, name='skyportal'),
+
     # Celery queue
     path('queue/', views_celery.view_queue, {'id': None}, name='queue'),
     path('queue/<slug:id>', views_celery.view_queue, name='queue'),
@@ -63,7 +66,7 @@ urlpatterns = [
 
     # robots.txt
     path('robots.txt', lambda r: HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")),
-    
+
     # Admin panel
     path('admin/', admin.site.urls),
 ]

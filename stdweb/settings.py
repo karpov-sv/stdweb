@@ -191,3 +191,6 @@ STDPIPE_HOTPANTS = config('STDPIPE_HOTPANTS', default=None)
 STDPIPE_SWARP = config('STDPIPE_SWARP', default=None)
 # Path to store PS1 download cache (if not set, use task-local cache)
 STDPIPE_PS1_CACHE = config('STDPIPE_PS1_CACHE', default=None)
+
+# SkyPortal API token
+SKYPORTAL_TOKEN = config('SKYPORTAL_TOKEN', default=None)
