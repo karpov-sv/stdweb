@@ -63,11 +63,12 @@ def skyportal_upload_photometry(
         limit,
         magsys,
         filter,
-        origin,
         instrument,
         ra=None,
         dec=None,
+        altdata=None,
         group_ids=[3],
+        origin='stdview',
         api_token=settings.SKYPORTAL_TOKEN
 ):
     if api_token is not None:
@@ -87,11 +88,12 @@ def skyportal_upload_photometry(
         'ra': ra,
         'dec': dec,
         'origin': origin,
+        'altdata': altdata,
         'group_ids': group_ids,
     }
 
     base_url = 'https://skyportal-icare.ijclab.in2p3.fr/api'
-    res = requests.post(f'{base_url}/photometry', headers=headers, json=payload)
+    res = requests.put(f'{base_url}/photometry', headers=headers, json=payload)
 
     return res.json()
 
@@ -137,10 +139,15 @@ def skyportal(request):
                     ctask['dec'] = task.config.get('target_dec')
 
                     if ctask['ra'] or ctask['dec']:
-                        sid = skyportal_resolve_source(
-                            ctask['ra'],
-                            ctask['dec'],
-                        )
+                        # Try resolving using increasing cone search radius
+                        for sr in [10/3600, 30/3600, 1/60, 10/60, 30/60]:
+                            sid = skyportal_resolve_source(
+                                ctask['ra'],
+                                ctask['dec'],
+                                sr=sr,
+                            )
+                            if sid is not None:
+                                break
 
                         if sid is None:
                                 raise RuntimeError(f"Cannot resolve SkyPortal source at RA={ctask['ra']:.4f} Dec={ctask['dec']:.4f}")
@@ -183,7 +190,7 @@ def skyportal(request):
                     ctask['mjd'] = time.mjd
                     ctask['filter'] = fname
                     ctask['magsys'] = magsys
-                    if row['mag_calib_err'] < 1/3:
+                    if row['mag_calib_err'] < 1/5:
                         ctask['mag'] = row['mag_calib']
                         ctask['magerr'] = row['mag_calib_err']
                     else:
@@ -193,7 +200,8 @@ def skyportal(request):
 
                     if action == 'upload':
                         res = skyportal_upload_photometry(
-                            'test_source_stdpipe', # sid,
+                            # 'test_source_stdpipe',
+                            sid,
                             instrument=instrument,
                             mjd=ctask['mjd'],
                             mag=ctask['mag'],
@@ -203,7 +211,7 @@ def skyportal(request):
                             magsys=ctask['magsys'],
                             ra=ctask['ra'],
                             dec=ctask['dec'],
-                            origin=f'stdview:{id}',
+                            altdata={'stdview': id},
                         )
 
                         if res['status'] == 'success':
