@@ -197,6 +197,9 @@
             On this stage, several important parameters (gain, saturation level, filter name, etc) are extracted from FITS header. Also, the target name is resolved to coordinates, to be used later for forced photometry. All values may be overwritten by filling the form values.
           </p>
           <p>
+            Multiple targets may be listed, one per line. The first one will be the primary one, the rest may be used to perform forced photometry at additional positions around it. Every target may be defined by either Simbad or TNS resolvable name, or by a coordinate string in common formats (pair of degrees, or HH MM SS DD MM SS, etc).
+          </p>
+          <p>
             The mask is created from NaN values in the image, pixels above saturation level, and from optional cosmic ray detection. The latter is not always working perfectly, so disable it if it starts masking the actual stars! If the image has unusable regions (e.g. overscans) around it - you may mask them manually using custom mask editor.
           </p>
           <p>
@@ -368,8 +371,8 @@
       {% endif %}
 
       <hr style="border-style: dotted">
-      <div class="row mb-2">
-        {% if 'photometry.log' in files %}
+      {% if 'photometry.log' in files %}
+        <div class="row mb-2">
           <div class="col">
             {% include "task_block_text.html" with file='photometry.log' %}
           </div>
@@ -386,8 +389,13 @@
               {% endfor %}
             </div>
           </div>
+        </div>
+        {% if 'target.vot' in files %}
+          <div>
+            {% include "task_block_table.html" with file='target.vot' %}
+          </div>
         {% endif %}
-      </div>
+      {% endif %}
 
     {% endif %}
 

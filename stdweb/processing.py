@@ -440,36 +440,47 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Target?..
     if not 'target' in config:
-        config['target'] = header.get('TARGET')
+        config['target'] = str(header.get('TARGET'))
 
     if config.get('target'):
-        log(f"Target is {config['target']}")
-        try:
-            target = resolve.resolve(config['target'])
-            config['target_ra'] = target.ra.deg
-            config['target_dec'] = target.dec.deg
+        config['targets'] = []
+        for target_name in config['target'].splitlines():
+            target = {'name': target_name.strip()}
+            if target_name:
+                log(f"{'Primary' if not len(config['targets']) else 'Secondary'} target is {target['name']}")
+                try:
+                    coords = resolve.resolve(target['name'])
+                    target['ra'] = coords.ra.deg
+                    target['dec'] = coords.dec.deg
 
-            # Activate target photometry mode
-            config['subtraction_mode'] = 'target'
+                    if not len(config['targets']):
+                        # Keep backwards-compatible primary target coordinates
+                        config['target_ra'] = target['ra']
+                        config['target_dec'] = target['dec']
 
-            log(f"Resolved to RA={config['target_ra']:.4f} Dec={config['target_dec']:.4f}")
-        except:
-            log("Target not resolved")
+                    # Activate target photometry mode
+                    config['subtraction_mode'] = 'target'
+
+                    log(f"Resolved to RA={target['ra']:.4f} Dec={target['dec']:.4f}")
+
+                    config['targets'].append(target)
+                except:
+                    log("Target not resolved")
 
         if (config.get('target_ra') or config.get('target_dec')) and wcs and wcs.is_celestial:
             if ra0 is not None and dec0 is not None and sr0 is not None:
                 if astrometry.spherical_distance(ra0, dec0,
                                                  config.get('target_ra'),
                                                  config.get('target_dec')) > 2.0*sr0:
-                    log("Target is very far from the image center!")
+                    log("Primary target is very far from the image center!")
 
             try:
-                x0,y0 = wcs.all_world2pix(config.get('target_ra'), config.get('target_dec'), 0)
+                x0,y0 = wcs.all_world2pix(config.get('targets')[0].get('ra'), config.get('targets')[0].get('dec'), 0)
 
                 if x0 > 0 and y0 > 0 and x0 < image.shape[1] and y0 < image.shape[0]:
                     cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
                     fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
-                    log(f"Target is at x={x0:.1f} y={y0:.1f}")
+                    log(f"Primary target is at x={x0:.1f} y={y0:.1f}")
                     log("Target cutout written to file:image_target.fits")
                 else:
                     log("Target is outside the image")
@@ -549,6 +560,10 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Time
     time = Time(config.get('time')) if config.get('time') else None
+
+    # Secondary targets - backward compatibility
+    if not 'targets' in config and 'target_ra' in config and 'target_dec' in config:
+        config['targets'] = [{'ra': config.get('target_ra'), 'dec': config.get('target_dec')}]
 
     # Cleanup stale plots
     cleanup_paths(cleanup_photometry, basepath=basepath)
@@ -930,17 +945,23 @@ def photometry_image(filename, config, verbose=True, show=False):
         plots.plot_detection_limit(obj, mag_name=config['cat_col_mag'], sn=config.get('sn', 3), ax=ax)
 
     # Target forced photometry
-    if config.get('target_ra') is not None and config.get('target_dec') is not None:
-        log("\n---- Target forced photometry ----\n")
+    if config.get('targets') is not None:
+        log("\n---- Primary and secondary targets forced photometry ----\n")
 
-        target_obj = Table({'ra':[config['target_ra']], 'dec':[config['target_dec']]})
+        target_obj = Table({
+            'ra': [_['ra'] for _ in config['targets']],
+            'dec': [_['dec'] for _ in config['targets']]
+        })
         target_obj['x'],target_obj['y'] = wcs.all_world2pix(target_obj['ra'], target_obj['dec'], 0)
 
-        if not (target_obj['x'] > 0 and target_obj['x'] < image.shape[1] and
-                target_obj['y'] > 0 and target_obj['y'] < image.shape[0]):
-            raise RuntimeError("Target is outside the image")
+        # Filter out targets outside the image so that photometry routine does not crash
+        def is_inside(x, y):
+            return (x > 0 and x < image.shape[1] and y > 0 and y < image.shape[0])
 
-        log(f"Target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
+        if not is_inside(target_obj['x'][0], target_obj['y'][0]):
+            raise RuntimeError("Primary target is outside the image")
+
+        log(f"Primary target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
 
         target_obj = photometry.measure_objects(target_obj, image, mask=mask,
                                                 fwhm=fwhm,
@@ -975,7 +996,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             target_obj['mag_color_term'] = m['color_term']
 
         target_obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
-        log("Measured target stored to file:target.vot")
+        log("Measured targets stored to file:target.vot")
 
         # Create the cutout from image based on the candidate
         cutout = cutouts.get_cutout(image, target_obj[0], 30, mask=mask, header=header, time=time)
@@ -986,20 +1007,20 @@ def photometry_image(filename, config, verbose=True, show=False):
             cutout['template'] = templates.get_hips_image('CDS/P/skymapper-R', header=cutout['header'])[0]
 
         cutouts.write_cutout(cutout, os.path.join(basepath, 'target.cutout'))
-        log("Target cutouts stored to file:target.cutout")
+        log("Primary target cutouts stored to file:target.cutout")
 
-        log(f"Target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
+        log(f"Primary target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
         if target_obj['flux'][0] > 0:
             mag_string = target_obj['mag_filter_name'][0]
             if 'mag_color_name' in target_obj.colnames and 'mag_color_term' in target_obj.colnames and target_obj['mag_color_term'][0] is not None:
                 sign = '-' if target_obj['mag_color_term'][0] > 0 else '+'
                 mag_string += f" {sign} {np.abs(target_obj['mag_color_term'][0]):.2f}*({target_obj['mag_color_name'][0]})"
 
-            log(f"Target magnitude is {mag_string} = {target_obj['mag_calib'][0]:.2f} +/- {target_obj['mag_calib_err'][0]:.2f}")
-            log(f"Target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
+            log(f"Primary target magnitude is {mag_string} = {target_obj['mag_calib'][0]:.2f} +/- {target_obj['mag_calib_err'][0]:.2f}")
+            log(f"Primary target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
 
         else:
-            log("Target not detected")
+            log("Primary target not detected")
 
 
 def subtract_image(filename, config, verbose=True, show=False):

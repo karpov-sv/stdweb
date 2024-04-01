@@ -12,6 +12,7 @@ import re
 from functools import partial
 
 from astropy.io import fits
+from astropy.table import Table
 
 register = template.Library()
 
@@ -56,6 +57,37 @@ def task_file_contents(task, filename, highlight=False):
         contents = re.sub(r"\b(file:(\w+\.\w+))\b",
                           partial(task_file_link, task=task),
                           contents, flags=re.MULTILINE)
+
+    return mark_safe(contents)
+
+
+@register.simple_tag
+def task_file_table(task, filename):
+    path = os.path.join(task.path(), filename)
+
+    contents = ""
+
+    try:
+        table = Table.read(path)
+
+        for col in table.itercols():
+            if col.info.dtype.kind == 'f':
+                if col.name in ['ra', 'dec', 'RAJ2000', 'DEJ2000']:
+                    col.info.format = '.5f'
+                elif col.name in ['x', 'y']:
+                    col.info.format = '.2f'
+                else:
+                    col.info.format = '.4g'
+            elif col.name in ['flags']:
+                col.info.format = '#x'
+
+        contents = "\n".join(table.pformat_all(
+            html=True,
+            tableclass="table table-sm table-bordered text-center",
+            tableid='table_targets',
+        ))
+    except:
+        pass
 
     return mark_safe(contents)
 
