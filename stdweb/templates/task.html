@@ -244,6 +244,14 @@
                     aria-controls="cropControls"
                     title="Crop the image">Crop&nbsp;</button>
 
+            <!-- Raw config hide/show -->
+            <button type="button" class="btn btn-light collapse-chevron collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#rawConfig"
+                    aria-expanded="false"
+                    aria-controls="rawConfig"
+                    title="Show raw JSON config">Raw JSON config&nbsp;</button>
+
             <button type="submit" name="action" value="delete_task" class="btn btn-danger"
                     title="Permanently delete this task">Delete task</button>
           </span>
@@ -276,6 +284,10 @@
                         title="Crop the image">Crop!</button>
               </div>
             </div>
+          </div>
+
+          <div id="rawConfig" class="collapse collapsed">
+            {{ form_inspect.raw_config | as_crispy_field }}
           </div>
 
         </fieldset>

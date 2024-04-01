@@ -4,6 +4,8 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit
 from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 
+import json
+
 from .processing import supported_filters, supported_catalogs, supported_templates
 
 
@@ -38,6 +40,11 @@ class TasksFilterForm(forms.Form):
         )
 
 
+class PrettyJSONEncoder(json.JSONEncoder):
+    def __init__(self, *args, indent, sort_keys, **kwargs):
+        super().__init__(*args, indent=4, sort_keys=False, **kwargs)
+
+
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
     target = forms.CharField(max_length=50, required=False, empty_value=None, label="Target name or coordinates")
@@ -46,6 +53,8 @@ class TaskInspectForm(forms.Form):
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
     mask_cosmics = forms.BooleanField(initial=True, required=False, label="Mask cosmics")
     inspect_bg = forms.BooleanField(initial=False, required=False, label="Inspect background")
+
+    raw_config = forms.JSONField(initial=False, required=False, label="Raw config JSON", encoder=PrettyJSONEncoder)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
