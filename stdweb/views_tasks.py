@@ -50,7 +50,7 @@ def tasks(request, id=None):
 
         all_forms = {}
 
-        all_forms['inspect'] = forms.TaskInspectForm(request.POST or None, initial = task.config)
+        all_forms['inspect'] = forms.TaskInspectForm(request.POST or None, initial = task.config | {'raw_config': task.config})
         all_forms['photometry'] = forms.TaskPhotometryForm(request.POST or None, initial = task.config)
         all_forms['subtraction'] = forms.TaskSubtractionForm(request.POST or None, initial = task.config)
 
@@ -75,11 +75,16 @@ def tasks(request, id=None):
                         ignored_fields = [
                             'form_type',
                             'crop_x1', 'crop_y1', 'crop_x2', 'crop_y2',
+                            'raw_config',
                         ]
                         if name not in ignored_fields:
                             if name in form.changed_data or name not in task.config:
                                 # update only changed or new fields
                                 task.config[name] = value
+
+                    # Special handling for raw config field
+                    if 'raw_config' in form.changed_data:
+                        task.config.update(form.cleaned_data.get('raw_config'))
 
                     task.save()
 
