@@ -16,6 +16,9 @@ import requests
 from astropy.table import Table
 from astropy.io import fits
 from astropy.time import Time
+from astropy.wcs import WCS
+
+from stdpipe import astrometry
 
 from . import models
 from . import forms
@@ -38,6 +41,7 @@ def skyportal_resolve_source(ra, dec, sr=30/3600, api_token=settings.SKYPORTAL_T
 
     return None
 
+
 def skyportal_get_instruments(api_token=settings.SKYPORTAL_TOKEN):
     if api_token is not None:
         headers = {'Authorization': f'token {api_token}'}
@@ -53,6 +57,7 @@ def skyportal_get_instruments(api_token=settings.SKYPORTAL_TOKEN):
             return json['data']
 
     return []
+
 
 def skyportal_upload_photometry(
         sid,
@@ -97,6 +102,41 @@ def skyportal_upload_photometry(
 
     return res.json()
 
+
+def skyportal_resolve_task(task):
+    # Guess some coordinates relevant for the task
+    if 'target_ra' in task.config and 'target_dec' in task.config:
+        ra = task.config.get('target_ra')
+        dec = task.config.get('target_dec')
+
+    else:
+        try:
+            filename = f"tasks/{task.id}/image.fits"
+            wcsname = f"tasks/{task.id}/image.wcs"
+
+            header = fits.getheader(filename)
+            if os.path.exists(wcsname):
+                wcs = WCS(fits.getheader(wcsname))
+                astrometry.clear_wcs(header)
+                header += wcs.to_header(relax=True)
+
+            ra,dec,sr = astrometry.get_frame_center(header=header)
+
+        except:
+            raise RuntimeError("Task has no target coordinates")
+
+    # Try resolving using increasing cone search radius
+    for sr in [10/3600, 30/3600, 1/60, 10/60, 30/60]:
+        sid = skyportal_resolve_source(ra, dec, sr=sr)
+        if sid is not None:
+            break
+
+    if sid is None:
+        raise RuntimeError(f"Cannot resolve SkyPortal source at or around RA={ra:.4f} Dec={dec:.4f}")
+
+    return ra, dec, sid
+
+
 def skyportal(request):
     context = {}
 
@@ -135,37 +175,30 @@ def skyportal(request):
 
                     ctask['name'] = task.original_name
                     ctask['title'] = task.title
-                    ctask['ra'] = task.config.get('target_ra')
-                    ctask['dec'] = task.config.get('target_dec')
+                    ctask['ra'], ctask['dec'], ctask['sid'] = skyportal_resolve_task(task)
 
-                    if ctask['ra'] or ctask['dec']:
-                        # Try resolving using increasing cone search radius
-                        for sr in [10/3600, 30/3600, 1/60, 10/60, 30/60]:
-                            sid = skyportal_resolve_source(
-                                ctask['ra'],
-                                ctask['dec'],
-                                sr=sr,
-                            )
-                            if sid is not None:
-                                break
-
-                        if sid is None:
-                                raise RuntimeError(f"Cannot resolve SkyPortal source at RA={ctask['ra']:.4f} Dec={ctask['dec']:.4f}")
-
-                    else:
-                        raise RuntimeError("Task has no target coordinates")
-
-                    ctask['sid'] = sid
-
-                    filename = f"tasks/{id}/target.vot"
                     try:
-                        tobj = Table.read(filename)
+                        filename = f"tasks/{id}/target.vot"
+
+                        if os.path.exists(filename):
+                            tobj = Table.read(filename)
+                            row = tobj[0]
+                            fname = row['mag_filter_name']
+
+                            if row['mag_calib_err'] < 1/5:
+                                mag = row['mag_calib']
+                                magerr = row['mag_calib_err']
+                            else:
+                                mag = None
+                                magerr = None
+                            mag_limit = row['mag_limit']
+                        else:
+                            fname = task.config['cat_col_mag']
+                            mag = None
+                            magerr = None
+                            mag_limit = task.config['mag_limit']
                     except:
                         raise RuntimeError('Cannot load target measurements')
-
-                    row = tobj[0]
-
-                    fname = row['mag_filter_name']
 
                     magsys = 'vega' if fname in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag'] else 'ab'
                     fname = {
@@ -184,24 +217,19 @@ def skyportal(request):
                     if 'time' in task.config and task.config['time']:
                         time = Time(task.config['time'])
                     else:
-
                         raise RuntimeError('Cannot get image time')
 
                     ctask['mjd'] = time.mjd
                     ctask['filter'] = fname
                     ctask['magsys'] = magsys
-                    if row['mag_calib_err'] < 1/5:
-                        ctask['mag'] = row['mag_calib']
-                        ctask['magerr'] = row['mag_calib_err']
-                    else:
-                        ctask['mag'] = None
-                        ctask['magerr'] = None
-                    ctask['limit'] = row['mag_limit']
+                    ctask['mag'] = mag
+                    ctask['magerr'] = magerr
+                    ctask['limit'] = mag_limit
 
                     if action == 'upload':
                         res = skyportal_upload_photometry(
                             # 'test_source_stdpipe',
-                            sid,
+                            ctask['sid'],
                             instrument=instrument,
                             mjd=ctask['mjd'],
                             mag=ctask['mag'],
