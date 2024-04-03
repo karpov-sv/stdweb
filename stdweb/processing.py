@@ -945,7 +945,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         plots.plot_detection_limit(obj, mag_name=config['cat_col_mag'], sn=config.get('sn', 3), ax=ax)
 
     # Target forced photometry
-    if config.get('targets') is not None:
+    if config.get('targets'):
         log("\n---- Primary and secondary targets forced photometry ----\n")
 
         target_obj = Table({
