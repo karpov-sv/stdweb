@@ -82,10 +82,6 @@ def tasks(request, id=None):
                                 # update only changed or new fields
                                 task.config[name] = value
 
-                    # Special handling for raw config field
-                    if 'raw_config' in form.changed_data:
-                        task.config.update(form.cleaned_data.get('raw_config'))
-
                     task.save()
 
                 # Handle actions
@@ -117,6 +113,14 @@ def tasks(request, id=None):
 
                     messages.success(request, "Cropped the image for task " + str(id))
                     # Now we have to cleanup, which will be handled below
+
+                if action == 'update_config':
+                    if 'raw_config' in form.changed_data:
+                        task.config.update(form.cleaned_data.get('raw_config'))
+                        task.save()
+                        messages.success(request, f"Config for task {str(id)} updated")
+                    else:
+                        messages.success(request, f"Config for task {str(id)} unchanged")
 
                 if action == 'make_custom_mask':
                     return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id}))
