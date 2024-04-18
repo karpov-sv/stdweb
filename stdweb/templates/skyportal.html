@@ -30,6 +30,9 @@
                 MJD <b>{{ task.mjd|floatformat:6 }}</b>
                 Filter <b>{{ task.filter }}</b> (<b>{{ task.magsys }}</b>)
                 {% if task.mag %}
+                  {% if task.is_diff %}
+                    Diff
+                  {% endif %}
                   Mag <b>{{ task.mag|floatformat:2 }}</b> +/- <b>{{ task.magerr|floatformat:2 }}</b>
                 {% endif %}
                 Limit <b>{{ task.limit|floatformat:2 }}</b>

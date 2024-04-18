@@ -178,7 +178,15 @@ def skyportal(request):
                     ctask['ra'], ctask['dec'], ctask['sid'] = skyportal_resolve_task(task)
 
                     try:
-                        filename = f"tasks/{id}/target.vot"
+                        for sname in ['sub_target.vot', 'target.vot']:
+                            filename = f"tasks/{id}/{sname}"
+                            if os.path.exists(filename):
+                                if sname == 'sub_target.vot':
+                                    ctask['is_diff'] = True
+                                else:
+                                    ctask['is_diff'] = False
+
+                                break
 
                         if os.path.exists(filename):
                             tobj = Table.read(filename)

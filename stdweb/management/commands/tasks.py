@@ -114,7 +114,11 @@ class Command(BaseCommand):
             print(f"mjd,mag,magerr,limiting_mag,magsys,filter")
 
             for name in options['names']:
-                filename = f"tasks/{name}/target.vot"
+                for sname in ['sub_target.vot', 'target.vot']:
+                    filename = f"tasks/{name}/{sname}"
+                    if os.path.exists(filename):
+                        break
+
                 tobj = Table.read(filename)
                 cutout = cutouts.load_cutout(filename.replace('.vot', '.cutout'))
                 meta = cutout['meta']
