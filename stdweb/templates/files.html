@@ -84,42 +84,45 @@
           {% csrf_token %}
           <button class="btn btn-danger" type="submit">Process this file</button>
           <input type="hidden" name="path" value="{{ path }}"/>
+
+          {% for hdu in fitsfile %}
+            <div>
+              <!-- Full FITS header -->
+              <div class="card mb-2">
+                <h5 class="card-header pt-2 pb-2 collapse-chevron collapsed"
+                    data-bs-toggle="collapse" data-bs-target="#collapseHeader{{ forloop.counter0 }}"
+                    aria-expanded="false"
+                    aria-controls="collapseHeader{{ forloop.counter0 }}">
+                  {{ hdu.name }}
+                  <span class="float-right"><i class="fa fa-list"></i> </span>
+                </h5>
+
+                <div class="collapse {% if hdu.data is none %}show{% endif %}" id="collapseHeader{{ forloop.counter0 }}">
+                  <div class="card-body pr-2 pl-2 pt-2 pb-2">
+                    <pre>{{ hdu.header | header_to_string }}</pre>
+                  </div>
+                </div>
+              </div>
+
+              {% if hdu.data is not none %}
+                {% if fitsfile|length > 1 %}
+                  <button class="btn btn-warning" type="submit" name="ext" value="{{ forloop.counter0 }}">Process this extension</button>
+                {% endif %}
+                <div class="text-center">
+                  <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"
+                       class="img-fluid img-thumbnail stdview-image"
+                       data-stretch
+                       data-grid
+                       data-zoom
+                       alt="{{ path }}"/>
+                </div>
+              {% endif %}
+
+            </div>
+          {% endfor %}
+
         </form>
       </div>
-
-
-      {% for hdu in fitsfile %}
-        <div>
-          <!-- Full FITS header -->
-          <div class="card mb-2">
-            <h5 class="card-header pt-2 pb-2 collapse-chevron collapsed"
-                data-bs-toggle="collapse" data-bs-target="#collapseHeader{{ forloop.counter0 }}"
-                aria-expanded="false"
-                aria-controls="collapseHeader{{ loop.index0 }}">
-              {{ hdu.name }}
-              <span class="float-right"><i class="fa fa-list"></i> </span>
-            </h5>
-
-            <div class="collapse {% if hdu.data is none %}show{% endif %}" id="collapseHeader{{ forloop.counter0 }}">
-              <div class="card-body pr-2 pl-2 pt-2 pb-2">
-                <pre>{{ hdu.header | header_to_string }}</pre>
-              </div>
-            </div>
-          </div>
-
-          {% if hdu.data is not none %}
-            <div class="text-center">
-              <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"
-                   class="img-fluid img-thumbnail stdview-image"
-                   data-stretch
-                   data-grid
-                   data-zoom
-                   alt="{{ path }}"/>
-            </div>
-          {% endif %}
-
-        </div>
-      {% endfor %}
 
     {% elif mode == 'cutout' %}
 

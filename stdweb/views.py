@@ -320,6 +320,7 @@ def upload_file(request):
 def reuse_file(request, base=settings.DATA_PATH):
     if request.method == 'POST':
         path = request.POST.get('path')
+        ext = request.POST.get('ext')
         path = sanitize_path(path)
 
         fullpath = os.path.join(base, path)
@@ -333,12 +334,19 @@ def reuse_file(request, base=settings.DATA_PATH):
         except OSError:
             pass
 
-        shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
+        if ext is None:
+            shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
+            messages.success(request, "File copied as task " + str(task.id))
+
+        else:
+            ext = int(ext[0])
+            image = fits.getdata(fullpath, ext)
+            header = fits.getheader(fullpath, ext)
+            fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
+            messages.success(request, f"Extension {ext} copied as task " + str(task.id))
 
         task.state = 'copied'
         task.save()
-
-        messages.success(request, "File copied as task " + str(task.id))
 
         return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 
