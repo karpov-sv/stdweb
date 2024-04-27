@@ -247,6 +247,14 @@
                     aria-controls="cropControls"
                     title="Crop the image">Crop&nbsp;</button>
 
+            <!-- Non-linearity hide/show -->
+            <button type="button" class="btn btn-light collapse-chevron collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#nonlinControls"
+                    aria-expanded="false"
+                    aria-controls="nonlinControls"
+                    title="Crop the image">Non-linearity&nbsp;</button>
+
             <!-- Raw config hide/show -->
             <button type="button" class="btn btn-light collapse-chevron collapsed"
                     data-bs-toggle="collapse"
@@ -289,6 +297,25 @@
             </div>
           </div>
 
+          <!-- Non-linearity -->
+          <div id="nonlinControls" class="collapse collapsed">
+            <div class="row align-items-end">
+              <div class="col">
+                <label for="nonlin_slope" class="form-label">
+                  Power-law slope for pixel conversion (value = orig_value ** slope)
+                </label>
+                <input type="number" class="form-control" name="nonlin_slope" id="nonlin_slope"
+                       min="0.5" max="2" step="any" value="0.95"
+                       title="Values slightly smaller than 1 correct for positive photometric slopes, larger - for negative"/>
+              </div>
+              <div class="col">
+                <button type="submit" name="action" value="nonlin_image" class="btn btn-warning"
+                        title="Transform the image">Transform!</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw JSON config -->
           <div id="rawConfig" class="collapse collapsed">
             {{ form_inspect.raw_config | as_crispy_field }}
             <button type="submit" name="action" value="update_config" class="btn btn-warning"

@@ -279,6 +279,28 @@ def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=Tru
     fits.writeto(filename, image, header, overwrite=True)
 
 
+def nonlin_image(filename, config, slope=1.0, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    image,header = fits.getdata(filename, -1), fits.getheader(filename, -1)
+
+    # Sanitize input
+    try:
+        slope = float(slope)
+    except:
+        slope = 1.0
+
+    # Transform
+    idx = np.isfinite(image) & (image > 0)
+    image[idx] = image[idx] ** slope
+
+    # Write cropped image and header back
+    fits.writeto(filename, image, header, overwrite=True)
+
+
 def inspect_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
