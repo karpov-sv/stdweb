@@ -914,9 +914,12 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Apply photometry to objects
     # (It should already be done in calibrate_photometry(), but let's be verbose
-    obj['mag_calib'] = obj['mag'] + m['zero_fn'](obj['x'], obj['y'], obj['mag'])
-    obj['mag_calib_err'] = np.hypot(obj['magerr'],
-                                    m['zero_fn'](obj['x'], obj['y'], obj['mag'], get_err=True))
+    zp = m['zero_fn'](obj['x'], obj['y'], obj['mag'])
+    zp_err = m['zero_fn'](obj['x'], obj['y'], obj['mag'], get_err=True)
+    obj['mag_calib'] = obj['mag'] + zp
+    obj['mag_calib_err'] = np.hypot(obj['magerr'], zp_err)
+
+    log(f"Mean zero point is {np.mean(zp):.3f}, estimated error {np.mean(zp_err):.2g}")
 
     obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
     log("Measured objects stored to file:objects.vot")
