@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.db.models import Q
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.cache import cache_page
 from django.conf import settings
 
@@ -181,6 +182,9 @@ def tasks(request, id=None):
 
         return TemplateResponse(request, 'task.html', context=context)
     else:
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.path)
+
         # List all tasks
         tasks = models.Task.objects.all()
         tasks = tasks.order_by('-created')
