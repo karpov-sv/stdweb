@@ -8,6 +8,18 @@
 
 {% block title %}Tasks{% endblock %}
 
+{% block head %}
+  <script language="javascript">
+   // Submit the form on changing the checkbox
+   $(function(){
+     $('#id_show_all').on('change', function(){
+       $(this).closest('form').submit();
+     });
+   });
+
+  </script>
+{% endblock %}
+
 {% block content %}
 
   <div>
