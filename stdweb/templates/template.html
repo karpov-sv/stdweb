@@ -64,7 +64,7 @@
             <li class="nav-item">
               <a class="nav-link {% if request.resolver_match.view_name == 'tasks' %}active{% endif %}" href="{% url 'tasks' %}">Tasks</a>
             </li>
-            {% if perms.stdweb.skyportal_upload %}
+            {% if perms.stdweb.skyportal_upload and settings.SKYPORTAL_TOKEN %}
               <li class="nav-item">
                 <a class="nav-link" href="{% url 'skyportal' %}">SkyPortal Upload</a>
               </li>
