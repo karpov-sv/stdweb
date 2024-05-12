@@ -136,7 +136,7 @@ def skyportal_resolve_task(task):
 
     return ra, dec, sid
 
-
+@login_required
 def skyportal(request):
     context = {}
 
