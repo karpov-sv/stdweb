@@ -3,7 +3,7 @@
 }
 
 .stdview-image-overlay {
-    background: white;
+    background: var(--bs-body-bg);
     font-size: 0.8em;
     display: inline-block;
     position: absolute;
@@ -37,7 +37,7 @@
     transform: translate(-50%, -50%);
     opacity: 1.0;
     display: block;
-    background: white;
+    background: var(--bs-body-bg);
     padding: 1em;
     border: 1px dotted red;
 }
@@ -85,7 +85,7 @@
     --bs-popover-max-width: 500px;
     --bs-popover-border-color: var(--bs-info);
     --bs-popover-header-bg: var(--bs-info);
-    --bs-popover-header-color: var(--bs-white);
+    --bs-popover-header-color: var(--bs-body-bg);
     --bs-popover-font-size: 9pt;
     --bs-popover-body-padding-x: 1rem;
     --bs-popover-body-padding-y: .5rem;
