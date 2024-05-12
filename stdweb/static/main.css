@@ -122,6 +122,6 @@
   color: #565656;
 }
 
-/* .navbar { */
-/*     background: linear-gradient(0deg, rgba(100,100,100,0.1) 0%, rgba(255,255,255,0.2) 30%); */
-/* } */
+.table thead th {
+  background-color: #efefef;
+}
