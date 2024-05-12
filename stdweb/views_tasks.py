@@ -167,6 +167,12 @@ def tasks(request, id=None):
 
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
+        # Target cutouts
+        context['target_cutouts'] = [os.path.join('targets', os.path.split(_)[1]) for _ in sorted(glob.glob(os.path.join(path, 'targets', '*.cutout')))]
+        if not context['target_cutouts']:
+            # Fallback to legacy path
+            context['target_cutouts'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, 'target.cutout'))]
+
         # Additional info
         context['supported_filters'] = processing.supported_filters
         context['supported_catalogs'] = processing.supported_catalogs

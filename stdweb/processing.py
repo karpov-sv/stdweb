@@ -139,7 +139,7 @@ files_photometry = [
     'photometry.pickle',
     'objects.vot', 'cat.vot',
     'limit_hist.png', 'limit_sn.png',
-    'target.vot', 'target.cutout'
+    'target.vot', 'target.cutout', 'targets'
 ]
 
 files_subtraction = [
@@ -466,10 +466,12 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     if config.get('target'):
         config['targets'] = []
-        for target_name in config['target'].splitlines():
+        for i,target_name in enumerate(config['target'].splitlines()):
             target = {'name': target_name.strip()}
+            target_title = "Primary target" if i == 0 else f"Secondary target {i}"
+
             if target_name:
-                log(f"{'Primary' if not len(config['targets']) else 'Secondary'} target is {target['name']}")
+                log(f"{target_title} is {target['name']}")
                 try:
                     coords = resolve.resolve(target['name'])
                     target['ra'] = coords.ra.deg
@@ -503,9 +505,9 @@ def inspect_image(filename, config, verbose=True, show=False):
                     cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
                     fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
                     log(f"Primary target is at x={x0:.1f} y={y0:.1f}")
-                    log("Target cutout written to file:image_target.fits")
+                    log("Primary target cutout written to file:image_target.fits")
                 else:
-                    log("Target is outside the image")
+                    log("Primary target is outside the image")
                     log(f"{x0} {y0}")
             except:
                 pass
@@ -1023,29 +1025,44 @@ def photometry_image(filename, config, verbose=True, show=False):
         target_obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
         log("Measured targets stored to file:target.vot")
 
-        # Create the cutout from image based on the candidate
-        cutout = cutouts.get_cutout(image, target_obj[0], 30, mask=mask, header=header, time=time)
-        # Cutout from relevant HiPS survey
-        if target_obj['dec'][0] > -30:
-            cutout['template'] = templates.get_hips_image('PanSTARRS/DR1/r', header=cutout['header'])[0]
-        else:
-            cutout['template'] = templates.get_hips_image('CDS/P/skymapper-R', header=cutout['header'])[0]
+        # Create the cutouts from image based on the targets
+        for i,tobj in enumerate(target_obj):
+            cutout_name = f"targets/target_{i:04d}.cutout"
+            target_title = "Primary target" if i == 0 else f"Secondary target {i}"
 
-        cutouts.write_cutout(cutout, os.path.join(basepath, 'target.cutout'))
-        log("Primary target cutouts stored to file:target.cutout")
+            if (not np.isfinite(tobj['x']) or not np.isfinite(tobj['y']) or
+                tobj['x'] < 0 or tobj['y'] < 0 or
+                tobj['x'] > image.shape[1] or tobj['y'] > image.shape[0]):
+                log(f"{target_title} is outside image, skipping")
+                continue
 
-        log(f"Primary target flux is {target_obj['flux'][0]:.1f} +/- {target_obj['fluxerr'][0]:.1f} ADU")
-        if target_obj['flux'][0] > 0:
-            mag_string = target_obj['mag_filter_name'][0]
-            if 'mag_color_name' in target_obj.colnames and 'mag_color_term' in target_obj.colnames and target_obj['mag_color_term'][0] is not None:
-                sign = '-' if target_obj['mag_color_term'][0] > 0 else '+'
-                mag_string += f" {sign} {np.abs(target_obj['mag_color_term'][0]):.2f}*({target_obj['mag_color_name'][0]})"
+            cutout = cutouts.get_cutout(image, tobj, 30, mask=mask, header=header, time=time)
+            # Cutout from relevant HiPS survey
+            if tobj['dec'] > -30:
+                cutout['template'] = templates.get_hips_image('PanSTARRS/DR1/r', header=cutout['header'])[0]
+            else:
+                cutout['template'] = templates.get_hips_image('CDS/P/skymapper-R', header=cutout['header'])[0]
 
-            log(f"Primary target magnitude is {mag_string} = {target_obj['mag_calib'][0]:.2f} +/- {target_obj['mag_calib_err'][0]:.2f}")
-            log(f"Primary target detected with S/N = {1/target_obj['mag_calib_err'][0]:.2f}")
+            try:
+                os.makedirs(os.path.join(basepath, 'targets'))
+            except OSError:
+                pass
 
-        else:
-            log("Primary target not detected")
+            cutouts.write_cutout(cutout, os.path.join(basepath, cutout_name))
+            log(f"{target_title} cutouts stored to file:{cutout_name}")
+
+            log(f"{target_title} flux is {tobj['flux']:.1f} +/- {tobj['fluxerr']:.1f} ADU")
+            if tobj['flux'] > 0:
+                mag_string = tobj['mag_filter_name']
+                if 'mag_color_name' in target_obj.colnames and 'mag_color_term' in target_obj.colnames and tobj['mag_color_term'] is not None:
+                    sign = '-' if tobj['mag_color_term'] > 0 else '+'
+                    mag_string += f" {sign} {np.abs(tobj['mag_color_term']):.2f}*({tobj['mag_color_name']})"
+
+                log(f"{target_title} magnitude is {mag_string} = {tobj['mag_calib']:.2f} +/- {tobj['mag_calib_err']:.2f}")
+                log(f"{target_title} detected with S/N = {1/tobj['mag_calib_err']:.2f}")
+
+            else:
+                log(f"{target_title} not detected")
 
 
 def subtract_image(filename, config, verbose=True, show=False):

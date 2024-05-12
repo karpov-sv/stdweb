@@ -429,7 +429,7 @@
     {% endif %}
 
     <!-- Target cutout -->
-    {% if 'target.cutout' in files %}
+    {% if target_cutouts %}
       <hr>
       <h3>
         Target in direct image
@@ -444,9 +444,11 @@
         </span>
       </h3>
 
-      <div class="text-center">
-        {% include "task_block_image.html" with cutout='target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
-      </div>
+      {% for cutout in target_cutouts %}
+        <div class="text-center">
+          {% include "task_block_image.html" with cutout=cutout task=task ra=task.config.target_ra dec=task.config.target_dec only %}
+        </div>
+      {% endfor %}
 
     {% endif %}
 
