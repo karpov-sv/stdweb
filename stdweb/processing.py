@@ -189,6 +189,31 @@ def pickle_from_file(filename):
         return pickle.load(f)
 
 
+def get_wcs(filename, header=None, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    # Load the WCS from separate file, if it exists
+    if os.path.exists(os.path.join(basepath, "image.wcs")):
+        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
+
+        if header is not None:
+            # Update the header in-place with this new solution
+            astrometry.clear_wcs(header)
+            header += wcs.to_header(relax=True) # in-place update
+
+        log("WCS loaded from file:image.wcs")
+    else:
+        if header is None:
+            header = fits.getheader(filename, -1)
+        wcs = WCS(header)
+        log("Using original WCS from FITS header")
+
+    return wcs
+
+
 def fix_header(header, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -438,14 +463,7 @@ def inspect_image(filename, config, verbose=True, show=False):
             ax.set_title(f"Background RMS: median {np.median(bg.rms()):.2f} RMS {np.std(bg.rms()):.2f}")
 
     # WCS
-    if os.path.exists(os.path.join(basepath, "image.wcs")):
-        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
-        astrometry.clear_wcs(header)
-        header += wcs.to_header(relax=True)
-        log("WCS loaded from file:image.wcs")
-    else:
-        wcs = WCS(header)
-        log("Using original WCS from FITS header")
+    wcs = get_wcs(filename, header=header, verbose=verbose)
 
     if wcs and wcs.is_celestial:
         ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, width=image.shape[1], height=image.shape[0])
@@ -728,16 +746,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         else:
             log("Blind matching failed")
 
-    elif os.path.exists(os.path.join(basepath, "image.wcs")):
-        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
-        astrometry.clear_wcs(header)
-        header += wcs.to_header(relax=True)
-        log("WCS loaded from image.wcs")
-
     else:
-        wcs = WCS(header)
-        log("Using original WCS from FITS header")
-
+        wcs = get_wcs(filename, header=header, verbose=verbose)
 
     if wcs is None or not wcs.is_celestial:
         raise RuntimeError('No WCS astrometric solution')
@@ -820,7 +830,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             astrometry.clear_wcs(header)
             header += wcs.to_header(relax=True)
             config['refine_wcs'] = False
-            log("Refined WCS stored to image.wcs")
+            log("Refined WCS stored to file:image.wcs")
 
     log("\n---- Photometric calibration ----\n")
 
@@ -1102,14 +1112,7 @@ def subtract_image(filename, config, verbose=True, show=False):
     cat = Table.read(os.path.join(basepath, 'cat.vot'))
 
     # WCS
-    if os.path.exists(os.path.join(basepath, "image.wcs")):
-        wcs = WCS(fits.getheader(os.path.join(basepath, "image.wcs")))
-        astrometry.clear_wcs(header)
-        header += wcs.to_header(relax=True)
-        log("WCS loaded from image.wcs")
-    else:
-        wcs = WCS(header)
-        log("Using original WCS from FITS header")
+    wcs = get_wcs(filename, header=header, verbose=verbose)
 
     if wcs is None or not wcs.is_celestial:
         raise RuntimeError('No WCS astrometric solution')
