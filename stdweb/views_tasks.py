@@ -181,13 +181,6 @@ def tasks(request, id=None):
                 {'path': 'target.cutout', 'ra': task.config['target_ra'], 'dec': task.config['target_dec']}
             )
 
-        if 'targets' in task.config:
-            context['targets_ra'] = [_['ra'] for _ in task.config['targets']]
-            context['targets_dec'] = [_['dec'] for _ in task.config['targets']]
-        else:
-            context['targets_ra'] = [task.config['target_ra']]
-            context['targets_dec'] = [task.config['target_dec']]
-
         # Additional info
         context['supported_filters'] = processing.supported_filters
         context['supported_catalogs'] = processing.supported_catalogs
