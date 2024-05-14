@@ -437,7 +437,7 @@
 
       {% for cutout in target_cutouts %}
         <div class="text-center">
-          {% include "task_block_image.html" with image=cutout task=task ra=task.config.target_ra dec=task.config.target_dec only %}
+          {% include "task_block_image.html" with image=cutout.path task=task ra=cutout.ra dec=cutout.dec only %}
         </div>
       {% endfor %}
 

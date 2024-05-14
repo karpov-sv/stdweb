@@ -168,10 +168,25 @@ def tasks(request, id=None):
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
         # Target cutouts
-        context['target_cutouts'] = [os.path.join('targets', os.path.split(_)[1]) for _ in sorted(glob.glob(os.path.join(path, 'targets', '*.cutout')))]
-        if not context['target_cutouts']:
+        context['target_cutouts'] = []
+        if os.path.exists(os.path.join(path, 'targets')):
+            for i,target in enumerate(task.config['targets']):
+                if os.path.exists(os.path.join(path, f"targets/target_{i:04d}.cutout")):
+                    context['target_cutouts'].append(
+                        {'path': f"targets/target_{i:04d}.cutout", 'ra': target['ra'], 'dec': target['dec']}
+                    )
+        elif os.path.exists(os.path.join(path, 'targets')):
             # Fallback to legacy path
-            context['target_cutouts'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, 'target.cutout'))]
+            context['target_cutouts'].append(
+                {'path': 'target.cutout', 'ra': task.config['target_ra'], 'dec': task.config['target_dec']}
+            )
+
+        if 'targets' in task.config:
+            context['targets_ra'] = [_['ra'] for _ in task.config['targets']]
+            context['targets_dec'] = [_['dec'] for _ in task.config['targets']]
+        else:
+            context['targets_ra'] = [task.config['target_ra']]
+            context['targets_dec'] = [task.config['target_dec']]
 
         # Additional info
         context['supported_filters'] = processing.supported_filters

@@ -239,6 +239,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
         # Show the position of the object
+        ra = [float(_) for _ in request.GET.get('ra').split(',')]
+        dec = [float(_) for _ in request.GET.get('dec').split(',')]
 
         # Special handling of external WCS solution in .wcs file alongside with image
         wcsname = os.path.splitext(fullpath)[0] + '.wcs'
@@ -248,8 +250,10 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
             header = fits.getheader(fullpath, ext)
         wcs = WCS(header)
         if wcs is not None and wcs.is_celestial:
-            x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
-            ax.add_artist(Circle((x, y), 5.0, edgecolor='red', facecolor='none', ls='-', lw=2))
+            x,y = wcs.all_world2pix(ra, dec, 0)
+            for xx,yy in zip(x,y):
+                if xx > 0 and xx < data.shape[1] and yy > 0 and yy < data.shape[0]:
+                    ax.add_artist(Circle((xx, yy), 5.0, edgecolor='red', facecolor='none', ls='-', lw=2))
 
     if request.GET.get('obj'):
         # Overplot list of objects from the file

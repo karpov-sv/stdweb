@@ -91,3 +91,7 @@ def to_sexadecimal_plus(value):
 @register.filter
 def to_sexadecimal_hours(value):
     return to_sexadecimal(value*1.0/15)
+
+@register.filter
+def list_extract(value, key):
+    return [_[key] for _ in value]
