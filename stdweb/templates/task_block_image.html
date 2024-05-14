@@ -1,15 +1,27 @@
 {% load filters %}
 <figure class="figure mb-2">
 
-  {% if fits %}
+  {% if fits or '.fits' in image %}
 
     <!-- FITS files -->
-    <img src="{% url 'task_preview' task.id fits %}?width=256&timestamp={{ task.completed|unix }}"
+    <img src="{% url 'task_preview' task.id image %}?width=256&timestamp={{ task.completed|unix }}"
          class="figure-img img-fluid rounded mb-0" style="max-width: 256px;"
-         onclick="popupImage(event, '{% url 'task_preview' task.id fits %}?timestamp={{ task.modified|unix }}', '{{ fits }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.target_ra or task.config.target_dec %}'data-mark-ra':{{ task.config.target_ra }}, 'data-mark-dec':{{ task.config.target_dec }},{% endif %} 'data-grid':1, 'data-zoom':1, {% if obj %}'data-obj':1,{%endif %}})"/>
+         onclick="popupImage(event, '{% url 'task_preview' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.target_ra or task.config.target_dec %}'data-mark-ra':{{ task.config.target_ra }}, 'data-mark-dec':{{ task.config.target_dec }},{% endif %} 'data-grid':1, 'data-zoom':1, {% if obj %}'data-obj':1,{%endif %}})"/>
 
     <figcaption class="figure-caption text-center mt-0 mb-3">
-      <small><a href="{% url 'task_download' task.id fits %}">{{ fits }}</a></small>
+      <small><a href="{% url 'task_download' task.id image %}">{{ image }}</a></small>
+    </figcaption>
+
+  {% elif cutout or '.cutout' in image %}
+
+    <!-- Cutout -->
+    <img src="{% url 'task_cutout' task.id image %}?timestamp={{ task.completed|unix }}&format=png"
+         class="figure-img img-fluid rounded mb-0 stdview-image"
+         data-stretch=1 data-mark-ra={{ ra }} data-mark-dec={{ dec }}
+         />
+
+    <figcaption class="figure-caption text-center mt-0 mb-3">
+      <small><a href="{% url 'task_download' task.id image %}">{{ image }}</a></small>
     </figcaption>
 
   {% elif image %}
@@ -21,18 +33,6 @@
 
     <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_view' task.id image %}">{{ image }}</a></small>
-    </figcaption>
-
-  {% elif cutout %}
-
-    <!-- Cutout -->
-    <img src="{% url 'task_cutout' task.id cutout %}?timestamp={{ task.completed|unix }}&format=png"
-         class="figure-img img-fluid rounded mb-0 stdview-image"
-         data-stretch=1 data-mark-ra={{ ra }} data-mark-dec={{ dec }}
-         />
-
-    <figcaption class="figure-caption text-center mt-0 mb-3">
-      <small><a href="{% url 'task_download' task.id cutout %}">{{ cutout }}</a></small>
     </figcaption>
 
   {% endif %}

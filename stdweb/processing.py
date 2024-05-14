@@ -133,6 +133,7 @@ files_inspect = [
 files_photometry = [
     'photometry.log',
     'objects.png', 'fwhm.png',
+    'segmentation.fits',
     'photometry.png', 'photometry_unmasked.png',
     'photometry_zeropoint.png', 'photometry_model.png',
     'photometry_residuals.png', 'astrometry_dist.png',
@@ -612,19 +613,26 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log("\n---- Object detection ----\n")
 
-    # Extract objects
-    obj = photometry.get_objects_sextractor(image, mask=mask,
-                                            aper=config.get('initial_aper', 3.0),
-                                            gain=config.get('gain', 1.0),
-                                            extra={'BACK_SIZE': config.get('bg_size', 256)},
-                                            minarea=config.get('minarea', 3),
-                                            r0=config.get('initial_r0', 0.0),
-                                            mask_to_nans=True,
-                                            verbose=verbose,
-                                            _tmpdir=settings.STDPIPE_TMPDIR,
-                                            _exe=settings.STDPIPE_SEXTRACTOR)
+    # Extract objects and get segmentation map
+    obj,segm = photometry.get_objects_sextractor(
+        image, mask=mask,
+        aper=config.get('initial_aper', 3.0),
+        gain=config.get('gain', 1.0),
+        extra={'BACK_SIZE': config.get('bg_size', 256)},
+        extra_params=['NUMBER'],
+        checkimages=['SEGMENTATION'],
+        minarea=config.get('minarea', 3),
+        r0=config.get('initial_r0', 0.0),
+        mask_to_nans=True,
+        verbose=verbose,
+        _tmpdir=settings.STDPIPE_TMPDIR,
+        _exe=settings.STDPIPE_SEXTRACTOR
+    )
 
     log(f"{len(obj)} objects found")
+
+    fits.writeto(os.path.join(basepath, 'segmentation.fits'), segm, header, overwrite=True)
+    log("Segmemtation map written to file:segmentation.fits")
 
     if not len(obj):
         raise RuntimeError('Cannot detect objects in the image')

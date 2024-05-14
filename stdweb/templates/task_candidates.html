@@ -59,7 +59,7 @@
 
       {% for cand in candidates %}
         <div class="text-center">
-          {% include "task_block_image.html" with cutout=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+          {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
         </div>
       {% endfor %}
 

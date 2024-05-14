@@ -337,20 +337,11 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' as list %}
+              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' 'image_bg.png' 'image_rms.png' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with fits=name task=task obj=1 only %}
-                  </div>
-                {% endif %}
-              {% endfor %}
-
-              {% make_list 'image_bg.png' 'image_rms.png' as list %}
-              {% for name in list %}
-                {% if name in files %}
-                  <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with image=name task=task only %}
+                    {% include "task_block_image.html" with image=name task=task obj=1 only %}
                   </div>
                 {% endif %}
               {% endfor %}
@@ -408,11 +399,11 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'objects.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
+              {% make_list 'objects.png' 'segmentation.fits' 'fwhm_mag.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with image=name task=task only %}
+                    {% include "task_block_image.html" with image=name task=task obj=1 only %}
                   </div>
                 {% endif %}
               {% endfor %}
@@ -446,7 +437,7 @@
 
       {% for cutout in target_cutouts %}
         <div class="text-center">
-          {% include "task_block_image.html" with cutout=cutout task=task ra=task.config.target_ra dec=task.config.target_dec only %}
+          {% include "task_block_image.html" with image=cutout task=task ra=task.config.target_ra dec=task.config.target_dec only %}
         </div>
       {% endfor %}
 
@@ -512,7 +503,7 @@
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with fits=name task=task only %}
+                    {% include "task_block_image.html" with image=name task=task only %}
                   </div>
                 {% endif %}
               {% endfor %}
@@ -542,7 +533,7 @@
       </h3>
 
       <div class="text-center">
-        {% include "task_block_image.html" with cutout='sub_target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
+        {% include "task_block_image.html" with image='sub_target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
       </div>
 
     {% endif %}
@@ -570,7 +561,7 @@
 
       {% for cand in candidates|slice:":10" %}
         <div class="text-center">
-          {% include "task_block_image.html" with cutout=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+          {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
         </div>
       {% endfor %}
 
