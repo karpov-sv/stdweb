@@ -156,7 +156,7 @@
       {% if task.celery_id %}
         <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
       {% endif %}
-      <b class="text-{% if task.state == 'failed' %}danger{% elif task.celery_id %}primary{% else %}success{% endif %}">{{ task.state }}</b> on {{ task.modified|timestamp }} - {{ task.modified|naturaltime }}
+      <b class="text-{% if 'failed' in task.state %}danger{% elif task.celery_id %}primary{% else %}success{% endif %}">{{ task.state }}</b> on {{ task.modified|timestamp }} - {{ task.modified|naturaltime }}
       {% if task.celery_id and user_may_submit %}
         <!-- Help popover -->
         <div class="span-help-popover d-inline float-end" title="Task is running">

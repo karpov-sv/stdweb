@@ -33,7 +33,7 @@ def task_cleanup(self, id):
                 os.unlink(path)
 
     # End processing
-    task.state = 'cleaned'
+    task.state = 'cleanup_done'
     task.celery_id = None
     task.complete()
     task.save()
@@ -52,12 +52,12 @@ def task_inspect(self, id):
     # Start processing
     try:
         processing.inspect_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
-        task.state = 'inspected'
+        task.state = 'inspect_done'
     except:
         import traceback
         log("\nError!\n", traceback.format_exc())
 
-        task.state = 'failed'
+        task.state = 'inspect_failed'
         task.celery_id = None
 
     # End processing
@@ -80,7 +80,7 @@ def task_photometry(self, id):
     # Start processing
     try:
         processing.photometry_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
-        task.state = 'photometrized'
+        task.state = 'photometry_done'
     except:
         import traceback
         log("\nError!\n", traceback.format_exc())
@@ -108,12 +108,12 @@ def task_subtraction(self, id):
     # Start processing
     try:
         processing.subtract_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
-        task.state = 'subtracted'
+        task.state = 'subtraction_done'
     except:
         import traceback
         log("\nError!\n", traceback.format_exc())
 
-        task.state = 'failed'
+        task.state = 'subtraction_failed'
         task.celery_id = None
 
     # End processing

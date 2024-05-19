@@ -138,13 +138,13 @@ def tasks(request, id=None):
                 if action == 'cleanup_task' or action == 'crop_image':
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
                     task.config = {} # should we reset the config on cleanup?..
-                    task.state = 'cleaning'
+                    task.state = 'cleanup'
                     task.save()
                     messages.success(request, "Started cleanup for task " + str(id))
 
                 if action == 'inspect_image':
                     task.celery_id = celery_tasks.task_inspect.delay(task.id).id
-                    task.state = 'inspecting'
+                    task.state = 'inspect'
                     task.save()
                     messages.success(request, "Started image inspection for task " + str(id))
 
@@ -293,7 +293,7 @@ def task_mask(request, id=None, path=''):
 
         # Now we need to run image inspection
         task.celery_id = celery_tasks.task_inspect.delay(task.id).id
-        task.state = 'inspecting'
+        task.state = 'inspect'
         task.save()
         messages.success(request, "Started image inspection for task " + str(id))
 
