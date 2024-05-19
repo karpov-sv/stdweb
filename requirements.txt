@@ -12,3 +12,4 @@ astroscrappy
 dill
 astropy<5.3
 reproject
+scikit-learn

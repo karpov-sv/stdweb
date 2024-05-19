@@ -43,13 +43,11 @@
    check_blindmatch_visibility = function(){
      var checked = $('#id_blind_match_wcs').prop('checked');
 
-     for(var name of ['blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_ra0', 'blind_match_dec0', 'blind_match_sr0']){
-       var elem = $('#div_id_' + name);
-       if(checked && elem.is(':hidden')){
-         elem.show();
-       } else if(!checked && elem.is(':visible')){
-         elem.hide();
-       }
+     var elem = $('#blind_match_params_row');
+     if(checked && elem.is(':hidden')){
+       elem.show();
+     } else if(!checked && elem.is(':visible')){
+       elem.hide();
      }
    }
 

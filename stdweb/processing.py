@@ -327,6 +327,93 @@ def nonlin_image(filename, config, slope=1.0, verbose=True):
     fits.writeto(filename, image, header, overwrite=True)
 
 
+def guess_hips_survey(ra, dec, filter_name='R'):
+    survey_filter = filter_mappings.get(filter_name, 'r')[0]
+
+    # TODO: add Legacy Survey?..
+
+    if dec > -30:
+        if survey_filter == 'u':
+            survey_filter = 'g'
+
+        survey = f"PanSTARRS/DR1/{survey_filter}"
+
+    else:
+        survey = f"CDS/P/skymapper-{survey_filter.upper()}"
+
+    return survey
+
+
+from sklearn.ensemble import IsolationForest
+
+def filter_sextractor_detections(obj, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    var1,label1 = obj['FLUX_RADIUS'], 'FLUX_RADIUS'
+    var2,label2 = obj['fwhm'], 'FWHM'
+    var3,label3 = obj['mag']-obj['MAG_AUTO'], 'MAG_APER - MAG_AUTO'
+
+    log("Using isolation forest outline detection over columns ({})".format(
+        ", ".join([label1, label2, label3])
+    ))
+
+     # Exclude blends etc from the fit, as well as broken measurements
+    idx = obj['flags'] == 0
+    idx &= np.isfinite(var1) & (var1 > 0)
+    idx &= np.isfinite(var2) & (var2 > 0)
+    idx &= np.isfinite(var3)
+
+    X = np.array([np.log10(var1), np.log10(var2), var3]).T
+    res = IsolationForest().fit(X[idx])
+    X[~np.isfinite(X)] = -1000 # Definitely outside of the good locus
+    res = res.predict(X)
+
+    log(f"{np.sum(res > 0)} good, {np.sum(res < 0)} outliers")
+
+    return res > 0
+
+from sklearn.cluster import AgglomerativeClustering
+
+def filter_catalogue_blends(cat_in, sr, cat_col_ra='RAJ2000', cat_col_dec='DEJ2000'):
+    x,y,z = astrometry.radectoxyz(cat_in[cat_col_ra], cat_in[cat_col_dec])
+
+    # Cluster into groups using sr radius
+    cids = AgglomerativeClustering(
+        n_clusters=None,
+        distance_threshold=np.deg2rad(sr),
+        linkage='single'
+    ).fit_predict(np.array([x, y, z]).T)
+
+    # Unique clusters
+    uid,uids,urids,ucnt = np.unique(cids, return_index=True, return_inverse=True, return_counts=True)
+
+    # Copy of the catalogue to work on
+    cat = cat_in.copy()
+    cat['__remove__'] = False
+
+    used_blends = np.zeros_like(ucnt, dtype=bool)
+    for i,row in enumerate(cat):
+        uid1 = urids[i]
+
+        if used_blends[uid1]:
+            continue
+
+        used_blends[uid1] = True
+
+        if ucnt[uid1] > 1:
+            row['__remove__'] = True
+        else:
+            pass
+
+    cat = cat[~cat['__remove__']]
+    cat.remove_column('__remove__')
+
+    return cat
+
+
+# Actual processing steps below
+
 def inspect_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -619,7 +706,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         aper=config.get('initial_aper', 3.0),
         gain=config.get('gain', 1.0),
         extra={'BACK_SIZE': config.get('bg_size', 256)},
-        extra_params=['NUMBER'],
+        extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
         checkimages=['SEGMENTATION'],
         minarea=config.get('minarea', 3),
         r0=config.get('initial_r0', 0.0),
@@ -643,10 +730,19 @@ def photometry_image(filename, config, verbose=True, show=False):
     idx = obj['flags'] == 0
     idx &= obj['magerr'] < 1/20
 
-    if not len(obj[idx]):
-        raise RuntimeError("No stars with S/N > 20 in the image!")
+    if config.get('prefilter_detections', True):
+        log("Pre-filtering SExtractor detections with simple shape classifier")
+        fidx = filter_sextractor_detections(obj, verbose=verbose)
+        idx &= fidx
+        # Also store it in the flags to exclude from photometric match later
+        obj['flags'][~fidx] |= 0x400
 
-    fwhm = np.median(obj['fwhm'][idx]) # TODO: make it position-dependent
+    if not len(obj[idx]):
+        raise RuntimeError("No suitable stars with S/N > 20 in the image!")
+
+    fwhm_values = 2.0*obj['FLUX_RADIUS'] # obj['fwhm']
+
+    fwhm = np.median(fwhm_values[idx]) # TODO: make it position-dependent
     log(f"FWHM is {fwhm:.2f} pixels")
 
     if config.get('fwhm_override'):
@@ -658,29 +754,84 @@ def photometry_image(filename, config, verbose=True, show=False):
     # Plot FWHM map
     with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        plots.binned_map(obj[idx]['x'], obj[idx]['y'], obj[idx]['fwhm'], bins=8, statistic='median', show_dots=True, ax=ax)
+        plots.binned_map(
+            obj[idx]['x'], obj[idx]['y'], fwhm_values[idx],
+            range=[[0, image.shape[1]], [0, image.shape[0]]],
+            bins=8, statistic='median',
+            show_dots=True, ax=ax
+        )
         ax.set_aspect(1)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
         # ax.legend()
-        ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
+        ax.set_title(f"FWHM: median {np.median(fwhm_values[idx]):.2f} pix RMS {np.std(fwhm_values[idx]):.2f} pix")
 
     # Plot FWHM vs instrumental
     with plots.figure_saver(os.path.join(basepath, 'fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
         ax = fig.add_subplot(1, 1, 1)
-        ax.plot(obj['fwhm'], obj['mag'], '.', label='All objects')
-        ax.plot(obj['fwhm'][idx], obj['mag'][idx], '.', label='Used for FWHM')
+        ax.plot(fwhm_values, obj['mag'], '.', label='All objects')
+        ax.plot(fwhm_values[idx], obj['mag'][idx], '.', label='Used for FWHM')
 
         ax.axvline(fwhm, ls='--', color='red')
         ax.invert_yaxis()
         ax.legend()
         ax.grid(alpha=0.2)
-        ax.set_title(f"FWHM: median {np.median(obj[idx]['fwhm']):.2f} pix RMS {np.std(obj[idx]['fwhm']):.2f} pix")
+        ax.set_title(f"FWHM: median {np.median(fwhm_values[idx]):.2f} pix RMS {np.std(fwhm_values[idx]):.2f} pix")
         ax.set_xlabel('FWHM, pixels')
         ax.set_ylabel('Instrumental magnitude')
-        ax.set_xlim(0, np.percentile(obj['fwhm'], 98))
+        ax.set_xlim(0, np.percentile(fwhm_values, 98))
 
     log(f"FWHM diagnostic plot stored to file:fwhm_mag.png")
+
+    # Plot pre-filtering diagnostics
+    if config.get('prefilter_detections', True):
+        with plots.figure_saver(os.path.join(basepath, 'prefilter.png'), figsize=(8, 8), show=show) as fig:
+            var1,label1 = obj['FLUX_RADIUS'], 'FLUX_RADIUS'
+            var2,label2 = obj['fwhm'], 'FWHM'
+            var3,label3 = obj['mag']-obj['MAG_AUTO'], 'MAG_APER - MAG_AUTO'
+
+            if len(var1) > 1000:
+                alpha = 0.1
+            elif len(var1) > 100:
+                alpha = 0.3
+            else:
+                alpha = 1
+
+            ax1 = fig.add_subplot(221)
+            ax1.plot(var1[~fidx], var2[~fidx], '.', alpha=alpha)
+            ax1.plot(var1[fidx], var2[fidx], 'r.', alpha=alpha);
+
+            ax1.set_xscale('log')
+            ax1.set_yscale('log')
+
+            ax2 = fig.add_subplot(222, sharey=ax1)
+            ax2.plot(var3[~fidx], var2[~fidx], '.', alpha=alpha)
+            ax2.plot(var3[fidx], var2[fidx], 'r.', alpha=alpha);
+
+            ax3 = fig.add_subplot(223, sharex=ax1)
+            ax3.plot(var1[~fidx], var3[~fidx], '.', alpha=alpha)
+            ax3.plot(var1[fidx], var3[fidx], 'r.', alpha=alpha);
+
+            ax1.grid(alpha=0.2)
+            ax2.grid(alpha=0.2)
+            ax3.grid(alpha=0.2)
+
+            ax1.set_xlabel(label1)
+            ax1.set_ylabel(label2)
+
+            ax2.set_xlabel(label3)
+            ax2.set_ylabel(label2)
+
+            ax3.set_xlabel(label1)
+            ax3.set_ylabel(label3)
+
+            ax1.axhline(fwhm, ls='--', color='gray')
+            ax2.axhline(fwhm, ls='--', color='gray')
+
+            ax1.axvline(fwhm/2, ls='--', color='gray')
+            ax3.axvline(fwhm/2, ls='--', color='gray')
+
+        log("Pre-filtering diagnostic plot stored to file:prefilter.png")
 
     if config.get('rel_bg1') and config.get('rel_bg2'):
         rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
@@ -786,6 +937,13 @@ def photometry_image(filename, config, verbose=True, show=False):
     cat.write(os.path.join(basepath, 'cat.vot'), format='votable', overwrite=True)
     log("Catalogue written to file:cat.vot")
 
+    if config.get('filter_blends', True):
+        # TODO: merge blended stars, not remove them!
+        cat = filter_catalogue_blends(cat, fwhm*pixscale)
+        log(f"{len(cat)} catalogue stars after blend filtering with {3600*fwhm*pixscale:.1f} arcsec radius")
+        # cat.write(os.path.join(basepath, 'cat_filtered.vot'), format='votable', overwrite=True)
+        # log("Filtered catalogue written to file:cat_filtered.vot")
+
     # Catalogue settings
     if config.get('cat_name') == 'gaiadr3syn':
         config['cat_col_mag'] = config['filter'] + 'mag'
@@ -847,16 +1005,18 @@ def photometry_image(filename, config, verbose=True, show=False):
         sr /= 3600 # Arcseconds to degrees
 
     # Photometric calibration
-    m = pipeline.calibrate_photometry(obj, cat, sr=sr, pixscale=pixscale,
-                                      cat_col_mag=config.get('cat_col_mag'),
-                                      cat_col_mag_err=config.get('cat_col_mag_err'),
-                                      cat_col_mag1=config.get('cat_col_color_mag1'),
-                                      cat_col_mag2=config.get('cat_col_color_mag2'),
-                                      use_color=config.get('use_color', True),
-                                      order=config.get('spatial_order', 0),
-                                      robust=True, scale_noise=True,
-                                      accept_flags=0x02, max_intrinsic_rms=0.01,
-                                      verbose=verbose)
+    m = pipeline.calibrate_photometry(
+        obj, cat, sr=sr, pixscale=pixscale,
+        cat_col_mag=config.get('cat_col_mag'),
+        cat_col_mag_err=config.get('cat_col_mag_err'),
+        cat_col_mag1=config.get('cat_col_color_mag1'),
+        cat_col_mag2=config.get('cat_col_color_mag2'),
+        use_color=config.get('use_color', True),
+        order=config.get('spatial_order', 0),
+        robust=True, scale_noise=True,
+        accept_flags=0x02, max_intrinsic_rms=0.01,
+        verbose=verbose
+    )
 
     if m is None:
         raise RuntimeError('Photometric match failed')
@@ -1056,10 +1216,11 @@ def photometry_image(filename, config, verbose=True, show=False):
 
             cutout = cutouts.get_cutout(image, tobj, 30, mask=mask, header=header, time=time)
             # Cutout from relevant HiPS survey
-            if tobj['dec'] > -30:
-                cutout['template'] = templates.get_hips_image('PanSTARRS/DR1/r', header=cutout['header'])[0]
-            else:
-                cutout['template'] = templates.get_hips_image('CDS/P/skymapper-R', header=cutout['header'])[0]
+            cutout['template'] = templates.get_hips_image(
+                guess_hips_survey(tobj['ra'], tobj['dec'], config['filter']),
+                header=cutout['header'],
+                get_header=False
+            )
 
             try:
                 os.makedirs(os.path.join(basepath, 'targets'))
