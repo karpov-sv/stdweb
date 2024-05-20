@@ -1297,6 +1297,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
     log("\n---- Simple catalogue-based transient detection ----\n")
 
+    # Restrict to the cone if center and radius are provided
     if config.get('simple_center') and config.get('simple_sr0'):
         center = resolve.resolve(config.get('simple_center'))
         sr0 = config.get('simple_sr0')
@@ -1305,9 +1306,25 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         obj = obj[dist < sr0]
         log(f"{len(obj)} objects in the region")
 
-    vizier = config.get('simple_vizier', 'ps1 skymapper').split()
+    # Cross-check with objects detected in other tasks
+    if config.get('simple_others'):
+        log("Cross-checking with the objects detected in other tasks")
+        for other in config.get('simple_others', '').split():
+            if other.isdigit():
+                otherpath = os.path.join(basepath, '..', other, 'objects.vot')
+                if not os.path.exists(otherpath):
+                    log(f"Task {other} has no detected objects")
+                else:
+                    obj1 = Table.read(otherpath)
+                    oidx,_,__ = astrometry.spherical_match(obj['ra'], obj['dec'], obj1['ra'], obj1['dec'], 0.5*fwhm*pixscale)
+                    idx = np.in1d(obj['NUMBER'], obj['NUMBER'][oidx])
+                    obj = obj[idx]
+                    log(f"Task {other}: {len(obj1)} objects, {len(obj)} matches")
 
-    log("Using catalogues:", vizier)
+        log(f"{len(obj)} objects after cross-checking")
+
+    # Vizier catalogues to check
+    vizier = config.get('simple_vizier', 'ps1 skymapper').split()
 
     candidates = pipeline.filter_transient_candidates(
         obj,
@@ -1321,6 +1338,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         verbose=verbose
     )
 
+    # Restrict to 100 brightest ones if there are too many
     if len(candidates) > 100:
         candidates = candidates[:100]
         log(f"Warning: too many candidates, limiting to first {len(candidates)}")

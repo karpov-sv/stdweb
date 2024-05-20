@@ -165,6 +165,7 @@ class TaskTransientsSimpleForm(forms.Form):
     form_type = forms.CharField(initial='transients_simple', widget=forms.HiddenInput())
     simple_vizier = forms.CharField(initial="ps1 skymapper", required=False, empty_value=None, label="Vizier catalogues")
     simple_skybot = forms.BooleanField(initial=True, required=False, label="SkyBoT")
+    simple_others = forms.CharField(initial=None, empty_value=None, required=False, label="Task IDs to cross-check")
     simple_center = forms.CharField(required=False, empty_value=None, label="Center position")
     simple_sr0 = forms.FloatField(initial=None, min_value=0, required=False, label="Radius, deg")
 
@@ -178,8 +179,9 @@ class TaskTransientsSimpleForm(forms.Form):
             'form_type',
             Row(
                 Column('simple_vizier', css_class="col-md-4"),
-                Column('simple_skybot', css_class="col-md-3"),
-                Column('simple_center', css_class="col-md-4"),
+                Column('simple_skybot', css_class="col-md-1"),
+                Column('simple_others', css_class="col-md-3"),
+                Column('simple_center', css_class="col-md-3"),
                 Column('simple_sr0', css_class="col-md-1"),
                 css_class='align-items-end'
             ),
