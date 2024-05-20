@@ -85,7 +85,35 @@ def task_photometry(self, id):
         import traceback
         log("\nError!\n", traceback.format_exc())
 
-        task.state = 'failed'
+        task.state = 'photometry_failed'
+        task.celery_id = None
+
+    # End processing
+    task.celery_id = None
+    fix_config(config)
+    task.complete()
+    task.save()
+
+
+@shared_task(bind=True)
+def task_transients_simple(self, id):
+    task = models.Task.objects.get(id=id)
+    basepath = task.path()
+
+    config = task.config
+
+    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'transients_simple.log'))
+    log(clear=True)
+
+    # Start processing
+    try:
+        processing.transients_simple_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+        task.state = 'transients_simple_done'
+    except:
+        import traceback
+        log("\nError!\n", traceback.format_exc())
+
+        task.state = 'transients_simple_failed'
         task.celery_id = None
 
     # End processing

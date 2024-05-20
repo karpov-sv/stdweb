@@ -53,6 +53,7 @@ def tasks(request, id=None):
 
         all_forms['inspect'] = forms.TaskInspectForm(request.POST or None, initial = task.config | {'raw_config': task.config})
         all_forms['photometry'] = forms.TaskPhotometryForm(request.POST or None, initial = task.config)
+        all_forms['transients_simple'] = forms.TaskTransientsSimpleForm(request.POST or None, initial = task.config)
         all_forms['subtraction'] = forms.TaskSubtractionForm(request.POST or None, initial = task.config)
 
         for name,form in all_forms.items():
@@ -154,6 +155,12 @@ def tasks(request, id=None):
                     task.save()
                     messages.success(request, "Started image photometry for task " + str(id))
 
+                if action == 'transients_simple_image':
+                    task.celery_id = celery_tasks.task_transients_simple.delay(task.id).id
+                    task.state = 'transients_simple'
+                    task.save()
+                    messages.success(request, "Started simple transient detection for task " + str(id))
+
                 if action == 'subtract_image':
                     task.celery_id = celery_tasks.task_subtraction.delay(task.id).id
                     task.state = 'subtraction'
@@ -169,13 +176,13 @@ def tasks(request, id=None):
 
         # Target cutouts
         context['target_cutouts'] = []
-        if os.path.exists(os.path.join(path, 'targets')):
+        if os.path.exists(os.path.join(path, 'targets')) and 'targets' in task.config:
             for i,target in enumerate(task.config['targets']):
                 if os.path.exists(os.path.join(path, f"targets/target_{i:04d}.cutout")):
                     context['target_cutouts'].append(
                         {'path': f"targets/target_{i:04d}.cutout", 'ra': target['ra'], 'dec': target['dec']}
                     )
-        elif os.path.exists(os.path.join(path, 'targets')):
+        elif os.path.exists(os.path.join(path, 'target.cutout')):
             # Fallback to legacy path
             context['target_cutouts'].append(
                 {'path': 'target.cutout', 'ra': task.config['target_ra'], 'dec': task.config['target_dec']}
@@ -186,9 +193,13 @@ def tasks(request, id=None):
         context['supported_catalogs'] = processing.supported_catalogs
         context['supported_templates'] = processing.supported_templates
 
+        if 'candidates_simple.vot' in context['files']:
+            candidates_simple = Table.read(os.path.join(path, 'candidates_simple.vot'))
+            if candidates_simple:
+                candidates_simple.sort('flux', reverse=True)
+                context['candidates_simple'] = candidates_simple
+
         if 'candidates.vot' in context['files']:
-            # candidates = sorted(glob.glob(os.path.join(path, 'candidates', '*.cutout')))
-            # context['candidates'] = [os.path.join('candidates', os.path.split(_)[1]) for _ in candidates]
             candidates = Table.read(os.path.join(path, 'candidates.vot'))
             if candidates:
                 candidates.sort('flux', reverse=True)
@@ -306,7 +317,7 @@ def task_mask(request, id=None, path=''):
     return TemplateResponse(request, 'task_mask.html', context=context)
 
 
-def task_candidates(request, id):
+def task_candidates(request, id, filename='candidates.vot'):
     context = {}
 
     task = models.Task.objects.get(id=id)
@@ -316,10 +327,11 @@ def task_candidates(request, id):
 
     context['step'] = request.GET.get('step', 100)
 
-    if os.path.exists(os.path.join(path, 'candidates.vot')):
-        candidates = Table.read(os.path.join(path, 'candidates.vot'))
+    if os.path.exists(os.path.join(path, filename)):
+        candidates = Table.read(os.path.join(path, filename))
         if candidates:
             candidates.sort('flux', reverse=True)
             context['candidates'] = candidates
+            context['filename'] = filename
 
     return TemplateResponse(request, 'task_candidates.html', context=context)

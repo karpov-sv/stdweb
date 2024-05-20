@@ -73,8 +73,8 @@ class TaskInspectForm(forms.Form):
                 css_class='align-items-end'
             ),
             Row(
-                Column('mask_cosmics', css_class="col-md-2"),
-                Column('inspect_bg', css_class="col-md-2"),
+                Column('mask_cosmics', css_class="col-md-auto"),
+                Column('inspect_bg', css_class="col-md-auto"),
                 css_class='align-items-end justify-content-start'
             ),
         )
@@ -144,9 +144,9 @@ class TaskPhotometryForm(forms.Form):
                 css_class='align-items-end'
             ),
             Row(
-                Column('refine_wcs', css_class="col-md-2"),
-                Column('blind_match_wcs', css_class="col-md-2"),
-                Column('prefilter_detections', css_class="col-md-2"),
+                Column('refine_wcs', css_class="col-md-auto"),
+                Column('blind_match_wcs', css_class="col-md-auto"),
+                Column('prefilter_detections', css_class="col-md-auto"),
                 css_class='align-items-end'
             ),
             Row(
@@ -159,6 +159,32 @@ class TaskPhotometryForm(forms.Form):
                 css_class='align-items-end'
             ),
         )
+
+
+class TaskTransientsSimpleForm(forms.Form):
+    form_type = forms.CharField(initial='transients_simple', widget=forms.HiddenInput())
+    simple_vizier = forms.CharField(initial="ps1 skymapper", required=False, empty_value=None, label="Vizier catalogues")
+    simple_skybot = forms.BooleanField(initial=True, required=False, label="SkyBoT")
+    simple_center = forms.CharField(required=False, empty_value=None, label="Center position")
+    simple_sr0 = forms.FloatField(initial=None, min_value=0, required=False, label="Radius, deg")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.disable_csrf = True
+        self.helper.field_template = 'crispy_field.html'
+        self.helper.layout = Layout(
+            'form_type',
+            Row(
+                Column('simple_vizier', css_class="col-md-4"),
+                Column('simple_skybot', css_class="col-md-3"),
+                Column('simple_center', css_class="col-md-4"),
+                Column('simple_sr0', css_class="col-md-1"),
+                css_class='align-items-end'
+            ),
+        )
+
 
 class TaskSubtractionForm(forms.Form):
     form_type = forms.CharField(initial='subtraction', widget=forms.HiddenInput())
@@ -216,6 +242,7 @@ class TaskSubtractionForm(forms.Form):
                 css_class='align-items-end'
             ),
         )
+
 
 class SkyPortalUploadForm(forms.Form):
     ids = forms.CharField(max_length=150, required=False, label="Task IDs to upload")

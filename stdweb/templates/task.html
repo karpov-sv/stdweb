@@ -441,6 +441,96 @@
 
     {% endif %}
 
+    <!-- Simple transient detection -->
+    {% if 'objects.vot' in files %}
+      <hr>
+      <h3>
+        Simple transient detection
+        {% if user_may_submit %}
+          <!-- Help popover -->
+          <span class="span-help-popover float-end" title="Simple transient detection">
+            <p>
+              Transient detection is performed in a difference image using noise model produced by HOTPANTS and combined mask. Parameters for the detection and measurement, as well as photometric calibration of the candidates are the same as used for photometric calibration above.
+            </p>
+            <p>
+              Transient candidates will be filtered to exclude the ones with masked pixels within the aperture, as well as the ones positionally coincident (within half FWHM radius) with the objects from Pan-STARRS DR1 and SkyMapper DR1.1 catalogues.
+            </p>
+          </span>
+        {% endif %}
+      </h3>
+
+      {% if user_may_submit %}
+        <form action="" method="POST" class="mb-2" enctype="multipart/form-data">
+          {% csrf_token %}
+          <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
+
+            {% crispy form_transients_simple %}
+
+            <button type="submit" name="action" value="transients_simple_image" class="btn btn-primary">Run simple transient detection</button>
+          </fieldset>
+        </form>
+      {% endif %}
+
+      <hr style="border-style: dotted">
+      <div class="row mb-2">
+        {% if 'transients_simple.log' in files %}
+          <div class="col">
+            {% include "task_block_text.html" with file='transients_simple.log' %}
+          </div>
+
+          <div class="col">
+            <div class="row">
+              {% make_list '' as list %}
+              {% for name in list %}
+                {% if name in files %}
+                  <div class="col" style="max-width: 256px">
+                    {% include "task_block_image.html" with image=name task=task only %}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Transient candidates -->
+      {% if candidates_simple %}
+        <hr>
+        <h3>
+          Transient candidates from simple transient detection
+          <span class="span-help-popover float-end" title="Transient candidates from simple transient detection">
+            <p>
+              Cutouts show the target position in the original image, sky atlas, detection footprint, and the mask. The latter helps identifying possible problems due to template bad regions, cosmic rays or saturation, while the footprint displays the spread of the pixels above detection threshold useful for understanding what exactly triggered the detection.
+            </p>
+            <p>
+              The measurements above cutouts correspond to aperture photometry at the candidate position in the difference image, with the same parameters as used above for photometric calibration, so the resulting magnitude (if measured) is in the same system. Detection limit is derived from the locally estimated background noise and corresonds to the same S/N level as used for object detection above.
+            </p>
+            <p>
+              Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
+            </p>
+            <p>
+              The link below the cutouts allows to download single multi-extension FITS file containing all the cutouts, along with the information on transient position and metadata in the header.
+            </p>
+          </span>
+        </h3>
+
+        {% for cand in candidates_simple|slice:":10" %}
+          <div class="text-center">
+            {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+          </div>
+        {% endfor %}
+
+        {% if candidates_simple|length > 10 %}
+          <div class="mb-4 text-center">
+            <a class="btn btn-primary" href="{% url 'task_candidates_simple' id=task.id %}" role="button">
+              See the rest of {{ candidates_simple|length }} candidates
+            </a>
+          </div>
+        {% endif %}
+      {% endif %}
+
+    {% endif %}
+
     <!-- Image subtraction -->
     {% if 'photometry.pickle' in files %}
       <hr>

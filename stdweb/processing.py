@@ -143,6 +143,11 @@ files_photometry = [
     'target.vot', 'target.cutout', 'targets'
 ]
 
+files_transients_simple = [
+    'transients_simple.log',
+    'candidates_simple', 'candidates_simple.vot'
+]
+
 files_subtraction = [
     'subtraction.log',
     'sub_image.fits', 'sub_mask.fits',
@@ -153,9 +158,11 @@ files_subtraction = [
     'candidates', 'candidates.vot'
 ]
 
-cleanup_inspect = files_inspect + files_photometry + files_subtraction
+cleanup_inspect = files_inspect + files_photometry + files_transients_simple + files_subtraction
 
-cleanup_photometry = files_photometry + files_subtraction
+cleanup_photometry = files_photometry + files_transients_simple + files_subtraction
+
+cleanup_transients_simple = files_transients_simple
 
 cleanup_subtraction = files_subtraction
 
@@ -672,7 +679,6 @@ def inspect_image(filename, config, verbose=True, show=False):
     if config.get('time'):
         log(f"Time is {config.get('time')}")
         log(f"MJD is {Time(config.get('time')).mjd}")
-
 
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
@@ -1242,6 +1248,124 @@ def photometry_image(filename, config, verbose=True, show=False):
 
             else:
                 log(f"{target_title} not detected")
+
+
+def transients_simple_image(filename, config, verbose=True, show=False):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    # Cleanup stale plots and files
+    cleanup_paths(cleanup_transients_simple, basepath=basepath)
+
+    # Image
+    image,header = fits.getdata(filename, -1).astype(np.double), fits.getheader(filename, -1)
+
+    fix_header(header)
+
+    # Mask
+    mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+
+    # Segmentation map
+    segm = fits.getdata(os.path.join(basepath, 'segmentation.fits'))
+
+    # Objects
+    obj = Table.read(os.path.join(basepath, 'objects.vot'))
+    log(f"{len(obj)} objects loaded from file:objects.vot")
+
+    # Catalogue
+    cat = Table.read(os.path.join(basepath, 'cat.vot'))
+
+    # WCS
+    wcs = get_wcs(filename, header=header, verbose=verbose)
+
+    if wcs is None or not wcs.is_celestial:
+        raise RuntimeError('No WCS astrometric solution')
+
+    pixscale = astrometry.get_pixscale(wcs=wcs)
+    log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
+
+    fwhm = config.get('fwhm', 1.0)
+    log(f"FWHM is {fwhm:.1f} pixels, or {3600*fwhm*pixscale:.2f} arcsec")
+
+    # Time
+    time = Time(config.get('time')) if config.get('time') else None
+    if time is not None:
+        log(f"Time is {time}")
+        log(f"MJD is {Time(time).mjd}")
+
+    log("\n---- Simple catalogue-based transient detection ----\n")
+
+    if config.get('simple_center') and config.get('simple_sr0'):
+        center = resolve.resolve(config.get('simple_center'))
+        sr0 = config.get('simple_sr0')
+        log(f"Restricting the search to {sr0:.3f} deg around RA={center.ra.deg:.4f} Dec={center.dec.deg:.4f}")
+        dist = astrometry.spherical_distance(obj['ra'], obj['dec'], center.ra.deg, center.dec.deg)
+        obj = obj[dist < sr0]
+        log(f"{len(obj)} objects in the region")
+
+    vizier = config.get('simple_vizier', 'ps1 skymapper').split()
+
+    log("Using catalogues:", vizier)
+
+    candidates = pipeline.filter_transient_candidates(
+        obj,
+        sr=0.5*fwhm*pixscale,
+        vizier=vizier,
+        # Filter out all masked objects
+        flagged=True, flagmask=0xffff,
+        # SkyBoT?..
+        time=time,
+        skybot=config.get('filter_skybot', True),
+        verbose=verbose
+    )
+
+    if len(candidates) > 100:
+        candidates = candidates[:100]
+        log(f"Warning: too many candidates, limiting to first {len(candidates)}")
+
+    cutout_names = []
+
+    for cand in candidates:
+        cutout = cutouts.get_cutout(
+            image.astype(np.double),
+            cand,
+            30,
+            header=header,
+            mask=mask,
+            footprint=(segm==cand['NUMBER']) if segm is not None else None,
+        )
+
+        # Cutout from relevant HiPS survey
+        cutout['template'] = templates.get_hips_image(
+            guess_hips_survey(cand['ra'], cand['dec'], config['filter']),
+            header=cutout['header'],
+            get_header=False
+        )
+
+        jname = utils.make_jname(cand['ra'], cand['dec'])
+        cutout_name = os.path.join('candidates_simple', jname + '.cutout')
+        cutout_names.append(cutout_name)
+
+        try:
+            os.makedirs(os.path.join(basepath, 'candidates_simple'))
+        except OSError:
+            pass
+
+        cutouts.write_cutout(cutout, os.path.join(basepath, cutout_name))
+
+    log("\n---- Final list of candidates ----\n")
+
+    if len(candidates):
+        candidates['cutout_name'] = cutout_names
+
+        log(f"{len(candidates)} candidates in total")
+
+        candidates.write(os.path.join(basepath, 'candidates_simple.vot'), format='votable', overwrite=True)
+        log("Candidates written to file:candidates_simple.vot")
+    else:
+        log("No candidates found")
 
 
 def subtract_image(filename, config, verbose=True, show=False):

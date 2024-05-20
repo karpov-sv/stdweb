@@ -49,6 +49,7 @@ urlpatterns = [
     path('tasks/<int:id>/view/<path:path>', views_tasks.task_download, {'attachment': False}, name='task_view'),
     path('tasks/<int:id>/download/<path:path>', views_tasks.task_download, {'attachment': True}, name='task_download'),
     path('tasks/<int:id>/cutout/<path:path>', views_tasks.task_cutout, name='task_cutout'),
+    path('tasks/<int:id>/candidates_simple', views_tasks.task_candidates, {'filename': 'candidates_simple.vot'}, name='task_candidates_simple'),
     path('tasks/<int:id>/candidates', views_tasks.task_candidates, name='task_candidates'),
 
     path('tasks/<int:id>/mask', views_tasks.task_mask, name='task_mask'),

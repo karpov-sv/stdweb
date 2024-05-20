@@ -38,7 +38,7 @@
     {% if candidates %}
       <hr>
       <h3>
-        {{ candidates|length }} transient candidates in difference (template-subtracted) image
+        {{ candidates|length }} transient candidates {% if not 'simple' in filename %}in difference (template-subtracted) image{% endif %}
         <span class="span-help-popover float-end" title="Transient candidates in difference image">
           <p>
             Cutouts show the target position in the original image, template, template convolved with matching kernel which is used for actual subtraction, difference image, detection footprint, and the mask. The latter helps identifying possible problems due to template bad regions, cosmic rays or saturation, while the footprint displays the spread of the pixels above detection threshold useful for understanding what exactly triggered the detection.
