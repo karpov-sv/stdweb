@@ -127,7 +127,7 @@ def tasks(request, id=None):
 
                 if action == 'update_config':
                     if 'raw_config' in form.changed_data:
-                        task.config.update(form.cleaned_data.get('raw_config'))
+                        task.config = form.cleaned_data.get('raw_config')
                         task.save()
                         messages.success(request, f"Config for task {str(id)} updated")
                     else:
