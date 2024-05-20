@@ -71,7 +71,7 @@ def tasks(request, id=None):
                                                os.path.join(task.path(), 'custom_template.fits'))
                     messages.info(request, "Custom template uploaded as custom_template.fits")
 
-                if form.has_changed():
+                if form.has_changed() or True:
                     for name,value in form.cleaned_data.items():
                         # we do not want these to go to task.config
                         ignored_fields = [
