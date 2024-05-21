@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'crispy_bootstrap5',
     'el_pagination',
+    'django_select2',
     'stdweb',
 ]
 
@@ -171,6 +172,9 @@ CACHES = {
     #     "LOCATION": "unique-snowflake",
     # }
 }
+
+# Select2
+SELECT2_THEME = 'bootstrap-5'
 
 # Settings for STDPipe
 

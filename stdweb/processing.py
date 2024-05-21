@@ -1324,7 +1324,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         log(f"{len(obj)} objects after cross-checking")
 
     # Vizier catalogues to check
-    vizier = config.get('simple_vizier', 'ps1 skymapper').split()
+    vizier = config.get('simple_vizier', [])
 
     candidates = pipeline.filter_transient_candidates(
         obj,

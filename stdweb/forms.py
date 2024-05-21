@@ -4,6 +4,8 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit
 from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 
+from django_select2 import forms as s2forms
+
 import json
 
 from .processing import supported_filters, supported_catalogs, supported_templates
@@ -163,7 +165,13 @@ class TaskPhotometryForm(forms.Form):
 
 class TaskTransientsSimpleForm(forms.Form):
     form_type = forms.CharField(initial='transients_simple', widget=forms.HiddenInput())
-    simple_vizier = forms.CharField(initial="ps1 skymapper", required=False, empty_value=None, label="Vizier catalogues")
+    simple_vizier = forms.MultipleChoiceField(
+        initial=['ps1', 'skymapper'],
+        choices=[(_,supported_catalogs[_]['name']) for _ in supported_catalogs.keys()],
+        required=False,
+        label="Vizier catalogues",
+        widget=s2forms.Select2MultipleWidget,
+    )
     simple_skybot = forms.BooleanField(initial=True, required=False, label="SkyBoT")
     simple_others = forms.CharField(initial=None, empty_value=None, required=False, label="Task IDs to cross-check")
     simple_center = forms.CharField(required=False, empty_value=None, label="Center position")

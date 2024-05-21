@@ -1,0 +1,23 @@
+/* Multiple select fix from https://github.com/apalfrey/select2-bootstrap-5-theme/issues/53#issuecomment-1158540965 */
+.select2-selection--multiple {
+    padding: 0rem 0.75rem !important;
+}
+.select2-selection--multiple > ul {
+    display: inline-flex !important;
+}
+.select2-selection--multiple > ul > li {
+    padding: 0 0.3rem !important;
+    margin: 0.3rem !important;
+}
+.select2-selection--multiple .select2-search--inline {
+    display: inline-flex !important;
+    width: auto !important;
+    margin-top: 0.3rem !important;
+    vertical-align: middle;
+}
+
+/* My adjustments */
+.select2-selection--multiple .select2-selection__rendered,
+.select2-selection--multiple .select2-search--inline {
+  padding-left: 0 !important;
+}
