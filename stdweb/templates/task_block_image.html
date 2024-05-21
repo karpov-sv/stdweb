@@ -24,6 +24,10 @@
       <small><a href="{% url 'task_download' task.id image %}">{{ image }}</a></small>
     </figcaption>
 
+    {% if cand %}
+      <pre style="white-space: pre-wrap;">{{ cand|show_table }}</pre>
+    {% endif %}
+
   {% elif image %}
 
     <!-- Normal image -->

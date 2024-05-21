@@ -58,8 +58,8 @@
       {% paginate step candidates %}
 
       {% for cand in candidates %}
-        <div class="text-center">
-          {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+        <div class="row text-center">
+          {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec cand=cand only %}
         </div>
       {% endfor %}
 

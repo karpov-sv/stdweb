@@ -125,3 +125,11 @@
 .table thead th {
   background-color: #efefef;
 }
+
+/* Second header row - usually units or so */
+.table thead:nth-child(2) th {
+  font-weight: normal;
+  font-size: 80%;
+  font-style: italic;
+  display: none;
+}

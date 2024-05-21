@@ -1,5 +1,6 @@
 from django import template
 from django.template.defaultfilters import stringfilter
+from django.utils.safestring import mark_safe
 
 import datetime
 import uuid
@@ -92,6 +93,42 @@ def to_sexadecimal_plus(value):
 def to_sexadecimal_hours(value):
     return to_sexadecimal(value*1.0/15)
 
+
 @register.filter
 def list_extract(value, key):
     return [_[key] for _ in value]
+
+
+from astropy.table import Table
+
+@register.filter
+def show_table(table):
+    # FIXME: it repeats the code from tags.py, should be merged together!
+    contents = ""
+
+    # Ensure it is a Table
+    table = Table(table)
+
+    try:
+        for col in table.itercols():
+            if col.info.dtype.kind == 'f':
+                if col.name in ['ra', 'dec', 'RAJ2000', 'DEJ2000']:
+                    col.info.format = '.5f'
+                elif col.name in ['x', 'y']:
+                    col.info.format = '.2f'
+                else:
+                    col.info.format = '.4g'
+            elif col.name in ['flags']:
+                col.info.format = '#x'
+
+        contents = "\n".join(table.pformat_all(
+            html=True,
+            tableclass="table table-sm table-bordered text-center",
+            tableid='table_targets',
+        ))
+    except:
+        import traceback
+        traceback.print_exc()
+        pass
+
+    return mark_safe(contents)

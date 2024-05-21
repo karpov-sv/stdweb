@@ -515,8 +515,8 @@
         </h3>
 
         {% for cand in candidates_simple|slice:":10" %}
-          <div class="text-center">
-            {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+          <div class="row text-center">
+            {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec cand=cand only %}
           </div>
         {% endfor %}
 
@@ -648,8 +648,8 @@
       </h3>
 
       {% for cand in candidates|slice:":10" %}
-        <div class="text-center">
-          {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec only %}
+        <div class="row text-center">
+          {% include "task_block_image.html" with image=cand.cutout_name task=task ra=cand.ra dec=cand.dec cand=cand only %}
         </div>
       {% endfor %}
 
