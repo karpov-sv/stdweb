@@ -110,13 +110,16 @@ ENV/
 *.rej
 \#*\#
 *~
+*.*.py
 
 # Project specific
-tests/
-cutouts/
-data/
-tasks/
-static/
+/tests/
+/cutouts/
+/data/
+/tasks/
+/static/
 
 db.sqlite3
 dump.rdb
+
+/notebooks/
