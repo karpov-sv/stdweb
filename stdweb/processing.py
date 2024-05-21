@@ -70,6 +70,12 @@ supported_catalogs = {
               'limit':'Gmag'},
 }
 
+supported_catalogs_transients = {
+    **supported_catalogs,
+    'II/371/des_dr2': {'name':'DES DR2', 'filters':['g', 'r', 'i', 'z'],
+            'limit': 'rmag'},
+}
+
 supported_templates = {
     'custom': {'name': 'Custom template'},
     'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},

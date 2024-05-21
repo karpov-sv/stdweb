@@ -8,7 +8,7 @@ from django_select2 import forms as s2forms
 
 import json
 
-from .processing import supported_filters, supported_catalogs, supported_templates
+from .processing import supported_filters, supported_catalogs, supported_catalogs_transients, supported_templates
 
 
 class UploadFileForm(forms.Form):
@@ -167,7 +167,7 @@ class TaskTransientsSimpleForm(forms.Form):
     form_type = forms.CharField(initial='transients_simple', widget=forms.HiddenInput())
     simple_vizier = forms.MultipleChoiceField(
         initial=['ps1', 'skymapper'],
-        choices=[(_,supported_catalogs[_]['name']) for _ in supported_catalogs.keys()],
+        choices=[(_,supported_catalogs_transients[_]['name']) for _ in supported_catalogs_transients.keys()],
         required=False,
         label="Vizier catalogues",
         widget=s2forms.Select2MultipleWidget,
