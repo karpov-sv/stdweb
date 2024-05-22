@@ -149,7 +149,7 @@
         <span class="text-danger fw-bold">Task is read-only</span>
       {% endif %}
     </div>
-    <div class="mb-4 {% if task.celery_id %}sticky-top bg-white border-bottom pb-2{% endif %}">
+    <div class="mb-4 {% if task.celery_id %}sticky-top bg-body border-bottom pb-2{% endif %}">
       State:
       {% if task.celery_id %}
         <span class="spinner-border spinner-border-sm text-primary" role="status"></span>
