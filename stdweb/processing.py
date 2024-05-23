@@ -386,6 +386,7 @@ def filter_sextractor_detections(obj, verbose=True):
 
     return res > 0
 
+
 from sklearn.cluster import AgglomerativeClustering
 
 def filter_catalogue_blends(cat_in, sr, cat_col_ra='RAJ2000', cat_col_dec='DEJ2000'):
@@ -713,13 +714,13 @@ def photometry_image(filename, config, verbose=True, show=False):
     log("\n---- Object detection ----\n")
 
     # Extract objects and get segmentation map
-    obj,segm = photometry.get_objects_sextractor(
+    obj,segm,fimg = photometry.get_objects_sextractor(
         image, mask=mask,
         aper=config.get('initial_aper', 3.0),
         gain=config.get('gain', 1.0),
         extra={'BACK_SIZE': config.get('bg_size', 256)},
         extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
-        checkimages=['SEGMENTATION'],
+        checkimages=['SEGMENTATION', 'FILTERED'],
         minarea=config.get('minarea', 3),
         r0=config.get('initial_r0', 0.0),
         mask_to_nans=True,
@@ -728,10 +729,18 @@ def photometry_image(filename, config, verbose=True, show=False):
         _exe=settings.STDPIPE_SEXTRACTOR
     )
 
+    # FIXME: Filter some problematic detections
+    obj = obj[obj['MAG_AUTO'] < 90]
+    obj = obj[obj['fwhm'] > 0]
+    obj = obj[obj['ISOAREA_IMAGE'] > config.get('minarea', 3)]
+
     log(f"{len(obj)} objects found")
 
     fits.writeto(os.path.join(basepath, 'segmentation.fits'), segm, header, overwrite=True)
     log("Segmemtation map written to file:segmentation.fits")
+
+    fits.writeto(os.path.join(basepath, 'filtered.fits'), fimg, header, overwrite=True)
+    log("Filtered image written to file:filtered.fits")
 
     if not len(obj):
         raise RuntimeError('Cannot detect objects in the image')
@@ -860,7 +869,9 @@ def photometry_image(filename, config, verbose=True, show=False):
                                      gain=config.get('gain', 1.0),
                                      verbose=verbose)
 
-    log(f"{len(obj)} objects properly measured")
+    log(f"{len(obj)} objects properly measured, {np.sum(obj['flags'] == 0)} unflagged")
+    if np.sum(obj['flags'] == 0) < 0.5*len(obj):
+        log("Warning: more than half of objects are flagged!")
 
     obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
     log("Measured objects stored to file:objects.vot")
@@ -874,7 +885,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_aspect(1)
         ax.set_xlim(0, image.shape[1])
         ax.set_ylim(0, image.shape[0])
-        # ax.legend()
+        ax.legend()
         ax.set_title(f"Detected objects: {np.sum(idx)} unmasked, {np.sum(~idx)} masked")
 
     log("\n---- Initial astrometry ----\n")
@@ -1276,6 +1287,9 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     # Segmentation map
     segm = fits.getdata(os.path.join(basepath, 'segmentation.fits'))
 
+    # Filtered detection imahe
+    fimg = fits.getdata(os.path.join(basepath, 'filtered.fits'))
+
     # Objects
     obj = Table.read(os.path.join(basepath, 'objects.vot'))
     log(f"{len(obj)} objects loaded from file:objects.vot")
@@ -1359,6 +1373,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
             header=header,
             mask=mask,
             footprint=(segm==cand['NUMBER']) if segm is not None else None,
+            filtered=fimg if config.get('initial_r0') else None,
         )
 
         # Cutout from relevant HiPS survey

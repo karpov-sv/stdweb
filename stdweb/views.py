@@ -399,9 +399,9 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
     cutout = cutouts.load_cutout(fullpath)
 
     if request.GET.get('adjust'):
-        planes = ['image', 'template', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']
+        planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']
     else:
-        planes = ['image', 'template', 'convolved', 'diff', 'footprint', 'mask']
+        planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'footprint', 'mask']
 
     planes = [_ for _ in planes if _ in cutout]
 
