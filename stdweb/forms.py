@@ -4,7 +4,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit
 from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 
-from django_select2 import forms as s2forms
+# from django_select2 import forms as s2forms
 
 import json
 
@@ -165,16 +165,16 @@ class TaskPhotometryForm(forms.Form):
 
 class TaskTransientsSimpleForm(forms.Form):
     form_type = forms.CharField(initial='transients_simple', widget=forms.HiddenInput())
-    simple_vizier = forms.MultipleChoiceField(
-        initial=['ps1', 'skymapper'],
-        choices=[(_,supported_catalogs_transients[_]['name']) for _ in supported_catalogs_transients.keys()],
-        required=False,
-        label="Vizier catalogues",
-        widget=s2forms.Select2MultipleWidget,
-    )
+    # simple_vizier = forms.MultipleChoiceField(
+    #     initial=['ps1', 'skymapper'],
+    #     choices=[(_,supported_catalogs_transients[_]['name']) for _ in supported_catalogs_transients.keys()],
+    #     required=False,
+    #     label="Vizier catalogues",
+    #     widget=s2forms.Select2MultipleWidget,
+    # )
     simple_skybot = forms.BooleanField(initial=True, required=False, label="SkyBoT")
     simple_others = forms.CharField(initial=None, empty_value=None, required=False, label="Task IDs to cross-check")
-    simple_center = forms.CharField(required=False, empty_value=None, label="Center position")
+    simple_center = forms.CharField(required=False, empty_value=None, label="Center position to limit the search")
     simple_sr0 = forms.FloatField(initial=None, min_value=0, required=False, label="Radius, deg")
 
     def __init__(self, *args, **kwargs):
@@ -186,10 +186,10 @@ class TaskTransientsSimpleForm(forms.Form):
         self.helper.layout = Layout(
             'form_type',
             Row(
-                Column('simple_vizier', css_class="col-md-4"),
+                # Column('simple_vizier', css_class="col-md-4"),
+                Column('simple_others', css_class="col-md-6"),
                 Column('simple_skybot', css_class="col-md-1"),
-                Column('simple_others', css_class="col-md-3"),
-                Column('simple_center', css_class="col-md-3"),
+                Column('simple_center', css_class="col-md-4"),
                 Column('simple_sr0', css_class="col-md-1"),
                 css_class='align-items-end'
             ),
