@@ -772,10 +772,9 @@ def inspect_image(filename, config, verbose=True, show=False):
                 pass
 
         # We may initialize some blind match parameters from the target position, if any
-        if config.get('target_ra') is not None and config.get('blind_match_ra0') is None:
-            config['blind_match_ra0'] = config.get('target_ra')
-        if config.get('target_dec') is not None and config.get('blind_match_dec0') is None:
-            config['blind_match_dec0'] = config.get('target_dec')
+        if config.get('target_ra') is not None and config.get('blind_match_center') is None:
+            config['blind_match_center'] = "{} {}".format(config.get('target_ra'), config.get('target_dec'))
+
     else:
         # Remove fields that are computed from the target
         config.pop('target_ra', None)
@@ -1045,17 +1044,31 @@ def photometry_image(filename, config, verbose=True, show=False):
         if np.sum(sn_vals >= sn0) < 10:
             raise RuntimeError('Too few good objects for blind matching')
 
-        wcs = astrometry.blind_match_objects(obj[:500],
-                                             center_ra=config.get('blind_match_ra0'),
-                                             center_dec=config.get('blind_match_dec0'),
-                                             radius=config.get('blind_match_sr0'),
-                                             scale_lower=config.get('blind_match_ps_lo'),
-                                             scale_upper=config.get('blind_match_ps_up'),
-                                             sn=sn0,
-                                             verbose=verbose,
-                                             _tmpdir=settings.STDPIPE_TMPDIR,
-                                             _exe=settings.STDPIPE_SOLVE_FIELD,
-                                             config=settings.STDPIPE_SOLVE_FIELD_CONFIG)
+        if config.get('blind_match_center'):
+            center = resolve.resolve(config.get('blind_match_center'))
+            center_ra = center.ra.deg
+            center_dec = center.dec.deg
+        else:
+            center_ra = None
+            center_dec = None
+
+        # Exclude pre-filtered detections and limit list size
+        obj_bm = obj[(obj['flags'] & 0x400) == 0]
+        obj_bm = obj_bm[:500]
+
+        wcs = astrometry.blind_match_objects(
+            obj_bm,
+            center_ra=center_ra,
+            center_dec=center_dec,
+            radius=config.get('blind_match_sr0'),
+            scale_lower=config.get('blind_match_ps_lo'),
+            scale_upper=config.get('blind_match_ps_up'),
+            sn=sn0,
+            verbose=verbose,
+            _tmpdir=settings.STDPIPE_TMPDIR,
+            _exe=settings.STDPIPE_SOLVE_FIELD,
+            config=settings.STDPIPE_SOLVE_FIELD_CONFIG
+        )
 
         if wcs is not None and wcs.is_celestial:
             astrometry.store_wcs(os.path.join(basepath, "image.wcs"), wcs)
@@ -1139,8 +1152,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config.get('refine_wcs', False):
         log("\n---- Astrometric refinement ----\n")
 
+        # Exclude pre-filtered detections and limit list size
+        obj_ast = obj[(obj['flags'] & 0x400) == 0]
+
         # FIXME: make the order configurable
-        wcs1 = pipeline.refine_astrometry(obj, cat, fwhm*pixscale,
+        wcs1 = pipeline.refine_astrometry(obj_ast, cat, fwhm*pixscale,
                                           wcs=wcs, order=3, method='scamp',
                                           cat_col_mag=config.get('cat_col_mag'),
                                           cat_col_mag_err=config.get('cat_col_mag_err'),
@@ -1151,6 +1167,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             raise RuntimeError('WCS refinement failed')
         else:
             wcs = wcs1
+            obj['ra'],obj['dec'] = wcs.all_pix2world(obj['x'], obj['y'], 0)
             astrometry.store_wcs(os.path.join(basepath, "image.wcs"), wcs)
             astrometry.clear_wcs(header)
             header += wcs.to_header(relax=True)

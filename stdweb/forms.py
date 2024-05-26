@@ -110,8 +110,7 @@ class TaskPhotometryForm(forms.Form):
 
     blind_match_ps_lo = forms.FloatField(initial=0.2, min_value=0, required=False, label="Scale lower limit, arcsec/pix")
     blind_match_ps_up = forms.FloatField(initial=4.0, min_value=0, required=False, label="Scale upper limit, arcsec/pix")
-    blind_match_ra0 = forms.FloatField(min_value=0, max_value=360, required=False, label="Center RA, deg")
-    blind_match_dec0 = forms.FloatField(min_value=-90, max_value=90, required=False, label="Center Dec, deg")
+    blind_match_center = forms.CharField(required=False, empty_value=None, label="Center position for blind match")
     blind_match_sr0 = forms.FloatField(initial=1, min_value=0, required=False, label="Radius, deg")
 
     def __init__(self, *args, **kwargs):
@@ -146,18 +145,17 @@ class TaskPhotometryForm(forms.Form):
                 css_class='align-items-end'
             ),
             Row(
-                Column('refine_wcs', css_class="col-md-auto"),
-                Column('blind_match_wcs', css_class="col-md-auto"),
-                Column('prefilter_detections', css_class="col-md-auto"),
+                Column('blind_match_ps_lo', css_class="col-md-3"),
+                Column('blind_match_ps_up', css_class="col-md-3"),
+                Column('blind_match_center', css_class="col-md-4"),
+                Column('blind_match_sr0', css_class="col-md-2"),
+                id='blind_match_params_row',
                 css_class='align-items-end'
             ),
             Row(
-                Column('blind_match_ps_lo'),
-                Column('blind_match_ps_up'),
-                Column('blind_match_ra0'),
-                Column('blind_match_dec0'),
-                Column('blind_match_sr0'),
-                id='blind_match_params_row',
+                Column('refine_wcs', css_class="col-md-auto"),
+                Column('blind_match_wcs', css_class="col-md-auto"),
+                Column('prefilter_detections', css_class="col-md-auto"),
                 css_class='align-items-end'
             ),
         )
