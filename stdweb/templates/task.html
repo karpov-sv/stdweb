@@ -115,6 +115,24 @@
      check_sub_method_visibility();
    });
 
+   check_transients_visibility = function(){
+     var checked = $('#id_subtraction_mode_1').prop('checked');
+
+     var elem = $('#transients_row');
+     if(checked && elem.is(':hidden')){
+       elem.show();
+     } else if(!checked && elem.is(':visible')){
+       elem.hide();
+     }
+   }
+
+   // Toggle visibility of blind match options depending on the checkbox
+   $(function(){
+     $('#id_subtraction_mode_0').on('change', check_transients_visibility);
+     $('#id_subtraction_mode_1').on('change', check_transients_visibility);
+     check_transients_visibility();
+   });
+
 
   </script>
 

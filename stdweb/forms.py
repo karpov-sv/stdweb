@@ -212,9 +212,11 @@ class TaskSubtractionForm(forms.Form):
     subtraction_method = forms.ChoiceField(choices=[('zogy', 'ZOGY'), ('hotpants', 'HOTPANTS')],
                                          initial='hotpants', required=False, label="Method")
 
-    filter_vizier = forms.BooleanField(initial=False, required=False, label="Vizier")
-    filter_skybot = forms.BooleanField(initial=False, required=False, label="SkyBoT")
-    filter_adjust = forms.BooleanField(initial=False, required=False, label="Adjust")
+    filter_vizier = forms.BooleanField(initial=False, required=False, label="Filter Vizier catalogues")
+    filter_skybot = forms.BooleanField(initial=False, required=False, label="Filter SkyBoT")
+    filter_adjust = forms.BooleanField(initial=True, required=False, label="Sub-pixel adjustment")
+    filter_center = forms.CharField(required=False, empty_value=None, label="Center position to limit the search")
+    filter_sr0 = forms.FloatField(initial=1, min_value=0, required=False, label="Radius, deg")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -241,10 +243,16 @@ class TaskSubtractionForm(forms.Form):
                 id='custom_row',
             ),
             Row(
+                Column('filter_center', css_class="col-md-4"),
+                Column('filter_sr0', css_class="col-md-1"),
+                Column('filter_vizier', css_class="col-md-auto"),
+                Column('filter_skybot', css_class="col-md-auto"),
+                Column('filter_adjust', css_class="col-md-auto"),
+                css_class='align-items-end',
+                id='transients_row',
+            ),
+            Row(
                 Column(InlineRadios('subtraction_mode', template='crispy_radioselect_inline.html'), css_class='form-group'),
-                Column('filter_vizier', css_class="col-md-1"),
-                Column('filter_skybot', css_class="col-md-1"),
-                Column('filter_adjust', css_class="col-md-1"),
                 Div(css_class="col-md"),
                 Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-end'

@@ -1491,7 +1491,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         log(f"Restricting the search to {sr0:.3f} deg around RA={center.ra.deg:.4f} Dec={center.dec.deg:.4f}")
         dist = astrometry.spherical_distance(obj['ra'], obj['dec'], center.ra.deg, center.dec.deg)
         obj = obj[dist < sr0]
-        log(f"{len(obj)} objects in the region")
+        log(f"{len(obj)} objects inside the region")
 
     # Cross-check with objects detected in other tasks
     if config.get('simple_others'):
@@ -2100,6 +2100,16 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             log(f"{len(sobj)} transient candidates found in difference image")
 
+            # Restrict to the cone if center and radius are provided
+            if config.get('filter_center') and config.get('filter_sr0'):
+                # TODO: resolve the center only once
+                center = resolve.resolve(config.get('filter_center'))
+                sr0 = config.get('filter_sr0')
+                log(f"Restricting the search to {sr0:.3f} deg around RA={center.ra.deg:.4f} Dec={center.dec.deg:.4f}")
+                dist = astrometry.spherical_distance(sobj['ra'], sobj['dec'], center.ra.deg, center.dec.deg)
+                sobj = sobj[dist < sr0]
+                log(f"{len(sobj)} candidates inside the region")
+
             # Pre-filter detections if requested
             if True and len(sobj):
                 if classifier is None:
@@ -2108,6 +2118,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
                 fidx = filter_sextractor_detections(sobj, verbose=verbose, classifier=classifier)
                 sobj = sobj[fidx]
+                log(f"{len(sobj)} candidates left after pre-filtering")
 
             vizier = ['gaiaedr3', 'ps1', 'skymapper', ] if config.get('filter_vizier') else []
 
