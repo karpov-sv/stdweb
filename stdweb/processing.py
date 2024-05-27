@@ -406,7 +406,7 @@ def guess_catalogue_mag_columns(fname, cat):
 
 from sklearn.ensemble import IsolationForest
 
-def filter_sextractor_detections(obj, verbose=True):
+def filter_sextractor_detections(obj, verbose=True, classifier=None, return_classifier=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
@@ -425,11 +425,15 @@ def filter_sextractor_detections(obj, verbose=True):
     idx &= np.isfinite(var3)
 
     X = np.array([np.log10(var1), np.log10(var2), var3]).T
-    res = IsolationForest().fit(X[idx])
+    if classifier is None:
+        classifier = IsolationForest().fit(X[idx])
     X[~np.isfinite(X)] = -1000 # Definitely outside of the good locus
-    res = res.predict(X)
+    res = classifier.predict(X)
 
     log(f"{np.sum(res > 0)} good, {np.sum(res < 0)} outliers")
+
+    if return_classifier:
+        return classifier
 
     return res > 0
 
@@ -824,6 +828,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if config.get('time'):
         log(f"Time is {config.get('time')}")
         log(f"MJD is {Time(config.get('time')).mjd}")
+
 
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
@@ -1668,6 +1673,8 @@ def subtract_image(filename, config, verbose=True, show=False):
     sub_size = config.get('sub_size', 1000)
     sub_overlap = config.get('sub_overlap', 50)
 
+    classifier = None
+
     if subtraction_mode == 'detection':
         log('Transient detection mode activated')
         # We will split the image into nx x ny blocks
@@ -2039,7 +2046,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                     gain=config.get('gain', 1.0),
                     sn=config.get('sn', 5.0),
                     minarea=config.get('minarea', 3),
-                    extra_params=['NUMBER'],
+                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
                     extra={'BACK_SIZE': config.get('bg_size', 256)},
                     checkimages=['SEGMENTATION'],
                     verbose=sub_verbose,
@@ -2093,7 +2100,16 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             log(f"{len(sobj)} transient candidates found in difference image")
 
-            vizier = ['ps1', 'skymapper', ] if config.get('filter_vizier') else []
+            # Pre-filter detections if requested
+            if True and len(sobj):
+                if classifier is None:
+                    # Prepare the classifier based on SExtractor shape parameters
+                    classifier = filter_sextractor_detections(obj, verbose=False, return_classifier=True)
+
+                fidx = filter_sextractor_detections(sobj, verbose=verbose, classifier=classifier)
+                sobj = sobj[fidx]
+
+            vizier = ['gaiaedr3', 'ps1', 'skymapper', ] if config.get('filter_vizier') else []
 
             # Filter out catalogue objects
             candidates = pipeline.filter_transient_candidates(
