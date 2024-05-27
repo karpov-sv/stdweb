@@ -450,10 +450,10 @@
           <!-- Help popover -->
           <span class="span-help-popover float-end" title="Simple transient detection">
             <p>
-              Transient detection is performed in a difference image using noise model produced by HOTPANTS and combined mask. Parameters for the detection and measurement, as well as photometric calibration of the candidates are the same as used for photometric calibration above.
+              Simple catalogue-based transient detection allows finding the transients that are well-separated from the rest of objects in the image, and thus easily detectable in original (non-template-subtracted) image. The algorithm uses the list of objects detected during photometric calibration step, and rejects the ones that match known catalogue stars from common catalogues (Gaia eDR3, Pan-STARRS DR1, SkyMapper DR1.1, ...). Moreover, all flagged objects (i.e. having masked pixels within the aperture) will be rejected, along with the objects rejected during the pre-filtering (machine-learning based shape classifier) step during the photometry.
             </p>
             <p>
-              Transient candidates will be filtered to exclude the ones with masked pixels within the aperture, as well as the ones positionally coincident (within half FWHM radius) with the objects from Pan-STARRS DR1 and SkyMapper DR1.1 catalogues.
+              In order to further restrict the list of candidates, you may specify the sky region where to look for transients (so, simple cone search with specified center and radius will be used). Moreover, you may specify the list of tasks containing the images of the same sky area - they will be used to reject everything that did not appear in their object lists. This way, you will only get the candidates that appear in all the images from all specified tasks.
             </p>
           </span>
         {% endif %}
