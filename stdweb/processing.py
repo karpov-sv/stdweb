@@ -232,6 +232,10 @@ def fix_header(header, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
+    # Fix FITS standard errors in the header
+    for _ in header.cards:
+        _.verify('silentfix')
+
     # Fix SCAMP headers with TAN type what are actually TPV (and thus break AstroPy WCS)
     if header.get('CTYPE1') == 'RA---TAN' and 'PV1_5' in header.keys():
         header['CTYPE1'] = 'RA---TPV'
@@ -276,7 +280,8 @@ def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=Tru
     basepath = os.path.dirname(filename)
 
     image,header = fits.getdata(filename, -1), fits.getheader(filename, -1)
-
+    fix_header(header)
+    
     # Sanitize input
     try:
         x1 = int(x1)
