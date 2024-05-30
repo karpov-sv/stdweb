@@ -254,6 +254,30 @@ def fix_header(header, verbose=True):
         header.remove('FOCALLEN')
 
 
+def pre_fix_image(filename, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    # First check for compressed data
+    hdus = fits.open(filename)
+    if len(hdus) > 1:
+        for i,hdu in enumerate(hdus):
+            if hdu.is_image and len(hdu.shape) == 2:
+                log(f"Keeping first usable plane ({i}: {hdu.name}) from multi-extension or tile compressed image")
+                fits.writeto(filename, hdu.data, hdu.header, overwrite=True)
+                break
+
+    hdus.close()
+
+    # Handle various special cases
+    image,header = fits.getdata(filename), fits.getheader(filename)
+    if 'BSOFTEN' in header and 'BOFFSET' in header:
+        # Pan-STARRS image in ASINH scaling, let's convert it to linear
+        log('Detected Pan-STARRS ASINH scaled image, fixing it')
+        image,header = templates.normalize_ps1_skycell(image, header, verbose=verbose)
+        fits.writeto(filename, image, header, overwrite=True)
+
+
 def fix_image(filename, config, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -281,7 +305,7 @@ def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=Tru
 
     image,header = fits.getdata(filename, -1), fits.getheader(filename, -1)
     fix_header(header)
-    
+
     # Sanitize input
     try:
         x1 = int(x1)
@@ -372,6 +396,7 @@ def guess_vizier_catalogues(ra, dec):
         vizier.append('skymapper')
 
     return vizier
+
 
 def guess_catalogue_mag_columns(fname, cat):
     cat_col_mag = None
@@ -603,19 +628,15 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['sub_verbose'] = config.get('sub_verbose', False)
     config['subtraction_mode'] = config.get('subtraction_mode', 'detection')
 
+    # Fix some initial problems with the image like compression etc
+    pre_fix_image(filename, verbose=verbose)
+
     # Load the image
     log(f'Inspecting {filename}')
     try:
         image,header = fits.getdata(filename, -1).astype(np.double), fits.getheader(filename, -1)
     except:
         raise RuntimeError('Cannot load the image')
-
-    # Handle various special cases
-    if 'BSOFTEN' in header and 'BOFFSET' in header:
-        # Pan-STARRS image in ASINH scaling, let's convert it to linear
-        log('Detected Pan-STARRS ASINH scaled image, fixing it')
-        image,header = templates.normalize_ps1_skycell(image, header, verbose=verbose)
-        fits.writeto(filename, image, header, overwrite=True)
 
     log(f"Image size is {image.shape[1]} x {image.shape[0]}")
 
