@@ -434,6 +434,39 @@ def guess_catalogue_mag_columns(fname, cat):
     return cat_col_mag, cat_col_mag_err
 
 
+def guess_catalogue_radec_columns(cat):
+    cat_col_ra = None
+    cat_col_dec = None
+
+    # Find relevant coordinate columns
+    if 'RAJ2000' in cat.keys():
+        cat_col_ra = 'RAJ2000'
+        cat_col_dec = 'DEJ2000'
+
+    elif '_RAJ2000' in cat.keys():
+        cat_col_ra = '_RAJ2000'
+        cat_col_dec = '_DEJ2000'
+
+    elif 'RA_ICRS' in cat.keys():
+        cat_col_ra = 'RA_ICRS'
+        cat_col_dec = 'DE_ICRS'
+
+    # SkyMapper
+    elif 'RAICRS' in cat.keys():
+        cat_col_ra = 'RAICRS'
+        cat_col_dec = 'DEICRS'
+
+    # cross-match with Gaia eDR3
+    elif 'ra_2' in cat.keys():
+        cat_col_ra = 'ra_2'
+        cat_col_dec = 'dec_2'
+
+    # else:
+    #     raise RuntimeError(f"Cannot find coordinate columns for the catalogue")
+
+    return cat_col_ra, cat_col_dec
+
+
 from sklearn.ensemble import IsolationForest
 
 def filter_sextractor_detections(obj, verbose=True, classifier=None, return_classifier=False):
@@ -478,6 +511,10 @@ def filter_catalogue_blends(
         cat_col_mag=None,
         cat_col_mag_err=None
 ):
+    # Clustering fails if we have less than 2 stars. And it is meaningless anyway
+    if len(cat_in) < 2:
+        return cat_in
+
     x,y,z = astrometry.radectoxyz(cat_in[cat_col_ra], cat_in[cat_col_dec])
 
     # Cluster into groups using sr radius
@@ -572,20 +609,32 @@ def filter_vizier_blends(
         )
 
         if fname is not None:
+            # Find relevant magnitude and coordinate columns
             cat_col_mag,_ = guess_catalogue_mag_columns(fname, xcat)
+            cat_col_ra,cat_col_dec = guess_catalogue_radec_columns(xcat)
+
+            if cat_col_ra is None:
+                log("Cannot guess catalogue coordinate columns, skipping")
+                log(xcat.keys())
+                continue
 
             if cat_col_mag:
-                xcat = filter_catalogue_blends(xcat, sr_blend, cat_col_mag=cat_col_mag)
+                xcat = filter_catalogue_blends(
+                    xcat,
+                    sr_blend,
+                    cat_col_ra=cat_col_ra,
+                    cat_col_dec=cat_col_dec,
+                    cat_col_mag=cat_col_mag
+                )
+
                 oidx,xidx,_ = astrometry.spherical_match(
                     obj[cand_idx][obj_col_ra],
                     obj[cand_idx][obj_col_dec],
-                    xcat['RAJ2000'],
-                    xcat['DEJ2000'],
+                    xcat[cat_col_ra],
+                    xcat[cat_col_dec],
                     sr,
                 )
                 xcat = xcat[xidx]
-
-                # display(xcat)
 
         if xcat is not None and len(xcat):
             cand_idx &= ~np.in1d(obj[col_id], xcat[col_id])
@@ -1145,7 +1194,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     if config.get('filter_blends', True):
         # TODO: merge blended stars, not remove them!
-        cat = filter_catalogue_blends(cat, fwhm*pixscale)
+        cat = filter_catalogue_blends(cat, 2*fwhm*pixscale)
         log(f"{len(cat)} catalogue stars after blend filtering with {3600*fwhm*pixscale:.1f} arcsec radius")
         # cat.write(os.path.join(basepath, 'cat_filtered.vot'), format='votable', overwrite=True)
         # log("Filtered catalogue written to file:cat_filtered.vot")
@@ -2181,7 +2230,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 if config.get('filter_adjust'):
                     # Try to apply some sub-pixel adjustments to fix dipoles etc
                     if cutouts.adjust_cutout(
-                            cutout, max_shift=1, max_scale=1.1,
+                            cutout, max_shift=1, max_scale=1.3,
                             inner=int(np.ceil(2.0*config.get('fwhm'))),
                             normalize=False, verbose=False
                     ):
