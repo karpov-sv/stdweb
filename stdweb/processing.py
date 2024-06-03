@@ -62,7 +62,7 @@ supported_catalogs = {
                    'limit': 'rmag'},
     'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
             'limit':'rmag'},
-    'skymapper': {'name':'SkyMapper DR1.1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
+    'skymapper': {'name':'SkyMapper DR4', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
                   'limit':'rPSF'},
     'atlas': {'name':'ATLAS-REFCAT2', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
               'limit':'rmag'},
@@ -451,10 +451,15 @@ def guess_catalogue_radec_columns(cat):
         cat_col_ra = 'RA_ICRS'
         cat_col_dec = 'DE_ICRS'
 
-    # SkyMapper
+    # SkyMapper 1.1
     elif 'RAICRS' in cat.keys():
         cat_col_ra = 'RAICRS'
         cat_col_dec = 'DEICRS'
+
+    # SkyMapper 4
+    elif 'RAdeg' in cat.keys():
+        cat_col_ra = 'RAdeg'
+        cat_col_dec = 'DEdeg'
 
     # cross-match with Gaia eDR3
     elif 'ra_2' in cat.keys():
