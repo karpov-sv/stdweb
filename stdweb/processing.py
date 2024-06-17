@@ -641,8 +641,8 @@ def filter_vizier_blends(
                 )
                 xcat = xcat[xidx]
 
-        if xcat is not None and len(xcat):
-            cand_idx &= ~np.in1d(obj[col_id], xcat[col_id])
+                if xcat is not None and len(xcat):
+                    cand_idx &= ~np.in1d(obj[col_id], xcat[col_id])
 
         log(
             np.sum(cand_idx),
@@ -956,6 +956,9 @@ def photometry_image(filename, config, verbose=True, show=False):
     obj = obj[obj['MAG_AUTO'] < 90]
     obj = obj[obj['fwhm'] > 0]
     obj = obj[obj['ISOAREA_IMAGE'] > config.get('minarea', 3)]
+
+    # Ignore "deblended" flag from SExtractor, for now
+    # obj['flags'] &= 0xfffd
 
     log(f"{len(obj)} objects found")
 
@@ -1599,8 +1602,8 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         obj,
         sr=0.5*fwhm*pixscale,
         vizier=vizier,
-        # Filter out all masked objects except for isophotal masked
-        flagged=True, flagmask=0xffff - 0x0100,
+        # Filter out all masked objects except for isophotal masked, and deblended
+        flagged=True, flagmask=0xffff - 0x0100 - 0x02,
         # SkyBoT?..
         time=time,
         skybot=config.get('filter_skybot', True),
