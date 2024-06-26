@@ -220,6 +220,9 @@ def skyportal(request):
                         'rmag': 'sdssr',
                         'imag': 'sdssi',
                         'zmag': 'sdssz',
+                        'Gmag': 'gaia::g',
+                        'BPmag': 'gaia::grp',
+                        'RPmag': 'gaia::gbp',
                     }.get(fname, fname)
 
                     if 'time' in task.config and task.config['time']:
