@@ -1396,8 +1396,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     log("Measured objects stored to file:objects.vot")
 
     # Check the filter
-    if config.get('use_color', True) and np.abs(m['color_term']) > 0.5:
-        log("Warning: color term is too large, checking whether other filters would work better")
+    if config.get('use_color', True) and (np.abs(m['color_term']) > 0.5 or config.get('diagnose_color')):
+        if config.get('diagnose_color'):
+            log("Running color term diagnostics for all possible filters")
+        else:
+            log("Warning: color term is too large, checking whether other filters would work better")
 
         for fname in supported_catalogs[config['cat_name']].get('filters', []):
             m1 = pipeline.calibrate_photometry(
