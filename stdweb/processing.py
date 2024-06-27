@@ -670,7 +670,6 @@ def inspect_image(filename, config, verbose=True, show=False):
     config['rel_aper'] = config.get('rel_aper', 1)
     config['rel_bg1'] = config.get('rel_bg1', 5)
     config['rel_bg2'] = config.get('rel_bg2', 7)
-    config['bg_size'] = config.get('bg_size', 256)
     config['spatial_order'] = config.get('spatial_order', 2)
     config['minarea'] = config.get('minarea', 5)
     config['use_color'] = config.get('use_color', True)
@@ -743,6 +742,14 @@ def inspect_image(filename, config, verbose=True, show=False):
     if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
         mask |= fits.getdata(os.path.join(basepath, 'custom_mask.fits')) > 0
         log("Custom mask loaded from custom_mask.fits")
+
+    # Background size
+    if not config.get('bg_size'):
+        bg_size = 256
+        if bg_size > 0.5*image.shape[0] or bg_size > 0.5*image.shape[1]:
+            bg_size = int(min(image.shape[0]/2, image.shape[1]/2))
+        log(f"Background mesh size set to {bg_size} x {bg_size} pixels")
+        config['bg_size'] = bg_size
 
     # Cosmics
     if config.get('mask_cosmics', True):
