@@ -250,6 +250,15 @@ def fix_header(header, verbose=True):
         for _ in ['PV1_1', 'PV1_2']:
             header.remove(_, ignore_missing=True)
 
+    # Fix some IRAF stuff that breaks astropy WCS
+    for _ in ['WCSDIM', 'LTM1_1', 'LTM2_2', 'WAT0_001', 'WAT1_001', 'WAT2_001']:
+        header.remove(_, ignore_missing=True)
+
+    # Ensure WCS keywords are numbers, not strings
+    for kw in ['CRVAL1', 'CRVAL2', 'CRPIX1', 'CRPIX2', 'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2', 'CDELT1', 'CDELT2']:
+        if kw in header:
+            header[kw] = float(header[kw])
+
     if 'FOCALLEN' in header and not header.get('FOCALLEN'):
         header.remove('FOCALLEN')
 
@@ -805,6 +814,12 @@ def inspect_image(filename, config, verbose=True, show=False):
         log(f"Pixel scale is {3600*pixscale:.2f} arcsec/pix")
 
         config['refine_wcs'] = True
+
+        if pixscale > 100.0/3600:
+            log("Warning: Pixel scale is too large, most probably WCS is broken! Enabling blind matching.")
+            ra0,dec0,sr0 = None,None,None
+            config['blind_match_wcs'] = True
+
     else:
         ra0,dec0,sr0 = None,None,None
         config['blind_match_wcs'] = True
