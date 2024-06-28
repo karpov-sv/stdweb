@@ -186,6 +186,12 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     if not os.path.exists(fullpath):
         return HttpResponse('not found')
 
+    # Custom mask, if relevant
+    if path in ['image.fits'] and os.path.exists(os.path.join(base, 'custom_mask.fits')):
+        mask = fits.getdata(os.path.join(base, 'custom_mask.fits')) > 0
+    else:
+        mask = None
+
     # Optional parameters
     ext = int(request.GET.get('ext', -1))
     fmt = request.GET.get('format', 'jpeg')
@@ -222,7 +228,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     if show_grid:
         dx = 40/figsize[0]
         dy = 20/figsize[1]
-        ax = Axes(fig, [dx, dy, 0.99 - dx, 0.99 - dy])
+        ax = Axes(fig, [dx, dy, 0.99 - 2*dx, 0.99 - dy])
         ax.grid(color='white', alpha=0.3)
     else:
         # No axes, just the image
@@ -230,7 +236,9 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     fig.add_axes(ax)
 
-    plots.imshow(data, ax=ax, show_axis=True if show_grid else False, show_colorbar=False,
+    plots.imshow(data, ax=ax, mask=mask,
+                 show_axis=True if show_grid else False,
+                 show_colorbar=True if show_grid else False,
                  origin='lower',
                  interpolation='nearest' if data.shape[1]/zoom < 0.5*width else 'bicubic',
                  cmap=request.GET.get('cmap', 'Blues_r'),

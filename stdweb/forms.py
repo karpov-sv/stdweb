@@ -55,7 +55,6 @@ class TaskInspectForm(forms.Form):
     gain = forms.FloatField(min_value=0, required=False, label="Gain, e/ADU")
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
     mask_cosmics = forms.BooleanField(initial=True, required=False, label="Mask cosmics")
-    inspect_bg = forms.BooleanField(initial=False, required=False, label="Inspect background")
 
     raw_config = forms.JSONField(initial=False, required=False, label="Raw config JSON", encoder=PrettyJSONEncoder)
 
@@ -76,7 +75,6 @@ class TaskInspectForm(forms.Form):
             ),
             Row(
                 Column('mask_cosmics', css_class="col-md-auto"),
-                Column('inspect_bg', css_class="col-md-auto"),
                 css_class='align-items-end justify-content-start'
             ),
         )

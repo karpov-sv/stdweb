@@ -133,13 +133,13 @@ filter_mappings = {
 files_inspect = [
     'inspect.log',
     'mask.fits', 'image_target.fits',
-    'image_bg.png', 'image_rms.png',
 ]
 
 files_photometry = [
     'photometry.log',
     'objects.png', 'fwhm.png',
     'segmentation.fits',
+    'image_bg.fits', 'image_rms.fits',
     'photometry.png', 'photometry_unmasked.png',
     'photometry_zeropoint.png', 'photometry_model.png',
     'photometry_residuals.png', 'astrometry_dist.png',
@@ -788,26 +788,6 @@ def inspect_image(filename, config, verbose=True, show=False):
     fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), overwrite=True)
     log("Mask written to file:mask.fits")
 
-    # Cosmics
-    if config.get('inspect_bg', False):
-        bg = sep.Background(image, mask=mask)
-
-        with plots.figure_saver(os.path.join(basepath, 'image_bg.png'), figsize=(8, 6), show=show) as fig:
-            ax = fig.add_subplot(1, 1, 1)
-            plots.imshow(bg.back(), ax=ax)
-            ax.set_aspect(1)
-            ax.set_xlim(0, image.shape[1])
-            ax.set_ylim(0, image.shape[0])
-            ax.set_title(f"Background: median {np.median(bg.back()):.2f} RMS {np.std(bg.back()):.2f}")
-
-        with plots.figure_saver(os.path.join(basepath, 'image_rms.png'), figsize=(8, 6), show=show) as fig:
-            ax = fig.add_subplot(1, 1, 1)
-            plots.imshow(bg.rms(), ax=ax)
-            ax.set_aspect(1)
-            ax.set_xlim(0, image.shape[1])
-            ax.set_ylim(0, image.shape[0])
-            ax.set_title(f"Background RMS: median {np.median(bg.rms()):.2f} RMS {np.std(bg.rms()):.2f}")
-
     # WCS
     wcs = get_wcs(filename, header=header, verbose=verbose)
 
@@ -951,6 +931,12 @@ def photometry_image(filename, config, verbose=True, show=False):
     # Mask
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
 
+    # Custom mask
+    if os.path.exists(os.path.join(basepath, 'mask.fits')):
+        custom_mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+    else:
+        custom_mask = None
+
     # Time
     time = Time(config.get('time')) if config.get('time') else None
 
@@ -963,14 +949,22 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log("\n---- Object detection ----\n")
 
+    # SExtractor does not take mask into account while computing the background
+    # so we better mask custom-masked regions manually
+    if custom_mask is not None:
+        image_masked = image.copy()
+        image_masked[custom_mask] = np.nan
+    else:
+        image_masked = image
+
     # Extract objects and get segmentation map
-    obj,segm,fimg = photometry.get_objects_sextractor(
-        image, mask=mask,
+    obj,segm,fimg,bg,bgrms = photometry.get_objects_sextractor(
+        image_masked, mask=mask,
         aper=config.get('initial_aper', 3.0),
         gain=config.get('gain', 1.0),
         extra={'BACK_SIZE': config.get('bg_size', 256)},
         extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
-        checkimages=['SEGMENTATION', 'FILTERED'],
+        checkimages=['SEGMENTATION', 'FILTERED', 'BACKGROUND', 'BACKGROUND_RMS'],
         minarea=config.get('minarea', 3),
         r0=config.get('initial_r0', 0.0),
         mask_to_nans=True,
@@ -994,6 +988,12 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     fits.writeto(os.path.join(basepath, 'filtered.fits'), fimg, header, overwrite=True)
     log("Filtered image written to file:filtered.fits")
+
+    fits.writeto(os.path.join(basepath, 'image_bg.fits'), bg, header, overwrite=True)
+    log("Background map written to file:image_bg.fits")
+
+    fits.writeto(os.path.join(basepath, 'image_rms.fits'), bgrms, header, overwrite=True)
+    log("Background RMS map written to file:image_rms.fits")
 
     if not len(obj):
         raise RuntimeError('Cannot detect objects in the image')

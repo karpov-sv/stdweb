@@ -353,7 +353,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' 'image_bg.png' 'image_rms.png' as list %}
+              {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' 'image_bg.fits' 'image_rms.fits' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
