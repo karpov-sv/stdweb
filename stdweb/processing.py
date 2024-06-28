@@ -515,6 +515,21 @@ def filter_sextractor_detections(obj, verbose=True, classifier=None, return_clas
     return res > 0
 
 
+def plot_outline(x, y, *args, ax=None, **kwargs):
+    points = np.vstack((np.ma.filled(x), np.ma.filled(y))).T
+
+    from scipy.spatial import ConvexHull
+    hull = ConvexHull(points)
+
+    if ax is None:
+        ax = plt.gca()
+
+    for simplex in hull.simplices:
+        ax.plot(points[simplex, 0], points[simplex, 1], *args, **kwargs)
+        if 'label' in kwargs:
+            kwargs.pop('label')
+
+
 from sklearn.cluster import AgglomerativeClustering
 
 def filter_catalogue_blends(
@@ -967,7 +982,6 @@ def photometry_image(filename, config, verbose=True, show=False):
         checkimages=['SEGMENTATION', 'FILTERED', 'BACKGROUND', 'BACKGROUND_RMS'],
         minarea=config.get('minarea', 3),
         r0=config.get('initial_r0', 0.0),
-        mask_to_nans=True,
         verbose=verbose,
         _tmpdir=settings.STDPIPE_TMPDIR,
         _exe=settings.STDPIPE_SEXTRACTOR
@@ -1066,26 +1080,35 @@ def photometry_image(filename, config, verbose=True, show=False):
             var3,label3 = obj['mag']-obj['MAG_AUTO'], 'MAG_APER - MAG_AUTO'
 
             if len(var1) > 1000:
-                alpha = 0.1
+                alpha = 0.2
             elif len(var1) > 100:
-                alpha = 0.3
+                alpha = 0.5
             else:
                 alpha = 1
 
+            # All flags except 0x400 that we just set for outliers
+            idx = (obj['flags'] & (0xffff - 0x400)) > 0
+
             ax1 = fig.add_subplot(221)
-            ax1.plot(var1[~fidx], var2[~fidx], '.', alpha=alpha)
-            ax1.plot(var1[fidx], var2[fidx], 'r.', alpha=alpha);
+            ax1.plot(var1[~idx], var2[~idx], '.', alpha=alpha)
+            ax1.plot(var1[idx], var2[idx], '.', alpha=alpha, color='C1', label='Flagged')
+            plot_outline(var1[fidx], var2[fidx], 'r-', ax=ax1, label='Good')
+            ax1.legend()
 
             ax1.set_xscale('log')
             ax1.set_yscale('log')
 
             ax2 = fig.add_subplot(222, sharey=ax1)
-            ax2.plot(var3[~fidx], var2[~fidx], '.', alpha=alpha)
-            ax2.plot(var3[fidx], var2[fidx], 'r.', alpha=alpha);
+            ax2.plot(var3[~idx], var2[~idx], '.', alpha=alpha)
+            ax2.plot(var3[idx], var2[idx], '.', alpha=alpha, color='C1', label='Flagged')
+            plot_outline(var3[fidx], var2[fidx], 'r-', ax=ax2, label='Good')
+            ax2.legend()
 
             ax3 = fig.add_subplot(223, sharex=ax1)
-            ax3.plot(var1[~fidx], var3[~fidx], '.', alpha=alpha)
-            ax3.plot(var1[fidx], var3[fidx], 'r.', alpha=alpha);
+            ax3.plot(var1[~idx], var3[~idx], '.', alpha=alpha)
+            ax3.plot(var1[idx], var3[idx], '.', alpha=alpha, color='C1', label='Flagged')
+            plot_outline(var1[fidx], var3[fidx], 'r-', ax=ax3, label='Good')
+            ax3.legend()
 
             ax1.grid(alpha=0.2)
             ax2.grid(alpha=0.2)
@@ -1105,6 +1128,16 @@ def photometry_image(filename, config, verbose=True, show=False):
 
             ax1.axvline(fwhm/2, ls='--', color='gray')
             ax3.axvline(fwhm/2, ls='--', color='gray')
+
+            ax4 = fig.add_subplot(224)
+            ax4.axis('off')
+            ax4.annotate(
+                f"Isolation forest outlier detection\n"
+                f"{len(obj)} objects\n"
+                f"{np.sum(idx)} masked\n"
+                f"{np.sum(fidx)} good {np.sum(~fidx)} outliers",
+                (0.0, 1.0), xycoords='axes fraction', va='top'
+            )
 
         log("Pre-filtering diagnostic plot stored to file:prefilter.png")
 
