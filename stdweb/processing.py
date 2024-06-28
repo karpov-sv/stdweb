@@ -1629,12 +1629,16 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     log(f"Will check Vizier catalogues: {vizier}")
 
     # Filter based on flags and Vizier catalogs
+    flagmask = 0xffff - 0x0100 - 0x02 # Allow deblended and isophotal masked
+    if not config.get('simple_prefilter'):
+        flagmask -= 0x400 # Allow pre-filtered
+
     candidates = pipeline.filter_transient_candidates(
         obj,
         sr=0.5*fwhm*pixscale,
         vizier=vizier,
         # Filter out all masked objects except for isophotal masked, and deblended
-        flagged=True, flagmask=0xffff - 0x0100 - 0x02,
+        flagged=True, flagmask=flagmask,
         # SkyBoT?..
         time=time,
         skybot=config.get('filter_skybot', True),
@@ -1643,7 +1647,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
     # Additional filtering for blended stars
     # TODO: somehow integrate it into `filter_transient_candidates` proper
-    if len(candidates) > 0:
+    if len(candidates) > 0 and config.get('simple_blends'):
         candidates = filter_vizier_blends(
             candidates,
             sr=0.5*fwhm*pixscale,

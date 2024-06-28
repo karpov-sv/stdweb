@@ -172,10 +172,12 @@ class TaskTransientsSimpleForm(forms.Form):
     #     label="Vizier catalogues",
     #     widget=s2forms.Select2MultipleWidget,
     # )
-    simple_skybot = forms.BooleanField(initial=True, required=False, label="SkyBoT")
+    simple_skybot = forms.BooleanField(initial=True, required=False, label="Check SkyBoT")
     simple_others = forms.CharField(initial=None, empty_value=None, required=False, label="Task IDs to cross-check")
     simple_center = forms.CharField(required=False, empty_value=None, label="Center position to limit the search")
     simple_sr0 = forms.FloatField(initial=None, min_value=0, required=False, label="Radius, deg")
+    simple_blends = forms.BooleanField(initial=True, required=False, label="Reject blends")
+    simple_prefilter = forms.BooleanField(initial=True, required=False, label="Reject prefiltered")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -188,10 +190,14 @@ class TaskTransientsSimpleForm(forms.Form):
             Row(
                 # Column('simple_vizier', css_class="col-md-4"),
                 Column('simple_others', css_class="col-md-6"),
-                Column('simple_skybot', css_class="col-md-1"),
-                Column('simple_center', css_class="col-md-4"),
+                Column('simple_center', css_class="col-md-5"),
                 Column('simple_sr0', css_class="col-md-1"),
                 css_class='align-items-end'
+            ),
+            Row(
+                Column('simple_skybot', css_class="col-md-auto"),
+                Column('simple_blends', css_class="col-md-auto"),
+                Column('simple_prefilter', css_class="col-md-auto"),
             ),
         )
 
