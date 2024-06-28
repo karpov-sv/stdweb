@@ -989,11 +989,12 @@ def photometry_image(filename, config, verbose=True, show=False):
     fits.writeto(os.path.join(basepath, 'filtered.fits'), fimg, header, overwrite=True)
     log("Filtered image written to file:filtered.fits")
 
-    fits.writeto(os.path.join(basepath, 'image_bg.fits'), bg, header, overwrite=True)
-    log("Background map written to file:image_bg.fits")
+    if config.get('inspect_bg'):
+        fits.writeto(os.path.join(basepath, 'image_bg.fits'), bg, header, overwrite=True)
+        log("Background map written to file:image_bg.fits")
 
-    fits.writeto(os.path.join(basepath, 'image_rms.fits'), bgrms, header, overwrite=True)
-    log("Background RMS map written to file:image_rms.fits")
+        fits.writeto(os.path.join(basepath, 'image_rms.fits'), bgrms, header, overwrite=True)
+        log("Background RMS map written to file:image_rms.fits")
 
     if not len(obj):
         raise RuntimeError('Cannot detect objects in the image')
