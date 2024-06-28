@@ -105,6 +105,7 @@ class TaskPhotometryForm(forms.Form):
     sr_override = forms.FloatField(min_value=0, required=False, label="Matching radius, arcsec")
 
     prefilter_detections = forms.BooleanField(initial=True, required=False, label="Pre-filter detections")
+    diagnose_color = forms.BooleanField(initial=False, required=False, label="Color term diagnostics")
     refine_wcs = forms.BooleanField(required=False, label="Refine astrometry")
     blind_match_wcs = forms.BooleanField(required=False, label="Blind match")
 
@@ -156,6 +157,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('refine_wcs', css_class="col-md-auto"),
                 Column('blind_match_wcs', css_class="col-md-auto"),
                 Column('prefilter_detections', css_class="col-md-auto"),
+                Column('diagnose_color', css_class="col-md-auto"),
                 css_class='align-items-end'
             ),
         )
