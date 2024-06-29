@@ -947,8 +947,8 @@ def photometry_image(filename, config, verbose=True, show=False):
     mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
 
     # Custom mask
-    if os.path.exists(os.path.join(basepath, 'mask.fits')):
-        custom_mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+    if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
+        custom_mask = fits.getdata(os.path.join(basepath, 'custom_mask.fits')) > 0
     else:
         custom_mask = None
 
