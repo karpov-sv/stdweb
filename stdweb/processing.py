@@ -128,6 +128,24 @@ filter_mappings = {
 }
 
 
+# Conversion to AB mags, from https://www.astronomy.ohio-state.edu/martini.10/usefuldata.html
+filter_ab_offset = {
+    'U': 0.79,
+    'B': -0.09,
+    'V': 0.02,
+    'R': 0.21,
+    'I': 0.45,
+    'u': 0,
+    'g': 0,
+    'r': 0,
+    'i': 0,
+    'z': 0,
+    'G': 0,
+    'BP': 0,
+    'RP': 0,
+}
+
+
 # Files created at every step
 
 files_inspect = [
@@ -418,6 +436,18 @@ def guess_catalogue_mag_columns(fname, cat):
         if f"e_{fname}mag" in cat.colnames:
             cat_col_mag_err = f"e_{fname}mag"
 
+    # Non-augmented PS1 etc
+    elif "gmag" in cat.colnames and "rmag" in cat.colnames:
+        if fname in ['U', 'B', 'V', 'BP']:
+            cat_col_mag = "gmag"
+        if fname in ['R', 'G']:
+            cat_col_mag = "rmag"
+        if fname in ['I', 'RP']:
+            cat_col_mag = "imag"
+
+        if f"e_{cat_col_mag}" in cat.colnames:
+            cat_col_mag_err = f"e_{cat_col_mag}"
+
     # SkyMapper
     elif f"{fname}PSF" in cat.colnames:
         cat_col_mag = f"{fname}PSF"
@@ -425,7 +455,7 @@ def guess_catalogue_mag_columns(fname, cat):
         if f"e_{fname}PSF" in cat.colnames:
             cat_col_mag_err = f"e_{fname}PSF"
 
-    # Gaia DR2/eDR3/DR3
+    # Gaia DR2/eDR3/DR3 from Vizier
     elif "BPmag" in cat.colnames and "RPmag" in cat.colnames and "Gmag" in cat.colnames:
         if fname in ['U', 'B', 'V', 'R', 'u', 'g', 'r', 'BP']:
             cat_col_mag = "BPmag"
@@ -436,6 +466,18 @@ def guess_catalogue_mag_columns(fname, cat):
 
         if f"e_{cat_col_mag}" in cat.colnames:
             cat_col_mag_err = f"e_{cat_col_mag}"
+
+    # Gaia DR2/eDR3/DR3 from XMatch
+    elif "phot_bp_mean_mag" in cat.colnames and "phot_rp_mean_mag" in cat.colnames and "phot_g_mean_mag" in cat.colnames:
+        if fname in ['U', 'B', 'V', 'R', 'u', 'g', 'r', 'BP']:
+            cat_col_mag = "phot_bp_mean_mag"
+        elif fname in ['I', 'i', 'z', 'RP']:
+            cat_col_mag = "phot_rp_mean_mag"
+        else:
+            cat_col_mag = "phot_g_mean_mag"
+
+        if f"{cat_col_mag}_error" in cat.colnames:
+            cat_col_mag_err = f"{cat_col_mag}_error"
 
     # else:
     #     raise RuntimeError(f"Unsupported filter {fname} and/or catalogue")
@@ -577,6 +619,10 @@ def filter_catalogue_blends(
                 x0,y0,z0 = [np.nansum(_*flux1)/np.nansum(flux1) for _ in [x1,y1,z1]]
                 ra,dec = astrometry.xyztoradec([x0,y0,z0])
 
+                if not np.isfinite(ra) or not np.isfinite(dec):
+                    # No usable fluxes at all?..
+                    continue
+
                 cat[cat_col_ra][ids[0]],cat[cat_col_dec][ids[0]] = ra, dec
                 cat[cat_col_mag][ids[0]] = -2.5*np.log10(np.nansum(flux1))
 
@@ -604,6 +650,7 @@ def filter_vizier_blends(
     fname=None,
     vizier=[],
     col_id=None,
+    vizier_checker_fn=None,
     verbose=False,
 ):
     # Simple wrapper around print for logging in verbose mode only
@@ -666,6 +713,12 @@ def filter_vizier_blends(
                 xcat = xcat[xidx]
 
                 if xcat is not None and len(xcat):
+                    if callable(vizier_checker_fn):
+                        # Pass matched results through user-supplied checker
+                        xobj = obj[[np.where(obj[col_id] == _)[0][0] for _ in xcat[col_id]]]
+                        xidx = vizier_checker_fn(xobj, xcat, catname)
+                        xcat = xcat[xidx]
+
                     cand_idx &= ~np.in1d(obj[col_id], xcat[col_id])
 
         log(
@@ -977,7 +1030,10 @@ def photometry_image(filename, config, verbose=True, show=False):
         image_masked, mask=mask,
         aper=config.get('initial_aper', 3.0),
         gain=config.get('gain', 1.0),
-        extra={'BACK_SIZE': config.get('bg_size', 256)},
+        extra={
+            'BACK_SIZE': config.get('bg_size', 256),
+            'SATUR_LEVEL': config.get('saturation')
+        },
         extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
         checkimages=['SEGMENTATION', 'FILTERED', 'BACKGROUND', 'BACKGROUND_RMS'],
         minarea=config.get('minarea', 3),
@@ -1659,12 +1715,48 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
     # Vizier catalogues to check
     vizier = guess_vizier_catalogues(ra0, dec0)
-    log(f"Will check Vizier catalogues: {vizier}")
+    log(f"Will check Vizier catalogues: {' '.join(vizier)}")
 
     # Filter based on flags and Vizier catalogs
     flagmask = 0xffff - 0x0100 - 0x02 # Allow deblended and isophotal masked
     if not config.get('simple_prefilter'):
         flagmask -= 0x400 # Allow pre-filtered
+    else:
+        log("Will reject pre-filtered detections")
+
+    if config.get('simple_mag_diff'):
+        log(f"Will only keep matches brighter than catalogue by {config.get('simple_mag_diff'):.2f} mags")
+    else:
+        log("Will reject all positional matches")
+
+    # Cross-match checker
+    def checker_fn(xobj, xcat, catname):
+        xidx = np.ones_like(xobj, dtype=bool)
+
+        if config.get('simple_mag_diff'):
+            # Get filter used for photometric calibration
+            fname = config.get('cat_col_mag')
+            if fname.endswith('mag'):
+                fname = fname[:-3]
+
+            cat_col_mag, cat_col_mag_err = guess_catalogue_mag_columns(fname, xcat)
+
+            if cat_col_mag is not None:
+                mag = xobj['mag_calib']
+                if fname in ['U', 'B', 'V', 'R', 'I'] and cat_col_mag not in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag']:
+                    # Convert to AB mags if using AB reference catalogue
+                    mag += filter_ab_offset.get(fname, 0)
+
+                diff = mag - xcat[cat_col_mag]
+
+                if len(diff[np.isfinite(diff)]) > 10:
+                    # Adjust zeropoint
+                    diff -= np.nanmedian(diff)
+
+                # TODO: take errors into account?..
+                xidx = diff > -config.get('simple_mag_diff', 2.0)
+
+        return xidx
 
     candidates = pipeline.filter_transient_candidates(
         obj,
@@ -1675,6 +1767,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         # SkyBoT?..
         time=time,
         skybot=config.get('filter_skybot', True),
+        vizier_checker_fn=checker_fn,
         verbose=verbose
     )
 
@@ -1687,6 +1780,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
             sr_blend=2*fwhm*pixscale,
             vizier=vizier,
             fname=config.get('filter'),
+            vizier_checker_fn=checker_fn,
             verbose=verbose
         )
 
