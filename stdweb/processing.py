@@ -823,10 +823,17 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Saturation
     if not config.get('saturation'):
-        satlevel = header.get('SATURATE',
-                              header.get('DATAMAX'))
+        satlevel = header.get(
+            'SATURATE',
+            header.get('DATAMAX')
+        )
         if satlevel:
             log("Got saturation level from FITS header")
+
+            if satlevel < 0.5*np.nanmax(image):
+                log(f"Warning: header saturation level ({satlevel}) is significantly smaller than image max value!")
+            elif satlevel > np.nanmax(image):
+                log(f"Warning: header saturation level ({satlevel}) is larger than image max value!")
 
         else:
             satlevel = 0.05*np.nanmedian(image) + 0.95*np.nanmax(image) # med + 0.95(max-med)
