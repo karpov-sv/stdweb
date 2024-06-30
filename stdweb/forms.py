@@ -226,6 +226,7 @@ class TaskSubtractionForm(forms.Form):
 
     filter_vizier = forms.BooleanField(initial=False, required=False, label="Filter Vizier catalogues")
     filter_skybot = forms.BooleanField(initial=False, required=False, label="Filter SkyBoT")
+    filter_prefilter = forms.BooleanField(initial=True, required=False, label="Pre-filtering")
     filter_adjust = forms.BooleanField(initial=True, required=False, label="Sub-pixel adjustment")
     filter_center = forms.CharField(required=False, empty_value=None, label="Center position to limit the search")
     filter_sr0 = forms.FloatField(initial=1, min_value=0, required=False, label="Radius, deg")
@@ -259,6 +260,7 @@ class TaskSubtractionForm(forms.Form):
                 Column('filter_sr0', css_class="col-md-1"),
                 Column('filter_vizier', css_class="col-md-auto"),
                 Column('filter_skybot', css_class="col-md-auto"),
+                Column('filter_prefilter', css_class="col-md-auto"),
                 Column('filter_adjust', css_class="col-md-auto"),
                 css_class='align-items-end',
                 id='transients_row',
