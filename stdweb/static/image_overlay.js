@@ -119,6 +119,25 @@ overlay_stdview_images = function() {
   	    overlay.append(checkbox);
 
         }
+
+        /* objects */
+        if ('cat' in image.data()) {
+  	    var checkbox = $('<input type="checkbox" id="checkbox_cat"/>');
+            var label = $('<i class="fa fa-star-o" style="padding-left: 0.3em;  padding-right: 0.1em;">');
+
+  	    checkbox.on('click', function() {
+    	        if (this.checked)
+      	            update_image_get_params(image, {cat: 1});
+                else
+      	            update_image_get_params(image, {cat: null});
+            });
+
+            checkbox.attr('title', 'Click to show catalogue stars');
+
+  	    overlay.append(label);
+  	    overlay.append(checkbox);
+
+        }
     });
 }
 

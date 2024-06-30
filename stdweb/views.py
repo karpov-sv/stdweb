@@ -245,11 +245,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
                  stretch=request.GET.get('stretch', 'linear'),
                  qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))])
 
-    if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
-        # Show the position of the object
-        ra = [float(_) for _ in request.GET.get('ra').split(',')]
-        dec = [float(_) for _ in request.GET.get('dec').split(',')]
-
+    def get_wcs():
         # Special handling of external WCS solution in .wcs file alongside with image
         wcsname = os.path.splitext(fullpath)[0] + '.wcs'
         if os.path.exists(wcsname):
@@ -257,6 +253,16 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         else:
             header = fits.getheader(fullpath, ext)
         wcs = WCS(header)
+
+        return wcs
+
+    if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
+        # Show the position of the object
+        ra = [float(_) for _ in request.GET.get('ra').split(',')]
+        dec = [float(_) for _ in request.GET.get('dec').split(',')]
+
+        wcs = get_wcs()
+
         if wcs is not None and wcs.is_celestial:
             x,y = wcs.all_world2pix(ra, dec, 0)
             for xx,yy in zip(x,y):
@@ -274,6 +280,18 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
                 ax.plot(obj['x'][idx], obj['y'][idx], '.', color='red')
                 ax.plot(obj['x'][~idx], obj['y'][~idx], '.', color='orange')
 
+    if request.GET.get('cat'):
+        # Overplot list of catalogue stars from the file
+        catname = os.path.join(os.path.dirname(fullpath), 'cat.vot')
+        if os.path.exists(catname):
+            cat = Table.read(catname)
+
+            if cat is not None:
+                wcs = get_wcs()
+                x,y = wcs.all_world2pix(cat['RAJ2000'], cat['DEJ2000'], 0)
+                idx = (x > 0) & (x < data.shape[1]) & (y > 0) & (y < data.shape[0])
+                ax.plot(x[idx], y[idx], 'o', color='none', mec='brown', ms=10)
+
     if zoom > 1:
         x0,width = data.shape[1]/2, data.shape[1]
         y0,height = data.shape[0]/2, data.shape[0]
@@ -283,6 +301,9 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
         ax.set_xlim(x0 - 0.5*width/zoom, x0 + 0.5*width/zoom)
         ax.set_ylim(y0 - 0.5*height/zoom, y0 + 0.5*height/zoom)
+    else:
+        ax.set_xlim(0, data.shape[1])
+        ax.set_ylim(0, data.shape[0])
 
     buf = io.BytesIO()
     fig.savefig(buf, format=fmt, pil_kwargs={'quality':quality})

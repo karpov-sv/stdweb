@@ -357,7 +357,7 @@
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with image=name task=task obj=1 only %}
+                    {% include "task_block_image.html" with image=name task=task obj=1 cat=1 only %}
                   </div>
                 {% endif %}
               {% endfor %}
