@@ -396,6 +396,25 @@ def nonlin_image(filename, config, slope=1.0, verbose=True):
     fits.writeto(filename, image, header, overwrite=True)
 
 
+from astropy_healpix import healpy
+def round_coords_to_grid(ra0, dec0, sr0, nside=None):
+    """Tries to round the coordinates to nearest HEALPix pixel center"""
+    if nside is None:
+        for n in range(1, 16):
+            nside = 2**n
+            res = healpy.nside_to_pixel_resolution(nside).to('deg').value
+            if res < 0.05*sr0:
+                break
+    else:
+        res = healpy.nside_to_pixel_resolution(nside).to('deg').value
+
+    ipix = healpy.ang2pix(nside, ra0, dec0, lonlat=True)
+    ra1,dec1 = healpy.pix2ang(nside, ipix, lonlat=True)
+    sr1 = (np.floor(sr0/res) + 1)*res
+
+    return ra1, dec1, sr1
+
+
 def guess_hips_survey(ra, dec, filter_name='R'):
     survey_filter = filter_mappings.get(filter_name, 'r')[0]
 
@@ -1307,7 +1326,10 @@ def photometry_image(filename, config, verbose=True, show=False):
     filters = {}
     if supported_catalogs[config['cat_name']].get('limit') and config.get('cat_limit'):
         filters[supported_catalogs[config['cat_name']].get('limit')] = f"<{config['cat_limit']}"
-    cat = catalogs.get_cat_vizier(ra0, dec0, sr0, config['cat_name'], filters=filters, verbose=verbose)
+
+    # Round the coordinates a bit to optimize consecutive calls to Vizier after WCS refinement
+    ra00,dec00,sr00 = round_coords_to_grid(ra0, dec0, sr0)
+    cat = catalogs.get_cat_vizier(ra00, dec00, sr00, config['cat_name'], filters=filters, verbose=verbose)
 
     if not cat or not len(cat):
         raise RuntimeError('Cannot get catalogue stars')
