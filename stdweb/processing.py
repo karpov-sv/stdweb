@@ -2385,7 +2385,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 log(f"{len(sobj)} candidates inside the region")
 
             # Pre-filter detections if requested
-            if True and len(sobj):
+            if config.get('filter_prefilter') and len(sobj):
                 if classifier is None:
                     # Prepare the classifier based on SExtractor shape parameters
                     classifier = filter_sextractor_detections(obj, verbose=False, return_classifier=True)
