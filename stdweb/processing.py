@@ -1080,7 +1080,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         fidx = filter_sextractor_detections(obj, verbose=verbose)
         idx &= fidx
         # Also store it in the flags to exclude from photometric match later
-        obj['flags'][~fidx] |= 0x400
+        obj['flags'][~fidx] |= 0x800
 
     if not len(obj[idx]):
         raise RuntimeError("No suitable stars with S/N > 20 in the image!")
@@ -1142,8 +1142,8 @@ def photometry_image(filename, config, verbose=True, show=False):
             else:
                 alpha = 1
 
-            # All flags except 0x400 that we just set for outliers
-            idx = (obj['flags'] & (0xffff - 0x400)) > 0
+            # All flags except 0x800 that we just set for outliers
+            idx = (obj['flags'] & (0xffff - 0x800)) > 0
 
             ax1 = fig.add_subplot(221)
             ax1.plot(var1[~idx], var2[~idx], '.', alpha=alpha)
@@ -1258,7 +1258,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             center_dec = None
 
         # Exclude pre-filtered detections and limit list size
-        obj_bm = obj[(obj['flags'] & 0x400) == 0]
+        obj_bm = obj[(obj['flags'] & 0x800) == 0]
         obj_bm = obj_bm[:500]
 
         wcs = astrometry.blind_match_objects(
@@ -1358,7 +1358,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         log("\n---- Astrometric refinement ----\n")
 
         # Exclude pre-filtered detections and limit list size
-        obj_ast = obj[(obj['flags'] & 0x400) == 0]
+        obj_ast = obj[(obj['flags'] & 0x800) == 0]
 
         # FIXME: make the order configurable
         wcs1 = pipeline.refine_astrometry(obj_ast, cat, fwhm*pixscale,
@@ -1720,7 +1720,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     # Filter based on flags and Vizier catalogs
     flagmask = 0xffff - 0x0100 - 0x02 # Allow deblended and isophotal masked
     if not config.get('simple_prefilter'):
-        flagmask -= 0x400 # Allow pre-filtered
+        flagmask -= 0x800 # Allow pre-filtered
     else:
         log("Will reject pre-filtered detections")
 
