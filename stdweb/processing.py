@@ -806,7 +806,11 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Filter
     if not config.get('filter'):
-        config['filter'] = header.get('FILTER', header.get('CAMFILT', 'unknown')).strip()
+        config['filter'] = 'unknown'
+        for kw in ['FILTER', 'FILTERS', 'CAMFILT']:
+            if kw in header:
+                config['filter'] = header.get(kw).strip()
+                break
     log(f"Filter is {config['filter']}")
 
     # Normalize filters
