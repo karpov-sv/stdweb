@@ -1166,7 +1166,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             var3,label3 = obj['mag']-obj['MAG_AUTO'], 'MAG_APER - MAG_AUTO'
 
             if len(var1) > 1000:
-                alpha = 0.2
+                alpha = 0.3
             elif len(var1) > 100:
                 alpha = 0.5
             else:
@@ -1175,25 +1175,41 @@ def photometry_image(filename, config, verbose=True, show=False):
             # All flags except 0x800 that we just set for outliers
             idx = (obj['flags'] & (0xffff - 0x800)) > 0
 
+            # Subtypes
+            idx1 = idx & (obj['flags'] & 0x04 > 0) & (obj['flags'] & 0x100 > 0) # Saturated
+            idx2 = idx & (obj['flags'] & 0x04 == 0) & (obj['flags'] & 0x100 > 0) # Cosmics
+            idx3 = idx & (obj['flags'] & 0x02 > 0) & (obj['flags'] & 0x100 == 0) # Deblended
+            idx4 = idx & ~idx1 & ~idx2 & ~idx3 # Other flags
+            idx0 = ~idx1 & ~idx2 & ~idx3 # Unflagged
+
             ax1 = fig.add_subplot(221)
-            ax1.plot(var1[~idx], var2[~idx], '.', alpha=alpha)
-            ax1.plot(var1[idx], var2[idx], '.', alpha=alpha, color='C1', label='Flagged')
-            plot_outline(var1[fidx], var2[fidx], 'r-', ax=ax1, label='Good')
+            ax1.plot(var1[idx0], var2[idx0], '.', alpha=alpha)
+            ax1.plot(var1[idx1], var2[idx1], '.', alpha=alpha, color='C1', label='Saturated')
+            ax1.plot(var1[idx2], var2[idx2], '.', alpha=alpha, color='C3', label='Cosmics')
+            ax1.plot(var1[idx3], var2[idx3], '.', alpha=alpha, color='C4', label='Deblended')
+            ax1.plot(var1[idx4], var2[idx4], '.', alpha=alpha, color='C5', label='Other flags')
+            plot_outline(var1[fidx], var2[fidx], 'r-', ax=ax1)#, label='Good')
             ax1.legend()
 
             ax1.set_xscale('log')
             ax1.set_yscale('log')
 
             ax2 = fig.add_subplot(222, sharey=ax1)
-            ax2.plot(var3[~idx], var2[~idx], '.', alpha=alpha)
-            ax2.plot(var3[idx], var2[idx], '.', alpha=alpha, color='C1', label='Flagged')
-            plot_outline(var3[fidx], var2[fidx], 'r-', ax=ax2, label='Good')
+            ax2.plot(var3[idx0], var2[idx0], '.', alpha=alpha)
+            ax2.plot(var3[idx1], var2[idx1], '.', alpha=alpha, color='C1', label='Saturated')
+            ax2.plot(var3[idx2], var2[idx2], '.', alpha=alpha, color='C3', label='Cosmics')
+            ax2.plot(var3[idx3], var2[idx3], '.', alpha=alpha, color='C4', label='Deblended')
+            ax2.plot(var3[idx4], var2[idx4], '.', alpha=alpha, color='C5', label='Other flags')
+            plot_outline(var3[fidx], var2[fidx], 'r-', ax=ax2)#, label='Good')
             ax2.legend()
 
             ax3 = fig.add_subplot(223, sharex=ax1)
-            ax3.plot(var1[~idx], var3[~idx], '.', alpha=alpha)
-            ax3.plot(var1[idx], var3[idx], '.', alpha=alpha, color='C1', label='Flagged')
-            plot_outline(var1[fidx], var3[fidx], 'r-', ax=ax3, label='Good')
+            ax3.plot(var1[idx0], var3[idx0], '.', alpha=alpha)
+            ax3.plot(var1[idx1], var3[idx1], '.', alpha=alpha, color='C1', label='Saturated')
+            ax3.plot(var1[idx2], var3[idx2], '.', alpha=alpha, color='C3', label='Cosmics')
+            ax3.plot(var1[idx3], var3[idx3], '.', alpha=alpha, color='C4', label='Deblended')
+            ax3.plot(var1[idx4], var3[idx4], '.', alpha=alpha, color='C5', label='Other flags')
+            plot_outline(var1[fidx], var3[fidx], 'r-', ax=ax3)#, label='Good')
             ax3.legend()
 
             ax1.grid(alpha=0.2)
@@ -1220,8 +1236,9 @@ def photometry_image(filename, config, verbose=True, show=False):
             ax4.annotate(
                 f"Isolation forest outlier detection\n"
                 f"{len(obj)} objects\n"
-                f"{np.sum(idx)} masked\n"
-                f"{np.sum(fidx)} good {np.sum(~fidx)} outliers",
+                f"{np.sum(idx)} flagged\n"
+                f"{np.sum(fidx)} good {np.sum(~fidx)} outliers\n"
+                f"FWHM {fwhm:.2f} pixels",
                 (0.0, 1.0), xycoords='axes fraction', va='top'
             )
 
@@ -1352,10 +1369,12 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     if config.get('filter_blends', True):
         # TODO: merge blended stars, not remove them!
-        cat = filter_catalogue_blends(cat, 2*fwhm*pixscale)
-        log(f"{len(cat)} catalogue stars after blend filtering with {3600*fwhm*pixscale:.1f} arcsec radius")
+        cat_filtered = filter_catalogue_blends(cat, 2*fwhm*pixscale)
+        log(f"{len(cat_filtered)} catalogue stars after blend filtering with {3600*fwhm*pixscale:.1f} arcsec radius")
         # cat.write(os.path.join(basepath, 'cat_filtered.vot'), format='votable', overwrite=True)
         # log("Filtered catalogue written to file:cat_filtered.vot")
+    else:
+        cat_filtered = cat
 
     # Catalogue settings
     config['cat_col_mag'],config['cat_col_mag_err'] = guess_catalogue_mag_columns(
@@ -1394,7 +1413,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         obj_ast = obj[(obj['flags'] & 0x800) == 0]
 
         # FIXME: make the order configurable
-        wcs1 = pipeline.refine_astrometry(obj_ast, cat, fwhm*pixscale,
+        wcs1 = pipeline.refine_astrometry(obj_ast, cat_filtered, fwhm*pixscale,
                                           wcs=wcs, order=3, method='scamp',
                                           cat_col_mag=config.get('cat_col_mag'),
                                           cat_col_mag_err=config.get('cat_col_mag_err'),
@@ -1420,7 +1439,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Photometric calibration
     m = pipeline.calibrate_photometry(
-        obj, cat, sr=sr, pixscale=pixscale,
+        obj, cat_filtered, sr=sr, pixscale=pixscale,
         cat_col_mag=config.get('cat_col_mag'),
         cat_col_mag_err=config.get('cat_col_mag_err'),
         cat_col_mag1=config.get('cat_col_color_mag1'),
