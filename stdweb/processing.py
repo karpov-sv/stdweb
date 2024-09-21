@@ -1613,6 +1613,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                                                 sn=0,
                                                 bg_size=config.get('bg_size', 256),
                                                 gain=config.get('gain', 1.0),
+                                                centroid_iter=5 if config.get('centroid_targets') else 0,
                                                 verbose=verbose)
 
         target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'],
@@ -1624,6 +1625,10 @@ def photometry_image(filename, config, verbose=True, show=False):
                                                             target_obj['y'],
                                                             target_obj['mag'],
                                                             get_err=True))
+
+        if config.get('centroid_targets'):
+            # Centroiding might change target pixel positions - let's update sky positions too
+            target_obj['ra'],target_obj['dec'] = wcs.all_pix2world(target_obj['x'], target_obj['y'], 0)
 
         # Local detection limit from background rms, if available
         if 'bg_fluxerr' in target_obj.colnames and np.any(target_obj['bg_fluxerr'] > 0):
