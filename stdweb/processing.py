@@ -1534,6 +1534,13 @@ def photometry_image(filename, config, verbose=True, show=False):
     obj['mag_calib'] = obj['mag'] + zp
     obj['mag_calib_err'] = np.hypot(obj['magerr'], zp_err)
 
+    obj['mag_filter_name'] = m['cat_col_mag']
+
+    if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
+        obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
+    if m['color_term'] is not None:
+        obj['mag_color_term'] = m['color_term']
+
     log(f"Mean zero point is {np.mean(zp):.3f}, estimated error {np.mean(zp_err):.2g}")
 
     obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
@@ -1566,14 +1573,23 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Detection limits
     log("\n---- Global detection limit ----\n")
-    mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=verbose)
+    sns = [10, 5, 3]
+    if config.get('sn', 5) not in sns:
+        sns.append(config.get('sn', 5))
+    for sn in sns:
+        # Just print the value
+        mag0 = pipeline.get_detection_limit(obj, sn=sn, verbose=False)
+        log(f"Detection limit at S/N={sn:.0f} level is {mag0:.2f}")
+
+    mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=False)
     config['mag_limit'] = mag0
 
     if 'bg_fluxerr' in obj.colnames and np.any(obj['bg_fluxerr'] > 0):
         fluxerr = obj['bg_fluxerr']
-        maglim = -2.5*np.log10(config.get('sn', 5)*fluxerr) + m['zero_fn'](obj['x'], obj['y'], obj['mag'])
+        sn = config.get('sn', 5)
+        maglim = -2.5*np.log10(sn*fluxerr) + m['zero_fn'](obj['x'], obj['y'], obj['mag'])
         maglim = maglim[np.isfinite(maglim)] # Remove Inf and NaN
-        log(f"Local background RMS detection limit is {np.nanmedian(maglim):.2f} +/- {np.nanstd(maglim):.2f}")
+        log(f"Local background RMS detection limit (S/N={sn:.0f}) is {np.nanmedian(maglim):.2f} +/- {np.nanstd(maglim):.2f}")
 
     # Plot detection limit estimators
     with plots.figure_saver(os.path.join(basepath, 'limit_hist.png'), figsize=(8, 6), show=show) as fig:
@@ -1657,7 +1673,13 @@ def photometry_image(filename, config, verbose=True, show=False):
                 log(f"{target_title} is outside image, skipping")
                 continue
 
-            cutout = cutouts.get_cutout(image, tobj, 30, mask=mask, header=header, time=time)
+            cutout = cutouts.get_cutout(
+                image, tobj, 30,
+                mask=mask,
+                header=header,
+                time=time,
+                # filtered=fimg if config.get('initial_r0') else None,
+            )
             # Cutout from relevant HiPS survey
             cutout['template'] = templates.get_hips_image(
                 guess_hips_survey(tobj['ra'], tobj['dec'], config['filter']),

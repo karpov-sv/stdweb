@@ -243,7 +243,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
                  interpolation='nearest' if data.shape[1]/zoom < 0.5*width else 'bicubic',
                  cmap=request.GET.get('cmap', 'Blues_r'),
                  stretch=request.GET.get('stretch', 'linear'),
-                 qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))])
+                 qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))],
+                 r0=float(request.GET.get('r0', 0)))
 
     def get_wcs():
         # Special handling of external WCS solution in .wcs file alongside with image
@@ -414,6 +415,7 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
         'cmap': request.GET.get('cmap', 'Blues_r'),
         'qq': qq,
         'stretch': request.GET.get('stretch', None),
+        'r0': float(request.GET.get('r0', 0)),
     }
 
     if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
@@ -426,6 +428,11 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
 
     # Load the cutout
     cutout = cutouts.load_cutout(fullpath)
+
+    if 'mag_calib_err' in cutout['meta'] or 'magerr' in cutout['meta']:
+        magerr = cutout['meta'].get('mag_calib_err', cutout['meta'].get('magerr'))
+        if magerr is not None:
+            opts['additional_title'] = f"S/N = {1/magerr:.2f}"
 
     if request.GET.get('adjust'):
         planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']

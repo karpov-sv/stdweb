@@ -64,6 +64,29 @@ overlay_stdview_images = function() {
 
         }
 
+        /* Smooth */
+        if ('smooth' in image.data()) {
+  	    var smooth = $('<select/>');
+            var svals = [0, 0.5, 1, 2, 4];
+
+            smooth.append($('<option disabled selected>').html('Smooth'));
+
+            for (i=0; i<svals.length; i++)
+    	        smooth.append($('<option/>').val(svals[i]).html(svals[i].toString()+' px'));
+
+            smooth.on('change', function() {
+                if (this.value == 0) {
+                    update_image_get_params(image, {r0: null});
+                } else {
+                    update_image_get_params(image, {r0: this.value});
+                }
+            });
+            smooth.on('click', function() {return false});
+
+  	    overlay.append(smooth);
+
+        }
+
         /* data-mark-ra and data-mark-dec parameters */
         if ('markRa' in image.data() && 'markDec' in image.data()) {
   	    var checkbox = $('<input type="checkbox"/>');
