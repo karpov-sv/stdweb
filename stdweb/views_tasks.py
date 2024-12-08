@@ -283,7 +283,7 @@ def handle_task_mask_creation(task, width, height, areas):
 
         mask = mask[::-1] # Flip the mask vertically as the origin is at bottom
 
-        fits.writeto(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.int8), overwrite=True)
+        processing.fits_write(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.int8), compress=True)
 
     return True
 

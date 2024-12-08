@@ -223,6 +223,16 @@ def pickle_from_file(filename):
         return pickle.load(f)
 
 
+def fits_write(filename, image, header=None, compress=False):
+    """Store image with or without header to FITS file, with or without compression"""
+    if compress:
+        hdu = fits.CompImageHDU(image, header)
+    else:
+        hdu = fits.PrimaryHDU(image, header)
+
+    hdu.writeto(filename, overwrite=True)
+
+
 def get_wcs(filename, header=None, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -854,7 +864,7 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Custom mask
     if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
-        mask |= fits.getdata(os.path.join(basepath, 'custom_mask.fits')) > 0
+        mask |= fits.getdata(os.path.join(basepath, 'custom_mask.fits'), -1) > 0
         log("Custom mask loaded from custom_mask.fits")
 
     # Background size
@@ -885,7 +895,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if np.sum(mask) > 0.95*mask.shape[0]*mask.shape[1]:
         raise RuntimeError('More than 95% of the image is masked')
 
-    fits.writeto(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), overwrite=True)
+    fits_write(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), compress=True)
     log("Mask written to file:mask.fits")
 
     # WCS
@@ -1029,11 +1039,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     fix_header(header)
 
     # Mask
-    mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+    mask = fits.getdata(os.path.join(basepath, 'mask.fits'), -1) > 0
 
     # Custom mask
     if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
-        custom_mask = fits.getdata(os.path.join(basepath, 'custom_mask.fits')) > 0
+        custom_mask = fits.getdata(os.path.join(basepath, 'custom_mask.fits'), -1) > 0
     else:
         custom_mask = None
 
@@ -1085,17 +1095,17 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"{len(obj)} objects found")
 
-    fits.writeto(os.path.join(basepath, 'segmentation.fits'), segm, header, overwrite=True)
+    fits_write(os.path.join(basepath, 'segmentation.fits'), segm, header, compress=True)
     log("Segmemtation map written to file:segmentation.fits")
 
-    fits.writeto(os.path.join(basepath, 'filtered.fits'), fimg, header, overwrite=True)
+    fits_write(os.path.join(basepath, 'filtered.fits'), fimg, header, compress=True)
     log("Filtered image written to file:filtered.fits")
 
     if config.get('inspect_bg'):
-        fits.writeto(os.path.join(basepath, 'image_bg.fits'), bg, header, overwrite=True)
+        fits_write(os.path.join(basepath, 'image_bg.fits'), bg, header, compress=True)
         log("Background map written to file:image_bg.fits")
 
-        fits.writeto(os.path.join(basepath, 'image_rms.fits'), bgrms, header, overwrite=True)
+        fits_write(os.path.join(basepath, 'image_rms.fits'), bgrms, header, compress=True)
         log("Background RMS map written to file:image_rms.fits")
 
     if not len(obj):
@@ -1732,13 +1742,13 @@ def transients_simple_image(filename, config, verbose=True, show=False):
             raise RuntimeError(f"{_} not found, please rerun photometric calibration")
 
     # Mask
-    mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+    mask = fits.getdata(os.path.join(basepath, 'mask.fits'), -1) > 0
 
     # Segmentation map
-    segm = fits.getdata(os.path.join(basepath, 'segmentation.fits'))
+    segm = fits.getdata(os.path.join(basepath, 'segmentation.fits'), -1)
 
     # Filtered detection image
-    fimg = fits.getdata(os.path.join(basepath, 'filtered.fits'))
+    fimg = fits.getdata(os.path.join(basepath, 'filtered.fits'), -1)
 
     # Objects
     obj = Table.read(os.path.join(basepath, 'objects.vot'))
@@ -1939,7 +1949,7 @@ def subtract_image(filename, config, verbose=True, show=False):
     fix_header(header)
 
     # Mask
-    mask = fits.getdata(os.path.join(basepath, 'mask.fits')) > 0
+    mask = fits.getdata(os.path.join(basepath, 'mask.fits'), -1) > 0
 
     # Photometric solution
     m = pickle_from_file(os.path.join(basepath, 'photometry.pickle'))
@@ -2057,7 +2067,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         log(f"\n---- Sub-image {i}: {x0} {y0} - {x0 + image1.shape[1]} {y0 + image1.shape[0]} ----\n")
 
         fits.writeto(os.path.join(basepath, 'sub_image.fits'), image1, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.int8), header1, overwrite=True)
+        fits_write(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.int8), header1, compress=True)
 
         # Get the template
         if tname == 'ps1' or tname == 'ls':
@@ -2137,7 +2147,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         template_fwhm = np.median(tobj['fwhm'])
 
         fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
-        fits.writeto(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, overwrite=True)
+        fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, compress=True)
 
         if subtraction_method == 'zogy':
             # ZOGY
