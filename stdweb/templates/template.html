@@ -99,6 +99,10 @@
                     </li>
                   {% endif %}
 
+                  <li>
+                    <a class="dropdown-item" href="{% url 'password' %}?next={{ request.get_full_path }}">Change password</a>
+                  </li>
+
                   <!-- Logout requires POST -->
                   <li>
                     <form id="logout-form" method="post" action="{% url 'logout' %}?next={{ request.get_full_path }}">

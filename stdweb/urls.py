@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, re_path, include
+from django.urls import reverse_lazy
 from django.conf import settings
 from django.http import HttpResponse
 
@@ -64,9 +65,11 @@ urlpatterns = [
     # Auth
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('password/', auth_views.PasswordChangeView.as_view(success_url=reverse_lazy('password_change_done')), name='password'),
+    path('password/done/', auth_views.PasswordChangeDoneView.as_view(), name='password_change_done'),
 
     # robots.txt
-    path('robots.txt', lambda r: HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")),
+    path('robots.txt', lambda _: HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")),
 
     # Admin panel
     path('admin/', admin.site.urls),
