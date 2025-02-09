@@ -10,7 +10,7 @@ redis
 humanize
 astroscrappy
 dill
-astropy<5.3
+astropy
 reproject
 scikit-learn
 django-select2

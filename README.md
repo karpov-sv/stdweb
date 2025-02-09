@@ -20,7 +20,7 @@ The main requirement for *STDWeb* is obviously *STDPipe* which is available at h
 
 Then, deployment of *STDWeb* requires cloning of its code:
 ```
-git clone https://github.com/karpov-sv/stdpipe.git
+git clone https://github.com/karpov-sv/stdweb.git
 ```
 and then installing its dependencies (you better do it in a dedicated environment):
 ```
