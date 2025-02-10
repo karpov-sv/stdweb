@@ -1185,7 +1185,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                 alpha = 1
 
             # All flags except 0x800 that we just set for outliers
-            idx = (obj['flags'] & (0xffff - 0x800)) > 0
+            idx = (obj['flags'] & (0x7fff - 0x800)) > 0
 
             # Subtypes
             idx1 = idx & (obj['flags'] & 0x04 > 0) & (obj['flags'] & 0x100 > 0) # Saturated
@@ -1809,7 +1809,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     log(f"Will check Vizier catalogues: {' '.join(vizier)}")
 
     # Filter based on flags and Vizier catalogs
-    flagmask = 0xffff - 0x0100 - 0x02 # Allow deblended and isophotal masked
+    flagmask = 0x7fff - 0x0100 - 0x02 # Allow deblended and isophotal masked
     if not config.get('simple_prefilter'):
         flagmask -= 0x800 # Allow pre-filtered
     else:
