@@ -8,7 +8,7 @@ from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.cache import cache_page
 from django.conf import settings
 
-import os, glob
+import os, glob, shutil
 import json
 import numpy as np
 
@@ -100,6 +100,29 @@ def tasks(request, id=None):
                     else:
                         messages.error(request, "Cannot delete task " + str(id) + " belonging to " + task.user.username)
                         return HttpResponseRedirect(request.path_info)
+
+                if action == 'duplicate_task':
+                    old_path = task.path()
+
+                    # As per https://docs.djangoproject.com/en/5.2/topics/db/queries/#copying-model-instances
+                    task.pk = None
+                    task._state.adding = True
+                    task.user = request.user
+                    task.state = 'duplicated'
+                    task.save() # To populate new task.id
+
+                    try:
+                        os.makedirs(task.path())
+                    except OSError:
+                        pass
+
+                    for name in ['image.fits', 'image.wcs', 'custom_mask.fits', 'custom_template.fits']:
+                        if os.path.exists(os.path.join(old_path, name)):
+                            shutil.copyfile(os.path.join(old_path, name), os.path.join(task.path(), name))
+
+                    messages.success(request, "Task duplicated as " + str(task.id))
+
+                    return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 
                 if action == 'fix_image':
                     # TODO: move to async celery task?..
