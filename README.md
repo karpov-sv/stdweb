@@ -123,3 +123,6 @@ STDPIPE_PS1_CACHE =
 # SkyPortal API token
 SKYPORTAL_TOKEN = 
 ```
+
+# Referencing & Attribution
+If you STDWeb in your project, or use results from STDWeb in a publication, please cite [Karpov (2025)](https://ojs.cvut.cz/ojs/index.php/ap/article/view/9969). 
