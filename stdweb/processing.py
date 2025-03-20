@@ -265,6 +265,7 @@ def fix_header(header, verbose=True):
     # Fix FITS standard errors in the header
     for _ in header.cards:
         _.verify('silentfix')
+        __ = str(_) # it runs self.image()
 
     # Fix SCAMP headers with TAN type what are actually TPV (and thus break AstroPy WCS)
     if header.get('CTYPE1') == 'RA---TAN' and 'PV1_5' in header.keys():
@@ -799,6 +800,9 @@ def inspect_image(filename, config, verbose=True, show=False):
     except:
         raise RuntimeError('Cannot load the image')
 
+    # Fix image Inf values?..
+    image[~np.isfinite(image)] = np.nan
+
     log(f"Image size is {image.shape[1]} x {image.shape[0]}")
 
     log(f"Image Min / Median / Max : {np.nanmin(image):.2f} {np.nanmedian(image):.2f} {np.nanmax(image):.2f}")
@@ -808,7 +812,7 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Guess some parameters from keywords
     if not config.get('gain'):
-        config['gain'] = header.get('GAIN', 1)
+        config['gain'] = float(header.get('GAIN', 1))
 
         if config['gain'] == 1 and np.nanstd(image) <= 1:
             log(f"Warning: Pixel values are significantly re-scaled, guessing gain from max value")
@@ -1457,6 +1461,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         cat_col_mag1=config.get('cat_col_color_mag1'),
         cat_col_mag2=config.get('cat_col_color_mag2'),
         use_color=config.get('use_color', True),
+        force_color_term=config.get('force_color_term'),
         order=config.get('spatial_order', 0),
         robust=True, scale_noise=True,
         accept_flags=0x02, max_intrinsic_rms=0.01,
@@ -1549,7 +1554,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
         obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
     if m['color_term'] is not None:
-        obj['mag_color_term'] = m['color_term']
+        obj['mag_color_term'] = [m['color_term']]*len(obj)
 
     log(f"Mean zero point is {np.mean(zp):.3f}, estimated error {np.mean(zp_err):.2g}")
 
@@ -1557,7 +1562,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     log("Measured objects stored to file:objects.vot")
 
     # Check the filter
-    if config.get('use_color', True) and (np.abs(m['color_term']) > 0.5 or config.get('diagnose_color')):
+    if (config.get('use_color', True) and np.any(np.abs(m['color_term']) > 0.5)) or config.get('diagnose_color'):
         if config.get('diagnose_color'):
             log("Running color term diagnostics for all possible filters")
         else:
@@ -1570,14 +1575,14 @@ def photometry_image(filename, config, verbose=True, show=False):
                 cat_col_mag_err='e_' + fname + 'mag',
                 cat_col_mag1=config.get('cat_col_color_mag1'),
                 cat_col_mag2=config.get('cat_col_color_mag2'),
-                use_color=config.get('use_color', True),
+                use_color=True,
                 order=config.get('spatial_order', 0),
                 robust=True, scale_noise=True,
                 accept_flags=0x02, max_intrinsic_rms=0.01,
                 verbose=False)
 
             if m1 is not None:
-                log(f"filter {fname}: color term {m1['color_term']:.2f}")
+                log(f"filter {fname}: color term {photometry.format_color_term(m1['color_term'])}")
             else:
                 log(f"filter {fname}: match failed")
 
@@ -1667,7 +1672,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
         if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
             target_obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
-            target_obj['mag_color_term'] = m['color_term']
+            target_obj['mag_color_term'] = [m['color_term']]*len(target_obj)
 
         target_obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
         log("Measured targets stored to file:target.vot")
@@ -2316,7 +2321,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
                 target_obj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
-                target_obj['mag_color_term'] = m['color_term']
+                target_obj['mag_color_term'] = [m['color_term']]*len(target_obj)
 
             target_obj.write(os.path.join(basepath, 'sub_target.vot'), format='votable', overwrite=True)
             log("Measured target stored to file:sub_target.vot")
@@ -2432,7 +2437,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
                 if 'cat_col_mag1' in m.keys() and 'cat_col_mag2' in m.keys():
                     sobj['mag_color_name'] = '%s - %s' % (m['cat_col_mag1'], m['cat_col_mag2'])
-                    sobj['mag_color_term'] = m['color_term']
+                    sobj['mag_color_term'] = [m['color_term']]*len(sobj)
 
             log(f"{len(sobj)} transient candidates found in difference image")
 
