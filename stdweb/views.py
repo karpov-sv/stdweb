@@ -261,6 +261,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         # Show the position of the object
         ra = [float(_) for _ in request.GET.get('ra').split(',')]
         dec = [float(_) for _ in request.GET.get('dec').split(',')]
+        radius = float(request.GET.get('radius', 5.0))
 
         wcs = get_wcs()
 
@@ -268,7 +269,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
             x,y = wcs.all_world2pix(ra, dec, 0)
             for xx,yy in zip(x,y):
                 if xx > 0 and xx < data.shape[1] and yy > 0 and yy < data.shape[0]:
-                    ax.add_artist(Circle((xx, yy), 5.0, edgecolor='red', facecolor='none', ls='-', lw=2))
+                    ax.add_artist(Circle((xx, yy), radius, edgecolor='red', facecolor='none', ls='-', lw=2))
 
     if request.GET.get('obj'):
         # Overplot list of objects from the file
@@ -425,6 +426,9 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
         x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
         opts['mark_x'] = x
         opts['mark_y'] = y
+
+        if request.GET.get('radius', None) is not None:
+            opts['mark_r'] = float(request.GET.get('radius', 5.0))
 
     # Load the cutout
     cutout = cutouts.load_cutout(fullpath)

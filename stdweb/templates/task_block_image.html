@@ -6,7 +6,7 @@
     <!-- FITS files -->
     <img src="{% url 'task_preview' task.id image %}?width=256&timestamp={{ task.completed|unix }}"
          class="figure-img img-fluid rounded mb-0" style="max-width: 256px;"
-         onclick="popupImage(event, '{% url 'task_preview' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.targets %}'data-mark-ra':'{{ task.config.targets|list_extract:"ra"|join:"," }}', 'data-mark-dec':'{{ task.config.targets|list_extract:"dec"|join:"," }}',{% endif %} 'data-grid':1, 'data-zoom':1, {% if obj %}'data-obj':1,{%endif %} {% if cat %}'data-cat':1,{%endif %}})"/>
+         onclick="popupImage(event, '{% url 'task_preview' task.id image %}?timestamp={{ task.modified|unix }}', '{{ image }}', true, 'stdview-image', {'data-stretch':1, {% if task.config.targets %}'data-mark-ra':'{{ task.config.targets|list_extract:"ra"|join:"," }}', 'data-mark-dec':'{{ task.config.targets|list_extract:"dec"|join:"," }}',{% if task.config.fwhm and task.config.rel_aper %} 'data-mark-radius': '{{ task.config.fwhm|multiply:task.config.rel_aper }}',{% endif %}{% endif %} 'data-grid':1, 'data-zoom':1, {% if obj %}'data-obj':1,{%endif %} {% if cat %}'data-cat':1,{%endif %}})"/>
 
     <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_download' task.id image %}">{{ image }}</a></small>
@@ -18,6 +18,9 @@
     <img src="{% url 'task_cutout' task.id image %}?timestamp={{ task.completed|unix }}&format=png"
          class="figure-img img-fluid rounded mb-0 stdview-image"
          data-stretch=1 data-smooth=1 data-mark-ra={{ ra }} data-mark-dec={{ dec }}
+         {% if task.config.fwhm and task.config.rel_aper %}
+         data-mark-radius={{ task.config.fwhm|multiply:task.config.rel_aper }}
+         {% endif %}
          />
 
     <figcaption class="figure-caption text-center mt-0 mb-3">

@@ -93,10 +93,13 @@ overlay_stdview_images = function() {
             var label = $('<i class="fa fa-bullseye" style="padding-left: 0.3em; padding-right: 0.1em;">');
 
   	    checkbox.on('click', function() {
-    	        if (this.checked)
+    	        if (this.checked) {
       	            update_image_get_params(image, {ra: image.data('markRa'), dec: image.data('markDec')});
-                else
-      	            update_image_get_params(image, {ra: null, dec: null});
+
+                    if ('markRadius' in image.data())
+                        update_image_get_params(image, {radius: image.data('markRadius')});
+                } else
+      	            update_image_get_params(image, {ra: null, dec: null, r0: null});
             });
 
             checkbox.attr('title', 'Click to mark the position');
