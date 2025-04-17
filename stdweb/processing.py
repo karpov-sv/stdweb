@@ -1463,6 +1463,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         use_color=config.get('use_color', True),
         force_color_term=config.get('force_color_term'),
         order=config.get('spatial_order', 0),
+        bg_order=config.get('bg_order', None),
+        nonlin=config.get('nonlin', False),
         robust=True, scale_noise=True,
         accept_flags=0x02, max_intrinsic_rms=0.01,
         verbose=verbose
@@ -1714,8 +1716,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             if tobj['flux'] > 0:
                 mag_string = tobj['mag_filter_name']
                 if 'mag_color_name' in target_obj.colnames and 'mag_color_term' in target_obj.colnames and tobj['mag_color_term'] is not None:
-                    sign = '-' if tobj['mag_color_term'] > 0 else '+'
-                    mag_string += f" {sign} {np.abs(tobj['mag_color_term']):.2f}*({tobj['mag_color_name']})"
+                    mag_string += ' ' + photometry.format_color_term(tobj['mag_color_term'], color_name=tobj['mag_color_name'])
 
                 log(f"{target_title} magnitude is {mag_string} = {tobj['mag_calib']:.2f} +/- {tobj['mag_calib_err']:.2f}")
                 log(f"{target_title} detected with S/N = {1/tobj['mag_calib_err']:.2f}")
@@ -2287,8 +2288,13 @@ def subtract_image(filename, config, verbose=True, show=False):
                 # ..and known error model
                 err=ediff,
                 gain=config.get('gain', 1.0),
+                centroid_iter=5 if config.get('centroid_targets') else 0,
                 verbose=sub_verbose
             )
+
+            if config.get('centroid_targets'):
+                # Centroiding might change target pixel positions - let's update sky positions too
+                target_obj['ra'],target_obj['dec'] = wcs1.all_pix2world(target_obj['x'], target_obj['y'], 0)
 
             target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](
                 target_obj['x'] + x0,
