@@ -8,6 +8,10 @@ from stdweb import models
 
 import argparse
 
+import celery
+
+from ... import celery_tasks
+
 class store_kw(argparse.Action):
     """
     argparse action to split an argument into KEY=VALUE form
@@ -43,6 +47,9 @@ class Command(BaseCommand):
         parser.add_argument("-d", "--delete", action="store_true", dest='delete', help="Delete tasks")
 
         parser.add_argument("--skyportal", action="store_true", dest='skyportal', help="Prepare photometry for exporting to SkyPortal")
+
+        # Run specific steps
+        parser.add_argument("-r", "--run", action="store", dest='run', default=None, help="Run processing steps")
 
         # Config values as key-value pairs
         parser.add_argument("-c", "--config", metavar="KEY=VALUE", action=store_kw, nargs=1, dest="config", help="Initial parameters for the task")
@@ -86,7 +93,10 @@ class Command(BaseCommand):
                             elif value in ['False']:
                                 value = False
 
-                            config[key] = value
+                            try:
+                                config[key] = float(value)
+                            except:
+                                config[key] = value
 
                         task.config.update(config)
 
@@ -94,6 +104,9 @@ class Command(BaseCommand):
                     task.save()
 
                     print(f"{task.original_name} imported as task {task.id}")
+
+                    if options['run'] is not None:
+                        run_task(task, options['run'])
 
         elif options['delete']:
             for name in options['names']:
@@ -142,3 +155,28 @@ class Command(BaseCommand):
                     }.get(fname, fname)
 
                     print(f"{meta['time'].mjd},{row['mag_calib']:.3f},{row['mag_calib_err']:.3f},{row['mag_limit']:.3f},{magsys},{fname}")
+
+        elif options['run']:
+            for name in options['names']:
+                id = int(name)
+                task = models.Task.objects.get(id=id)
+
+                run_task(task, options['run'])
+
+def run_task(task, run):
+    todo = []
+
+    for step in run.split(','):
+        print(f"Running {step} for task {task.id}")
+
+        if step == 'inspect':
+            todo.append(celery_tasks.task_inspect.subtask(args=[task.id], immutable=True))
+        elif step == 'photometry':
+            todo.append(celery_tasks.task_photometry.subtask(args=[task.id], immutable=True))
+        else:
+            print(f"Unknown step: {step}")
+
+    if todo:
+        task.celery_id = celery.chain(todo).apply_async()
+        task.state = 'running'
+        task.save()
