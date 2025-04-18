@@ -98,6 +98,10 @@ overlay_stdview_images = function() {
 
                     if ('markRadius' in image.data())
                         update_image_get_params(image, {radius: image.data('markRadius')});
+                    if ('markRadius2' in image.data())
+                        update_image_get_params(image, {radius2: image.data('markRadius2')});
+                    if ('markRadius3' in image.data())
+                        update_image_get_params(image, {radius3: image.data('markRadius3')});
                 } else
       	            update_image_get_params(image, {ra: null, dec: null, r0: null});
             });

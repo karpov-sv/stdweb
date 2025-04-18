@@ -271,6 +271,12 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
                 if xx > 0 and xx < data.shape[1] and yy > 0 and yy < data.shape[0]:
                     ax.add_artist(Circle((xx, yy), radius, edgecolor='red', facecolor='none', ls='-', lw=2))
 
+                    for _ in ['2', '3']:
+                        radius1 = request.GET.get('radius'+_)
+                        if radius1:
+                            ax.add_artist(Circle((xx, yy), float(radius1), edgecolor='red', facecolor='none', ls='--', lw=1))
+
+
     if request.GET.get('obj'):
         # Overplot list of objects from the file
         objname = os.path.join(os.path.dirname(fullpath), 'objects.vot')
@@ -427,8 +433,9 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
         opts['mark_x'] = x
         opts['mark_y'] = y
 
-        if request.GET.get('radius', None) is not None:
-            opts['mark_r'] = float(request.GET.get('radius', 5.0))
+        for _ in ['', '2', '3']:
+            if request.GET.get('radius'+_, None) is not None:
+                opts['mark_r'+_] = float(request.GET.get('radius'+_))
 
     # Load the cutout
     cutout = cutouts.load_cutout(fullpath)
