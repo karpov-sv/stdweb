@@ -141,8 +141,8 @@ def skyportal(request):
     context = {}
 
     instruments = skyportal_get_instruments()
-    instruments = [(_['id'], _['name']) for _ in instruments]
-    instruments.sort(key=lambda x: x[0])
+    instruments = [(_['id'], _['name']) for _ in instruments if _['type'] == 'imager']
+    instruments.sort(key=lambda x: x[1]) # Sort by name
     for i,inst in enumerate(instruments):
         if inst[1] == 'Generic Instrument':
             instruments.insert(0, instruments.pop(i))
