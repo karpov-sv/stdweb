@@ -813,6 +813,9 @@ def inspect_image(filename, config, verbose=True, show=False):
     # Guess some parameters from keywords
     if not config.get('gain'):
         config['gain'] = float(header.get('GAIN', 1))
+        if config['gain'] == 0:
+            log("Header gain is zero, setting it to 1")
+            config['gain'] = 1
 
         if config['gain'] == 1 and np.nanstd(image) <= 1:
             log(f"Warning: Pixel values are significantly re-scaled, guessing gain from max value")
