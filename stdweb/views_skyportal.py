@@ -152,8 +152,10 @@ def skyportal(request):
     context['form'] = form
 
     if request.method == 'POST':
-        if form.is_valid():
+        if form.is_valid() and request.POST.get('action') != 'init':
             action = request.POST.get('action')
+            types = request.POST.get('types', 'best')
+            limit_only = request.POST.get('limit_only', False)
             context['action'] = action
 
             instrument = form.cleaned_data.get('instrument')
@@ -178,7 +180,13 @@ def skyportal(request):
                     ctask['ra'], ctask['dec'], ctask['sid'] = skyportal_resolve_task(task)
 
                     try:
-                        for sname in ['sub_target.vot', 'target.vot']:
+                        sfiles = []
+                        if types == 'subtracted' or types == 'best':
+                            sfiles.append('sub_target.vot')
+                        if types == 'direct' or types == 'best':
+                            sfiles.append('target.vot')
+
+                        for sname in sfiles:
                             filename = f"tasks/{id}/{sname}"
                             if os.path.exists(filename):
                                 if sname == 'sub_target.vot':
@@ -193,7 +201,7 @@ def skyportal(request):
                             row = tobj[0]
                             fname = row['mag_filter_name']
 
-                            if row['mag_calib_err'] < 1/5:
+                            if row['mag_calib_err'] < 1/3 and not limit_only:
                                 mag = row['mag_calib']
                                 magerr = row['mag_calib_err']
                             else:

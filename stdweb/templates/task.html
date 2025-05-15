@@ -443,6 +443,19 @@
 
     <!-- Target cutout -->
     {% if target_cutouts %}
+      {% if perms.stdweb.skyportal_upload and settings.SKYPORTAL_TOKEN %}
+        {% if user_may_submit and not task.celery_id %}
+          <form action="{% url 'skyportal' %}" method="POST" class="mb-2">
+            {% csrf_token %}
+            <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
+              <input type="hidden" name="ids" value="{{ task.id }}"/>
+              <input type="hidden" name="types" value="direct"/>
+              <button type="submit" name="action" value="init" class="btn btn-secondary">Upload Photometry to SkyPortal</button>
+            </fieldset>
+          </form>
+        {% endif %}
+      {% endif %}
+
       <hr>
       <h3>
         Target in direct image
@@ -631,6 +644,19 @@
 
     <!-- Target cutout -->
     {% if 'sub_target.cutout' in files %}
+      {% if perms.stdweb.skyportal_upload and settings.SKYPORTAL_TOKEN %}
+        {% if user_may_submit and not task.celery_id %}
+          <form action="{% url 'skyportal' %}" method="POST" class="mb-2">
+            {% csrf_token %}
+            <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
+              <input type="hidden" name="ids" value="{{ task.id }}"/>
+              <input type="hidden" name="types" value="subtracted"/>
+              <button type="submit" name="action" value="init" class="btn btn-secondary">Upload Photometry to SkyPortal</button>
+            </fieldset>
+          </form>
+        {% endif %}
+      {% endif %}
+
       <hr>
       <h3>
         Target in difference (template-subtracted) image

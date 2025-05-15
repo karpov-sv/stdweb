@@ -277,8 +277,15 @@ class TaskSubtractionForm(forms.Form):
 
 
 class SkyPortalUploadForm(forms.Form):
-    ids = forms.CharField(max_length=150, required=False, label="Task IDs to upload")
+    ids = forms.CharField(
+        max_length=150, required=False, label="Task IDs to upload",
+        widget=forms.TextInput(attrs={'placeholder': 'Comma or whitespace separated list of task IDs to upload'})
+    )
+    types = forms.ChoiceField(choices=[
+        ('best', 'Best'), ('direct', 'Direct'), ('subtracted', 'Template-subtracted'),
+    ],  initial='best', required=False, label="Photometry type")
     instrument = forms.ChoiceField(choices=[], initial=None, required=False, label="Instrument")
+    limit_only = forms.BooleanField(initial=False, required=False, label="Upload upper limit only")
 
     def __init__(self, *args, **kwargs):
         instruments = kwargs.pop('instruments')
@@ -286,24 +293,31 @@ class SkyPortalUploadForm(forms.Form):
         self.helper = FormHelper()
         self.helper.form_tag = False
         self.helper.disable_csrf = True
-        self.helper.form_show_labels = False
+        self.helper.field_template = 'crispy_field.html'
         self.helper.layout = Layout(
             Row(
                 Column(
-                    InlineField(
-                        PrependedText('ids', 'IDs:', placeholder='Comma or whitespace separated list of task IDs to upload'),
-                    ),
+                    'ids',
                     css_class="col-md"
+                ),
+                Column(
+                    'types',
+                    css_class="col-md-auto"
                 ),
                 Column(
                     'instrument',
                     css_class="col-md-auto"
                 ),
                 Column(
-                    Submit('preview', 'Preview', css_class='btn-primary'),
+                    Submit('preview', 'Preview', css_class='btn-primary mb-1'),
                     css_class="col-md-auto"
-                )
-            )
+                ),
+                css_class='align-items-end',
+            ),
+            Row(
+                Column('limit_only', css_class="col-md"),
+                css_class='align-items-end',
+            ),
         )
 
         if instruments is not None:
