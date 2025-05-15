@@ -762,6 +762,21 @@ def filter_vizier_blends(
     return obj[cand_idx]
 
 
+import regions
+def write_ds9_regions(filename, objs, radius=None):
+    regs = []
+
+    if radius is None:
+        radius = 5/3600 # 5 arcsec
+
+    for row in objs:
+        regs.append(regions.CircleSkyRegion(SkyCoord(row['ra'], row['dec'], unit='deg'), radius*u.deg))
+
+    regs = regions.Regions(regs)
+
+    regs.write(filename, format='ds9', overwrite=True)
+
+
 # Actual processing steps below
 
 def inspect_image(filename, config, verbose=True, show=False):
@@ -1929,6 +1944,14 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
         candidates.write(os.path.join(basepath, 'candidates_simple.vot'), format='votable', overwrite=True)
         log("Candidates written to file:candidates_simple.vot")
+
+        write_ds9_regions(
+            os.path.join(basepath, 'candidates_simple.reg'),
+            candidates,
+            radius=config.get('rel_aper', 1.0)*pixscale*fwhm
+        )
+        log("Candidates written to file:candidates_simple.reg")
+
     else:
         log("No candidates found")
 
@@ -2543,5 +2566,13 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             all_candidates.write(os.path.join(basepath, 'candidates.vot'), format='votable', overwrite=True)
             log("Candidates written to file:candidates.vot")
+
+            write_ds9_regions(
+                os.path.join(basepath, 'candidates.reg'),
+                candidates,
+                radius=config.get('rel_aper', 1.0)*pixscale*config.get('fwhm')
+            )
+            log("Candidates written to file:candidates.reg as DS9 regions")
+
         else:
             log("No candidates found")
