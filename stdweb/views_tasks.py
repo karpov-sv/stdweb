@@ -77,7 +77,6 @@ def tasks(request, id=None):
                         ignored_fields = [
                             'form_type',
                             'crop_x1', 'crop_y1', 'crop_x2', 'crop_y2',
-                            'nonlin_slope',
                             'raw_config',
                         ]
                         if name not in ignored_fields:
@@ -139,14 +138,6 @@ def tasks(request, id=None):
 
                     messages.success(request, "Cropped the image for task " + str(id))
                     # Now we have to cleanup, which will be handled below
-
-                if action == 'nonlin_image':
-                    # TODO: move to async celery task?..
-                    processing.nonlin_image(os.path.join(task.path(), 'image.fits'), task.config,
-                                            slope=request.POST.get('nonlin_slope', 1.0))
-
-                    messages.success(request, "Non-linear transformation done for task " + str(id))
-                    # For nonlin transform we do not need to do full cleanup
 
                 if action == 'update_config':
                     if 'raw_config' in form.changed_data:

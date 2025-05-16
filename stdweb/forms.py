@@ -109,6 +109,7 @@ class TaskPhotometryForm(forms.Form):
     blind_match_wcs = forms.BooleanField(required=False, label="Blind match")
     inspect_bg = forms.BooleanField(required=False, label="Inspect background")
     centroid_targets = forms.BooleanField(required=False, label="Centroid targets")
+    nonlin = forms.BooleanField(required=False, label="Non-linearity")
 
     blind_match_ps_lo = forms.FloatField(initial=0.2, min_value=0, required=False, label="Scale lower limit, arcsec/pix")
     blind_match_ps_up = forms.FloatField(initial=4.0, min_value=0, required=False, label="Scale upper limit, arcsec/pix")
@@ -160,6 +161,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('filter_blends', css_class="col-md-auto"),
                 Column('prefilter_detections', css_class="col-md-auto"),
                 Column('centroid_targets', css_class="col-md-auto"),
+                Column('nonlin', css_class="col-md-auto"),
                 Column('diagnose_color', css_class="col-md-auto"),
                 Column('inspect_bg', css_class="col-md-auto"),
                 css_class='align-items-end'
