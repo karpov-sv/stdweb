@@ -52,7 +52,8 @@ def delete_task_hook(sender, instance, using, **kwargs):
 
 class Preset(models.Model):
     name = models.CharField(max_length=250, blank=False) # Preset name
-    config = models.JSONField(default=dict, blank=True)
+    config = models.JSONField(default=dict, blank=True, help_text='Initial config for the task, in JSON format')
+    files = models.TextField(blank=True, help_text='Files to be copied into new task, one per line') # Files to be copied into new task, one per line
 
     def __str__(self):
         return f"{self.id}: {self.name}"

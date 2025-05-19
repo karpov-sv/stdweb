@@ -351,7 +351,13 @@ def upload_file(request):
             if form.cleaned_data.get('preset'):
                 preset = models.Preset.objects.get(id=int(form.cleaned_data.get('preset')))
                 task.config.update(preset.config)
-                messages.success(request, "Config updated with preset " + str(preset.id) + " : " + preset.name)
+                messages.success(request, "Config updated with preset " + preset.name + " : " + str(preset.config))
+
+                if preset.files:
+                    # Copy preset files into task folder
+                    for filename in preset.files.split('\n'):
+                        shutil.copy(filename, task.path())
+                        messages.success(request, filename + " copied into the task")
 
             task.config['target'] = form.cleaned_data.get('target')
 
