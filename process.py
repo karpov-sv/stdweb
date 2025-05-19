@@ -85,9 +85,13 @@ if __name__ == '__main__':
     parser.add_argument('--cleanup', dest='do_cleanup', action='store_true', help='Run Cleanup task')
     parser.add_argument('--inspect', dest='do_inspect', action='store_true', help='Run Inspect task')
     parser.add_argument('--photometry', dest='do_photometry', action='store_true', help='Run Photometry task')
+    parser.add_argument('--simple-transients', dest='do_simple_transients', action='store_true', help='Run Simple Transients Detection task')
+    parser.add_argument('--subtract', dest='do_subtraction', action='store_true', help='Run Template Subtraction task')
 
     # Config values as key-value pairs
     parser.add_argument("-c", "--config", metavar="KEY=VALUE", action=store_kw, nargs=1, dest="config", help="Initial parameters for the task")
+
+    parser.add_argument('--preset', dest='preset', action='store', help='Read configuration preset from file', default=None)
 
     options, filenames = parser.parse_known_args()
 
@@ -98,12 +102,12 @@ if __name__ == '__main__':
         basepath = os.path.split(filename)[0]
         configname = os.path.join(basepath, '.config')
 
+        config = {}
+
         # Read existing config
         if os.path.exists(configname):
             log('Reading config from', configname)
-            config = json.loads(file_read(configname))
-        else:
-            config = {}
+            config.update(json.loads(file_read(configname)))
 
         # Cleanup
         if options.do_cleanup:
@@ -115,6 +119,11 @@ if __name__ == '__main__':
                     else:
                         os.unlink(path)
             config = {}
+
+        # If preset is specified, add it on top of the config we read
+        if options.preset and os.path.exists(options.preset):
+            log('Reading preset configuration from', options.preset)
+            config.update(json.loads(file_read(options.preset)))
 
         # Now apply config params from command line
         config.update(parse_kw(options.config))
@@ -129,6 +138,16 @@ if __name__ == '__main__':
         if options.do_photometry:
             log('\n-- Photometry --')
             processing.photometry_image(filename, config, verbose=options.verbose)
+
+        # Simple Transients Detection
+        if options.do_photometry:
+            log('\n-- Simple Transients Detection --')
+            processing.transients_simple_image(filename, config, verbose=options.verbose)
+
+        # Template Subtraction
+        if options.do_subtraction:
+            log('\n-- Template Subtraction --')
+            processing.subtract_image(filename, config, verbose=options.verbose)
 
         # Store the config
         log('Writing config to', configname)
