@@ -456,13 +456,8 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
         return HttpResponse('not found')
 
     # Optional parameters
-    ext = int(request.GET.get('ext', 0))
     fmt = request.GET.get('format', 'jpeg')
     quality = int(request.GET.get('quality', 95))
-
-    width = request.GET.get('width', width)
-    if width is not None:
-        width = int(width)
 
     qq = None
     if 'qmin' in request.GET or 'qmax' in request.GET:
@@ -475,20 +470,21 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
         'r0': float(request.GET.get('r0', 0)),
     }
 
+    # Load the cutout
+    cutout = cutouts.load_cutout(fullpath)
+
     if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
         # Show the position of the object
         header = fits.getheader(fullpath, 1)
         wcs = WCS(header)
-        x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
+        # x,y = wcs.all_world2pix(float(request.GET.get('ra')), float(request.GET.get('dec')), 0)
+        x,y = wcs.all_world2pix(cutout['meta'].get('ra'), cutout['meta'].get('dec'), 0)
         opts['mark_x'] = x
         opts['mark_y'] = y
 
         for _ in ['', '2', '3']:
             if request.GET.get('radius'+_, None) is not None:
                 opts['mark_r'+_] = float(request.GET.get('radius'+_))
-
-    # Load the cutout
-    cutout = cutouts.load_cutout(fullpath)
 
     if 'mag_calib_err' in cutout['meta'] or 'magerr' in cutout['meta']:
         magerr = cutout['meta'].get('mag_calib_err', cutout['meta'].get('magerr'))
