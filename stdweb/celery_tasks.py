@@ -21,7 +21,32 @@ def fix_config(config):
 
 
 @shared_task(bind=True)
-def task_cleanup(self, id):
+def task_finalize(self, id):
+    task = models.Task.objects.get(id=id)
+    task.celery_id = None
+    task.complete()
+    task.save()
+
+
+@shared_task(bind=True)
+def task_set_state(self, id, state):
+    task = models.Task.objects.get(id=id)
+    task.state = state
+    task.save()
+
+
+@shared_task(bind=True)
+def task_break_if_failed(self, id):
+    task = models.Task.objects.get(id=id)
+
+    if not task.celery_id:
+        print("Breaking the chain!!!")
+        # self.request.callbacks = None
+        # self.request.chain = None
+        raise RuntimeError
+
+@shared_task(bind=True)
+def task_cleanup(self, id, finalize=True):
     task = models.Task.objects.get(id=id)
     basepath = task.path()
 
@@ -32,15 +57,17 @@ def task_cleanup(self, id):
             else:
                 os.unlink(path)
 
-    # End processing
-    task.state = 'cleanup_done'
-    task.celery_id = None
-    task.complete()
+    if finalize:
+        # End processing
+        task.state = 'cleanup_done'
+        task.celery_id = None
+        task.complete()
+
     task.save()
 
 
 @shared_task(bind=True)
-def task_inspect(self, id):
+def task_inspect(self, id, finalize=True):
     task = models.Task.objects.get(id=id)
     basepath = task.path()
 
@@ -60,15 +87,17 @@ def task_inspect(self, id):
         task.state = 'inspect_failed'
         task.celery_id = None
 
-    # End processing
-    task.celery_id = None
+    if finalize:
+        # End processing
+        task.celery_id = None
+        task.complete()
+
     fix_config(config)
-    task.complete()
     task.save()
 
 
 @shared_task(bind=True)
-def task_photometry(self, id):
+def task_photometry(self, id, finalize=True):
     task = models.Task.objects.get(id=id)
     basepath = task.path()
 
@@ -88,15 +117,17 @@ def task_photometry(self, id):
         task.state = 'photometry_failed'
         task.celery_id = None
 
-    # End processing
-    task.celery_id = None
+    if finalize:
+        # End processing
+        task.celery_id = None
+        task.complete()
+
     fix_config(config)
-    task.complete()
     task.save()
 
 
 @shared_task(bind=True)
-def task_transients_simple(self, id):
+def task_transients_simple(self, id, finalize=True):
     task = models.Task.objects.get(id=id)
     basepath = task.path()
 
@@ -116,15 +147,17 @@ def task_transients_simple(self, id):
         task.state = 'transients_simple_failed'
         task.celery_id = None
 
-    # End processing
-    task.celery_id = None
+    if finalize:
+        # End processing
+        task.celery_id = None
+        task.complete()
+
     fix_config(config)
-    task.complete()
     task.save()
 
 
 @shared_task(bind=True)
-def task_subtraction(self, id):
+def task_subtraction(self, id, finalize=True):
     task = models.Task.objects.get(id=id)
     basepath = task.path()
 
@@ -144,8 +177,10 @@ def task_subtraction(self, id):
         task.state = 'subtraction_failed'
         task.celery_id = None
 
-    # End processing
-    task.celery_id = None
+    if finalize:
+        # End processing
+        task.celery_id = None
+        task.complete()
+
     fix_config(config)
-    task.complete()
     task.save()

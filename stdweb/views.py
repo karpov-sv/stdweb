@@ -12,6 +12,7 @@ import shutil
 
 import mimetypes
 import magic
+import celery
 
 from astropy.table import Table
 from astropy.time import Time
@@ -27,6 +28,8 @@ from stdpipe import cutouts, plots
 
 from . import forms
 from . import models
+from . import celery_tasks
+
 
 def index(request):
     context = {}
@@ -342,11 +345,52 @@ def upload_file(request):
             task.save() # to populate task.id
 
             handle_uploaded_file(upload, os.path.join(task.path(), 'image.fits'))
+            messages.success(request, "File uploaded as task " + str(task.id))
+
+            # Apply config preset
+            if form.cleaned_data.get('preset'):
+                preset = models.Preset.objects.get(id=int(form.cleaned_data.get('preset')))
+                task.config.update(preset.config)
+                messages.success(request, "Config updated with preset " + str(preset.id) + " : " + preset.name)
+
+            task.config['target'] = form.cleaned_data.get('target')
 
             task.state = 'uploaded'
             task.save()
 
-            messages.success(request, "File uploaded as task " + str(task.id))
+            # Initiate some processing steps
+            todo = []
+
+            if form.cleaned_data.get('do_inspect'):
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
+                todo.append(celery_tasks.task_inspect.subtask(args=[task.id, False], immutable=True))
+                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
+
+            if form.cleaned_data.get('do_photometry'):
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
+                todo.append(celery_tasks.task_photometry.subtask(args=[task.id, False], immutable=True))
+                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
+
+            if form.cleaned_data.get('do_simple_transients'):
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
+                todo.append(celery_tasks.task_transients_simple.subtask(args=[task.id, False], immutable=True))
+                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
+
+            if form.cleaned_data.get('do_subtraction'):
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
+                todo.append(celery_tasks.task_subtraction.subtask(args=[task.id, False], immutable=True))
+                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
+
+            if todo:
+                todo.append(celery_tasks.task_finalize.subtask(args=[task.id], immutable=True))
+
+                task.celery_id = celery.chain(todo).apply_async()
+                task.state = 'running'
+                task.save()
 
             return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 

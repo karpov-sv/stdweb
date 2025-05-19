@@ -1,4 +1,4 @@
-from django.http import HttpResponse, FileResponse, HttpResponseRedirect
+from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.db.models import Q
@@ -349,3 +349,9 @@ def task_candidates(request, id, filename='candidates.vot'):
             context['filename'] = filename
 
     return TemplateResponse(request, 'task_candidates.html', context=context)
+
+
+def task_state(request, id):
+    task = models.Task.objects.get(id=id)
+
+    return JsonResponse({'state': task.state, 'id': task.id, 'celery_id': task.celery_id})

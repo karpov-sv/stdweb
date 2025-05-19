@@ -32,10 +32,14 @@ class Task(models.Model):
     def complete(self):
         self.completed = now()
 
+    def __str__(self):
+        return f"{self.id}: {self.user.username} : {self.original_name}"
+
     class Meta:
         permissions = [
             ('skyportal_upload', 'Can upload the task results to SkyPortal')
         ]
+
 
 @receiver(pre_delete, sender=Task)
 def delete_task_hook(sender, instance, using, **kwargs):
@@ -44,3 +48,11 @@ def delete_task_hook(sender, instance, using, **kwargs):
     # Cleanup the data on filesystem related to this model
     if os.path.exists(path):
         shutil.rmtree(path)
+
+
+class Preset(models.Model):
+    name = models.CharField(max_length=250, blank=False) # Preset name
+    config = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return f"{self.id}: {self.name}"

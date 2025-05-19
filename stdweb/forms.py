@@ -1,7 +1,7 @@
 from django import forms
 
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit
+from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit, HTML
 from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 
 # from django_select2 import forms as s2forms
@@ -9,11 +9,56 @@ from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 import json
 
 from .processing import supported_filters, supported_catalogs, supported_catalogs_transients, supported_templates
-
+from . import models
 
 class UploadFileForm(forms.Form):
+    form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
     file = forms.FileField(label="FITS file")
+    preset = forms.ChoiceField(
+        choices=[('','')],
+        required=False, label="Configuration Preset"
+    )
+    target = forms.CharField(
+        required=False, empty_value=None, label="Target name or coordinates",
+        widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name or coordinates, one per line'})
+    )
+    do_inspect = forms.BooleanField(initial=False, required=False, label="Inspection")
+    do_photometry = forms.BooleanField(initial=False, required=False, label="Photometry")
+    do_simple_transients = forms.BooleanField(initial=False, required=False, label="Simple transients detection")
+    do_subtraction = forms.BooleanField(initial=False, required=False, label="Subtraction")
+
     title = forms.CharField(max_length=150, required=False, label="Optional title or comment")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_action = 'upload'
+        self.helper.field_template = 'crispy_field.html'
+        self.helper.layout = Layout(
+            'form_type',
+            Row(
+                Column('file', css_class="col-md"),
+                Column('preset', css_class="col-md-auto"),
+                Column(Submit('upload', 'Upload', css_class='btn-primary'), css_class="col-md-auto mb-1"),
+                css_class='align-items-end'
+            ),
+            Row(
+                Column('title', css_class="col-md"),
+                Column('target', css_class="col-md"),
+                css_class='align-items-end'
+            ),
+            Row(
+                Column(HTML("Run automatically:"), css_class="col-md-auto mb-1"),
+                Column('do_inspect', css_class="col-md-auto"),
+                Column('do_photometry', css_class="col-md-auto"),
+                Column('do_simple_transients', css_class="col-md-auto"),
+                Column('do_subtraction', css_class="col-md-auto"),
+                css_class='align-items-end justify-content-start'
+            ),
+        )
+
+        # Populate presets
+        self.fields['preset'].choices = [('','')] + [(_.id, _.name) for _ in models.Preset.objects.all()]
 
 
 class TasksFilterForm(forms.Form):

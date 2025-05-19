@@ -44,12 +44,7 @@
   {% if user.is_authenticated %}
 
     <!-- File upload form -->
-    <form class="mb-4" enctype="multipart/form-data" method="POST" action="{% url 'upload' %}">
-      {% csrf_token %}
-      <input type="hidden" name="type" value="image"/>
-      {{ form|crispy }}
-      <button type="submit" class="btn btn-primary">Upload</button>
-    </form>
+    {% crispy form %}
 
   {% else %}
 
