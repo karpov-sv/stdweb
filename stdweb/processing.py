@@ -1859,7 +1859,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         flagged=True, flagmask=flagmask,
         # SkyBoT?..
         time=time,
-        skybot=config.get('filter_skybot', True),
+        skybot=config.get('simple_skybot', True),
         vizier_checker_fn=checker_fn,
         verbose=verbose
     )
