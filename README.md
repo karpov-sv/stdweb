@@ -125,4 +125,10 @@ SKYPORTAL_TOKEN =
 ```
 
 # Referencing & Attribution
-If you STDWeb in your project, or use results from STDWeb in a publication, please cite [Karpov (2025)](https://ojs.cvut.cz/ojs/index.php/ap/article/view/9969). 
+STDWeb is being developed by Sergey Karpov, and was originally created as part of [GRANDMA](https://grandma.ijclab.in2p3.fr) project.
+
+If you STDWeb in your work, or use results from STDWeb in a publication, please cite:
+> Karpov, S. (2025).
+> **STDweb: simple transient detection pipeline for the web**. _Acta Polytechnica_, 65(1), 50-64. 
+> https://doi.org/10.14311/AP.2025.65.0050
+> 
