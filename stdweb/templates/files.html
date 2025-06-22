@@ -1,6 +1,7 @@
 {% extends "template.html" %}
 
 {% load filters %}
+{% load crispy_forms_tags %}
 
 {% block ptitle %}{% if path %}{{ path }}{% else %}Files{% endif %} : STDWeb{% endblock %}
 
@@ -80,13 +81,13 @@
       <!-- Display FITS inline -->
 
       <div class="mb-4">
-        <form method='POST' action="{% url 'reuse' %}">
-          {% csrf_token %}
-          <button class="btn btn-danger" type="submit">Process this file</button>
-          <input type="hidden" name="path" value="{{ path }}"/>
+        <!-- File upload form -->
+        <form method='POST' action="{% url 'upload' %}">
+
+          {% crispy form %}
 
           {% for hdu in fitsfile %}
-            <div>
+            <div class="mt-4">
               <!-- Full FITS header -->
               <div class="card mb-2">
                 <h5 class="card-header pt-2 pb-2 collapse-chevron collapsed"
@@ -106,7 +107,7 @@
 
               {% if hdu.data is not none %}
                 {% if fitsfile|length > 1 %}
-                  <button class="btn btn-warning" type="submit" name="ext" value="{{ forloop.counter0 }}">Process this extension</button>
+                  <button class="btn btn-warning mt-2 mb-2" type="submit" name="ext" value="{{ forloop.counter0 }}">Process this extension</button>
                 {% endif %}
                 <div class="text-center">
                   <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"

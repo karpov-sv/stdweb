@@ -101,6 +101,9 @@ def list_files(request, path='', base=settings.DATA_PATH):
         elif 'fits' in context['mime'] or 'FITS' in context['magic_info'] or os.path.splitext(path)[1].lower().startswith('.fit'):
             context['mode'] = 'fits'
 
+            form = forms.UploadFileForm(filename=path)
+            context['form'] = form
+
             try:
                 hdus = fits.open(fullpath) # FIXME: will it be closed?..
                 context['fitsfile'] = hdus
@@ -334,18 +337,48 @@ def handle_uploaded_file(upload, filename):
             dest.write(chunk)
 
 
-def upload_file(request):
+def upload_file(request, base=settings.DATA_PATH):
+    form = forms.UploadFileForm(request.POST or None, request.FILES or None, filename=request.POST.get('local_file'))
+
     if request.method == "POST":
-        form = forms.UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
-            upload = request.FILES['file']
+            if 'file' in request.FILES:
+                upload = request.FILES['file']
+                task = models.Task(title=form.cleaned_data.get('title'), original_name=upload.name)
+                task.user = request.user
+                task.save() # to populate task.id
 
-            task = models.Task(title=form.cleaned_data.get('title'), original_name=upload.name)
-            task.user = request.user
-            task.save() # to populate task.id
+                handle_uploaded_file(upload, os.path.join(task.path(), 'image.fits'))
+                messages.success(request, "File uploaded as task " + str(task.id))
 
-            handle_uploaded_file(upload, os.path.join(task.path(), 'image.fits'))
-            messages.success(request, "File uploaded as task " + str(task.id))
+            else:
+                path = request.POST.get('local_file')
+                ext = request.POST.get('ext')
+                path = sanitize_path(path)
+
+                fullpath = os.path.join(base, path)
+
+                task = models.Task(original_name=os.path.split(path)[-1])
+                task.user = request.user
+                task.save() # to populate task.id
+
+                # TODO: merge into handle_uploaded_file?..
+                try:
+                    os.makedirs(task.path())
+                except OSError:
+                    pass
+
+                if ext is None:
+                    shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
+                    messages.success(request, "File copied as task " + str(task.id))
+
+                else:
+                    ext = int(ext[0])
+                    image = fits.getdata(fullpath, ext)
+                    header = fits.getheader(fullpath, ext)
+                    fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
+                    messages.success(request, f"Extension {ext} copied as task " + str(task.id))
+
 
             # Apply config preset
             if form.cleaned_data.get('preset'):
@@ -403,45 +436,8 @@ def upload_file(request):
         else:
             messages.error(request, "Error uploading file")
 
-    form = forms.UploadFileForm()
     context = {'form': form}
     return TemplateResponse(request, 'index.html', context=context)
-
-
-def reuse_file(request, base=settings.DATA_PATH):
-    if request.method == 'POST':
-        path = request.POST.get('path')
-        ext = request.POST.get('ext')
-        path = sanitize_path(path)
-
-        fullpath = os.path.join(base, path)
-
-        task = models.Task(original_name=os.path.split(path)[-1])
-        task.user = request.user
-        task.save() # to populate task.id
-
-        try:
-            os.makedirs(task.path())
-        except OSError:
-            pass
-
-        if ext is None:
-            shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
-            messages.success(request, "File copied as task " + str(task.id))
-
-        else:
-            ext = int(ext[0])
-            image = fits.getdata(fullpath, ext)
-            header = fits.getheader(fullpath, ext)
-            fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
-            messages.success(request, f"Extension {ext} copied as task " + str(task.id))
-
-        task.state = 'copied'
-        task.save()
-
-        return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
-
-    return HttpResponse('done')
 
 
 def cutout(request, path, width=None, base=settings.DATA_PATH):

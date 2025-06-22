@@ -40,7 +40,6 @@ urlpatterns = [
 
     # Uploads
     path('upload/', views.upload_file, name='upload'),
-    path('reuse/', views.reuse_file, name='reuse'),
 
     # Tasks
     path('tasks/', views_tasks.tasks, {'id':None}, name='tasks'),

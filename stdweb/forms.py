@@ -11,9 +11,11 @@ import json
 from .processing import supported_filters, supported_catalogs, supported_catalogs_transients, supported_templates
 from . import models
 
+
 class UploadFileForm(forms.Form):
-    form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
-    file = forms.FileField(label="FITS file")
+    file = forms.FileField(label="FITS file", required=False)
+    local_file = forms.CharField(required=False, widget=forms.HiddenInput())
+    local_filename = forms.CharField(required=False, label="FITS file", disabled=True) # Will not be sent
     preset = forms.ChoiceField(
         choices=[('','')],
         required=False, label="Configuration Preset"
@@ -30,16 +32,29 @@ class UploadFileForm(forms.Form):
     title = forms.CharField(max_length=150, required=False, label="Optional title or comment")
 
     def __init__(self, *args, **kwargs):
+        filename = kwargs.pop('filename', None)
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
+        self.helper.form_tag = False
         self.helper.form_action = 'upload'
         self.helper.field_template = 'crispy_field.html'
+
+        if filename:
+            file_field = 'local_filename'
+            self.fields['local_file'].initial = filename
+            self.fields['local_filename'].initial = filename
+            submit = Submit('process', 'Process this file', css_class='btn-primary')
+        else:
+            file_field = 'file'
+            self.fields['file'].required = True
+            submit = Submit('upload', 'Upload', css_class='btn-primary')
+
         self.helper.layout = Layout(
-            'form_type',
             Row(
-                Column('file', css_class="col-md"),
+                Column(file_field, css_class="col-md"),
+                'local_file',
                 Column('preset', css_class="col-md-auto"),
-                Column(Submit('upload', 'Upload', css_class='btn-primary'), css_class="col-md-auto mb-1"),
+                Column(submit, css_class="col-md-auto mb-1"),
                 css_class='align-items-end'
             ),
             Row(
@@ -81,7 +96,7 @@ class TasksFilterForm(forms.Form):
                 ),
                 Column(
                     InlineField('show_all'),
-                    css_class="col-md-auto"
+                    css_class="col-md-auto mt-2"
                 ),
             )
         )
@@ -177,7 +192,8 @@ class TaskPhotometryForm(forms.Form):
                 Column('minarea'),
                 css_class='align-items-end'
             ),
-            Row(Column('rel_aper'),
+            Row(
+                Column('rel_aper'),
                 Column('rel_bg1'),
                 Column('rel_bg2'),
                 Column('fwhm_override'),
