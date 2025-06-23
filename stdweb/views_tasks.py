@@ -301,6 +301,7 @@ def handle_task_mask_creation(task, width, height, areas):
 
     return True
 
+
 def task_mask(request, id=None, path=''):
     task = models.Task.objects.get(id=id)
 

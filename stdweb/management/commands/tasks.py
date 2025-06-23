@@ -7,52 +7,36 @@ import os, shutil
 from stdweb import models
 
 import argparse
+import json
 
 import celery
 
 from ... import celery_tasks
+from ...utils import store_kw, parse_kw
 
-class store_kw(argparse.Action):
-    """
-    argparse action to split an argument into KEY=VALUE form
-    on append to a dictionary.
-    """
-
-    def __call__(self, parser, args, values, option_string=None):
-        # try:
-        #     d = dict(map(lambda x: x.split('='), values))
-        # except ValueError as ex:
-        #     raise argparse.ArgumentError(self, f"Could not parse argument \"{values}\" as k1=v1 k2=v2 ... format")
-
-        # setattr(args, self.dest, d)
-        assert(len(values) == 1)
-        try:
-            (k, v) = values[0].split("=", 2)
-        except ValueError as ex:
-            raise argparse.ArgumentError(self, f"could not parse argument \"{values[0]}\" as k=v format")
-        d = getattr(args, self.dest) or {}
-        d[k] = v
-        setattr(args, self.dest, d)
 
 class Command(BaseCommand):
     help = 'Manage image processing tasks'
 
     def add_arguments(self, parser):
         # Named arguments
-        parser.add_argument("-l", "--list", action="store_true", dest='list', help="List all tasks")
-        parser.add_argument("-s", "--sort", action="store", dest='sort', default="modified", help="Sort field")
+        parser.add_argument("-l", "--list", action="store_true", dest='do_list', help="List all tasks")
+        parser.add_argument("-s", "--sort", action="store", dest='list_sort', default="modified", help="Sort field")
 
-        parser.add_argument("-i", "--import", action="store_true", dest='import', help="Import FITS files")
+        parser.add_argument("-i", "--import", action="store_true", dest='do_import', help="Import FITS files")
 
-        parser.add_argument("-d", "--delete", action="store_true", dest='delete', help="Delete tasks")
+        parser.add_argument("-d", "--delete", action="store_true", dest='do_delete', help="Delete tasks")
 
-        parser.add_argument("--skyportal", action="store_true", dest='skyportal', help="Prepare photometry for exporting to SkyPortal")
+        parser.add_argument("--skyportal", action="store_true", dest='do_skyportal', help="Prepare photometry for exporting to SkyPortal")
 
         # Run specific steps
-        parser.add_argument("-r", "--run", action="store", dest='run', default=None, help="Run processing steps")
+        parser.add_argument("-r", "--run", action="append", dest='run', default=None, help="Run processing steps for the task")
 
         # Config values as key-value pairs
-        parser.add_argument("-c", "--config", metavar="KEY=VALUE", action=store_kw, nargs=1, dest="config", help="Initial parameters for the task")
+        parser.add_argument("-c", "--config", metavar="KEY=VALUE", action=store_kw, nargs=1, dest="config", help="Set initial parameters for the task on importing")
+
+        # Configuration preset
+        parser.add_argument('--preset', dest='preset', action='store', help='Apply configuration preset', default=None)
 
         # Positional arguments
         parser.add_argument("names", nargs="*", type=str)
@@ -61,18 +45,21 @@ class Command(BaseCommand):
         # Work inside project root
         os.chdir(settings.BASE_DIR)
 
-        if options['list']:
-            tasks = models.Task.objects.order_by(f"-{options['sort']}")
+        if options['do_list']:
+            tasks = models.Task.objects.order_by(f"-{options['list_sort']}")
 
             for task in tasks:
                 print(f"{task.id} {task.created.strftime('%Y-%m-%d %H:%M:%S')} - {task.modified.strftime('%Y-%m-%d %H:%M:%S')} - {task.user.username} - {task.state} - {task.original_name}")
 
-        elif options['import']:
+
+        elif options['do_import']:
             for filename in options['names']:
                 if os.path.exists(filename):
                     task = models.Task(original_name=os.path.split(filename)[-1])
                     task.user = User.objects.filter(is_staff=True).order_by('id').first() # FIXME: ???
                     task.save() # to populate task.id
+
+                    print(f"{task.original_name} imported as task {task.id}")
 
                     try:
                         os.makedirs(task.path())
@@ -81,34 +68,33 @@ class Command(BaseCommand):
 
                     shutil.copyfile(filename, os.path.join(task.path(), 'image.fits'))
 
+                    config = {}
+
+                    # If preset is specified, add it
+                    if options['preset']:
+                        preset = models.Preset.objects.filter(name=options['preset']).first()
+                        if preset is not None:
+                            print(f"Applying configuration preset {preset.name}")
+                            config.update(preset.config)
+
+                        elif os.path.exists(options['preset']):
+                            print(f"Applying configuration preset from file {options['preset']}")
+                            config.update(json.loads(file_read(options['preset'])))
+
+                    # Now apply config params from command line
                     if options['config']:
-                        # Pre-process the config entries
-                        config = {}
-                        for key in options['config']:
-                            value = options['config'][key]
+                        config.update(parse_kw(options['config']))
 
-                            # Booleans
-                            if value in ['True']:
-                                value = True
-                            elif value in ['False']:
-                                value = False
-
-                            try:
-                                config[key] = float(value)
-                            except:
-                                config[key] = value
-
-                        task.config.update(config)
+                    task.config.update(config)
 
                     task.state = 'imported'
                     task.save()
 
-                    print(f"{task.original_name} imported as task {task.id}")
-
                     if options['run'] is not None:
                         run_task(task, options['run'])
 
-        elif options['delete']:
+
+        elif options['do_delete']:
             for name in options['names']:
                 id = int(name)
 
@@ -119,7 +105,8 @@ class Command(BaseCommand):
                 if task:
                     task.delete()
 
-        elif options['skyportal']:
+
+        elif options['do_skyportal']:
             from astropy.table import Table
             from stdpipe import cutouts
 
@@ -156,6 +143,7 @@ class Command(BaseCommand):
 
                     print(f"{meta['time'].mjd},{row['mag_calib']:.3f},{row['mag_calib_err']:.3f},{row['mag_limit']:.3f},{magsys},{fname}")
 
+
         elif options['run']:
             for name in options['names']:
                 id = int(name)
@@ -163,20 +151,43 @@ class Command(BaseCommand):
 
                 run_task(task, options['run'])
 
+
 def run_task(task, run):
     todo = []
 
-    for step in run.split(','):
-        print(f"Running {step} for task {task.id}")
+    for step in run:
+        print(f"Will run {step} step for task {task.id}")
 
         if step == 'inspect':
-            todo.append(celery_tasks.task_inspect.subtask(args=[task.id], immutable=True))
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
+            todo.append(celery_tasks.task_inspect.subtask(args=[task.id, False], immutable=True))
+            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
+
         elif step == 'photometry':
-            todo.append(celery_tasks.task_photometry.subtask(args=[task.id], immutable=True))
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
+            todo.append(celery_tasks.task_photometry.subtask(args=[task.id, False], immutable=True))
+            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
+
+        elif step == 'simple_transients':
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
+            todo.append(celery_tasks.task_transients_simple.subtask(args=[task.id, False], immutable=True))
+            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
+
+        elif step == 'subtraction':
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
+            todo.append(celery_tasks.task_subtraction.subtask(args=[task.id, False], immutable=True))
+            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
+
         else:
             print(f"Unknown step: {step}")
 
     if todo:
+        todo.append(celery_tasks.task_finalize.subtask(args=[task.id], immutable=True))
+
         task.celery_id = celery.chain(todo).apply_async()
         task.state = 'running'
         task.save()
