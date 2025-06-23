@@ -140,7 +140,7 @@ if __name__ == '__main__':
             processing.photometry_image(filename, config, verbose=options.verbose)
 
         # Simple Transients Detection
-        if options.do_photometry:
+        if options.do_simple_transients:
             log('\n-- Simple Transients Detection --')
             processing.transients_simple_image(filename, config, verbose=options.verbose)
 
