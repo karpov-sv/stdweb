@@ -167,6 +167,10 @@ def skyportal(request):
 
             ids = [int(_.strip()) for _ in re.split(r'\W+', ids) if _.isnumeric()]
 
+            # TODO: more accurate handling of ranges?..
+            if '-' in form.cleaned_data.get('ids') and len(ids) == 2:
+                ids = [int(_) for _ in np.arange(ids[0], ids[1]+1)]
+
             print(ids)
 
             tasks = []
