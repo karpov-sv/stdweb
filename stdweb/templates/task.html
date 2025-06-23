@@ -424,6 +424,9 @@
             <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
               <input type="hidden" name="ids" value="{{ task.id }}"/>
               <input type="hidden" name="types" value="direct"/>
+              {% if task.config.skyportal_instrument_name %}
+                <input type="hidden" name="instrument" value="{{ task.config.skyportal_instrument_name|skyportal_instrument_id }}"/>
+              {% endif %}
               <button type="submit" name="action" value="init" class="btn btn-secondary">Upload Photometry to SkyPortal</button>
             </fieldset>
           </form>
@@ -625,6 +628,9 @@
             <fieldset class="small" {% if task.celery_id %}disabled{% endif %}>
               <input type="hidden" name="ids" value="{{ task.id }}"/>
               <input type="hidden" name="types" value="subtracted"/>
+              {% if task.config.skyportal_instrument_name %}
+                <input type="hidden" name="instrument" value="{{ task.config.skyportal_instrument_name|skyportal_instrument_id }}"/>
+              {% endif %}
               <button type="submit" name="action" value="init" class="btn btn-secondary">Upload Photometry to SkyPortal</button>
             </fieldset>
           </form>

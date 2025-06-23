@@ -156,3 +156,21 @@ def divide(value, arg):
         return float(value) / float(arg) if float(arg) != 0 else ''
     except (ValueError, TypeError):
         return ''
+
+from ..views_skyportal import skyportal_get_instruments
+# TODO: more optimal caching?..
+skyportal_instruments = None
+
+@register.filter
+def skyportal_instrument_id(name):
+    global skyportal_instruments
+
+    if skyportal_instruments is None:
+        skyportal_instruments = skyportal_get_instruments()
+        skyportal_instruments = [(_['id'], _['name']) for _ in skyportal_instruments if _['type'] == 'imager']
+
+    for inst in skyportal_instruments:
+        if inst[1] == name:
+            return inst[0]
+
+    return ''

@@ -48,13 +48,16 @@ def skyportal_get_instruments(api_token=settings.SKYPORTAL_TOKEN):
     else:
         headers = None
 
-    base_url = 'https://skyportal-icare.ijclab.in2p3.fr/api'
-    res = requests.get(f'{base_url}/instrument', headers=headers)
+    try:
+        base_url = 'https://skyportal-icare.ijclab.in2p3.fr/api'
+        res = requests.get(f'{base_url}/instrument', headers=headers)
 
-    if res:
-        json = res.json()
-        if json['status'] == 'success':
-            return json['data']
+        if res:
+            json = res.json()
+            if json['status'] == 'success':
+                return json['data']
+    except:
+        pass
 
     return []
 
@@ -136,6 +139,7 @@ def skyportal_resolve_task(task):
 
     return ra, dec, sid
 
+
 @login_required
 def skyportal(request):
     context = {}
@@ -144,7 +148,7 @@ def skyportal(request):
     instruments = [(_['id'], _['name']) for _ in instruments if _['type'] == 'imager']
     instruments.sort(key=lambda x: x[1]) # Sort by name
     for i,inst in enumerate(instruments):
-        if inst[1] == 'Generic Instrument':
+        if inst[1] == 'Generic':
             instruments.insert(0, instruments.pop(i))
             break
 
