@@ -26,6 +26,7 @@ from . import views
 from . import views_tasks
 from . import views_celery
 from . import views_skyportal
+from . import views_user
 
 urlpatterns = [
     # path('', views.index, name='index'),
@@ -40,6 +41,9 @@ urlpatterns = [
 
     # Uploads
     path('upload/', views.upload_file, name='upload'),
+
+    # API endpoints
+    path('api/', include('stdweb.urls_api')),
 
     # Tasks
     path('tasks/', views_tasks.tasks, {'id':None}, name='tasks'),
@@ -67,6 +71,11 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('password/', auth_views.PasswordChangeView.as_view(success_url=reverse_lazy('password_change_done')), name='password'),
     path('password/done/', auth_views.PasswordChangeDoneView.as_view(), name='password_change_done'),
+
+    # User management
+    path('api-tokens/', views_user.api_tokens, name='api_tokens'),
+    path('api-tokens/regenerate/', views_user.regenerate_api_token, name='regenerate_api_token'),
+    path('api-documentation/', views_user.api_documentation, name='api_documentation'),
 
     # robots.txt
     path('robots.txt', lambda _: HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")),
