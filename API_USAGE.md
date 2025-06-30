@@ -65,6 +65,19 @@ curl -X POST http://your-domain/api/tasks/upload/ \
   -F "cat_name=gaiaedr3"
 ```
 
+**Example with gain and saturation parameters:**
+```bash
+curl -X POST http://your-domain/api/tasks/upload/ \
+  -H "Authorization: Token your_api_token_here" \
+  -F "file=@path/to/your/image.fits" \
+  -F "title=Analysis with custom gain" \
+  -F "do_inspect=true" \
+  -F "do_photometry=true" \
+  -F "gain=2.5" \
+  -F "saturation=60000" \
+  -F "use_color=true"
+```
+
 **Parameters:**
 
 **Basic Parameters:**
@@ -76,6 +89,11 @@ curl -X POST http://your-domain/api/tasks/upload/ \
 - `do_photometry` (optional): Automatically run photometry (default: false)
 - `do_simple_transients` (optional): Automatically run simple transient detection (default: false)
 - `do_subtraction` (optional): Automatically run image subtraction (default: false)
+
+**Inspection Parameters:**
+- `gain` (optional): Gain in e-/ADU
+- `saturation` (optional): Saturation level in ADU
+- `time` (optional): Time parameter
 
 **Photometry Configuration Parameters:**
 - `sn` (optional): S/N Ratio for detection threshold

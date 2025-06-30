@@ -47,6 +47,11 @@ class TaskUploadSerializer(serializers.ModelSerializer):
     # Target specification
     target = serializers.CharField(required=False, allow_blank=True, help_text="Target name or coordinates")
     
+    # Inspection parameters
+    gain = serializers.FloatField(required=False, allow_null=True, help_text="Gain, e/ADU")
+    saturation = serializers.FloatField(required=False, allow_null=True, help_text="Saturation level, ADU")
+    time = serializers.CharField(required=False, allow_blank=True, help_text="Time")
+    
     class Meta:
         model = Task
         fields = [
@@ -59,7 +64,7 @@ class TaskUploadSerializer(serializers.ModelSerializer):
             'prefilter_detections', 'filter_blends', 'diagnose_color', 'refine_wcs', 
             'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
             'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
-            'target'
+            'target', 'gain', 'saturation', 'time'
         ]
         read_only_fields = ['original_name']
     
