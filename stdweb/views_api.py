@@ -73,10 +73,21 @@ class TaskUploadAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
             
-            # Set target from config if available
-            target = request.data.get('target')
-            if target:
-                task.config['target'] = target
+            # Extract and set all photometry configuration parameters
+            photometry_params = [
+                'sn', 'initial_aper', 'initial_r0', 'bg_size', 'minarea',
+                'rel_aper', 'rel_bg1', 'rel_bg2', 'fwhm_override',
+                'filter', 'cat_name', 'cat_limit', 'spatial_order', 'use_color', 'sr_override',
+                'prefilter_detections', 'filter_blends', 'diagnose_color', 'refine_wcs',
+                'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
+                'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
+                'target'
+            ]
+            
+            for param in photometry_params:
+                value = serializer.validated_data.get(param)
+                if value is not None:
+                    task.config[param] = value
             
             task.state = 'uploaded'
             task.save()

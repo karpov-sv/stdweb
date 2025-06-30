@@ -51,7 +51,23 @@ curl -X POST http://your-domain/api/tasks/upload/ \
   -F "do_photometry=true"
 ```
 
+**Example with photometry parameters (disabling color term):**
+```bash
+curl -X POST http://your-domain/api/tasks/upload/ \
+  -H "Authorization: Token your_api_token_here" \
+  -F "file=@path/to/your/image.fits" \
+  -F "title=Photometry without color term" \
+  -F "do_photometry=true" \
+  -F "use_color=false" \
+  -F "sn=5.0" \
+  -F "spatial_order=2" \
+  -F "filter=r" \
+  -F "cat_name=gaiaedr3"
+```
+
 **Parameters:**
+
+**Basic Parameters:**
 - `file` (required): FITS file to upload (.fits, .fit, .fts extensions)
 - `title` (optional): Title or description for the task
 - `target` (optional): Target name or coordinates
@@ -60,6 +76,37 @@ curl -X POST http://your-domain/api/tasks/upload/ \
 - `do_photometry` (optional): Automatically run photometry (default: false)
 - `do_simple_transients` (optional): Automatically run simple transient detection (default: false)
 - `do_subtraction` (optional): Automatically run image subtraction (default: false)
+
+**Photometry Configuration Parameters:**
+- `sn` (optional): S/N Ratio for detection threshold
+- `initial_aper` (optional): Initial aperture in pixels
+- `initial_r0` (optional): Smoothing kernel in pixels
+- `bg_size` (optional): Background mesh size
+- `minarea` (optional): Minimal object area
+- `rel_aper` (optional): Relative aperture in FWHM units
+- `rel_bg1` (optional): Sky inner annulus in FWHM units
+- `rel_bg2` (optional): Outer annulus in FWHM units
+- `fwhm_override` (optional): FWHM override in pixels
+- `filter` (optional): Filter name (e.g., 'r', 'g', 'i')
+- `cat_name` (optional): Reference catalog name (e.g., 'gaiaedr3')
+- `cat_limit` (optional): Catalog limiting magnitude
+- `spatial_order` (optional): Zeropoint spatial order (0-3)
+- `use_color` (optional): Use color term in photometric calibration (true/false)
+- `sr_override` (optional): Matching radius in arcseconds
+- `prefilter_detections` (optional): Pre-filter detections (true/false)
+- `filter_blends` (optional): Filter catalogue blends (true/false)
+- `diagnose_color` (optional): Run color term diagnostics (true/false)
+- `refine_wcs` (optional): Refine astrometry (true/false)
+- `blind_match_wcs` (optional): Enable blind astrometric matching (true/false)
+- `inspect_bg` (optional): Inspect background (true/false)
+- `centroid_targets` (optional): Centroid targets (true/false)
+- `nonlin` (optional): Apply non-linearity correction (true/false)
+
+**Blind Matching Parameters:**
+- `blind_match_ps_lo` (optional): Scale lower limit in arcsec/pix
+- `blind_match_ps_up` (optional): Scale upper limit in arcsec/pix
+- `blind_match_center` (optional): Center position for blind match
+- `blind_match_sr0` (optional): Search radius in degrees
 
 **Response:**
 ```json
