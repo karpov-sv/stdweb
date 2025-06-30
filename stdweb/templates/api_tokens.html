@@ -1,0 +1,146 @@
+{% extends "template.html" %}
+
+{% block title %}API Tokens{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">
+          <i class="fa fa-key"></i> API Token Management
+        </h5>
+      </div>
+      <div class="card-body">
+        
+        {% if token_created %}
+          <div class="alert alert-success" role="alert">
+            <i class="fa fa-check-circle"></i> 
+            API token created successfully!
+          </div>
+        {% endif %}
+
+        <p class="text-muted">
+          Use this token to authenticate API requests. Keep it secure and don't share it with others.
+        </p>
+
+        <div class="mb-4">
+          <label for="api-token" class="form-label"><strong>Your API Token:</strong></label>
+          <div class="input-group">
+            <input type="text" class="form-control font-monospace" id="api-token" value="{{ token.key }}" readonly>
+            <button class="btn btn-outline-secondary" type="button" onclick="copyToken()" id="copy-btn">
+              <i class="fa fa-copy"></i> Copy
+            </button>
+          </div>
+          <div class="form-text">
+            <small>Token created: {{ token.created|date:"M d, Y H:i" }}</small>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <h6>Usage Example:</h6>
+          <pre class="bg-light p-3 rounded"><code>curl -H "Authorization: Token {{ token.key }}" \
+     -F "file=@image.fits" \
+     -F "title=My Analysis" \
+     http://{{ request.get_host }}/api/tasks/upload/</code></pre>
+        </div>
+
+        <div class="d-flex gap-2">
+          <form method="post" action="{% url 'regenerate_api_token' %}" onsubmit="return confirmRegenerate()">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning">
+              <i class="fa fa-refresh"></i> Regenerate Token
+            </button>
+          </form>
+          
+          <a href="{% url 'index' %}" class="btn btn-secondary">
+            <i class="fa fa-arrow-left"></i> Back to Home
+          </a>
+        </div>
+
+        <div class="mt-4">
+          <small class="text-muted">
+            <strong>Warning:</strong> Regenerating your token will invalidate the current one. 
+            Update any applications using the old token.
+          </small>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+  
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="card-title mb-0">
+          <i class="fa fa-info-circle"></i> API Information
+        </h6>
+      </div>
+      <div class="card-body">
+        <p><strong>Base URL:</strong><br>
+        <code>http://{{ request.get_host }}/api/</code></p>
+        
+        <p><strong>Available Endpoints:</strong></p>
+        <ul class="list-unstyled small">
+          <li><code>POST /api/tasks/upload/</code><br>
+          <span class="text-muted">Upload FITS images</span></li>
+          
+          <li><code>GET /api/tasks/</code><br>
+          <span class="text-muted">List your tasks</span></li>
+          
+          <li><code>GET /api/tasks/{id}/</code><br>
+          <span class="text-muted">Get task details</span></li>
+          
+          <li><code>GET /api/presets/</code><br>
+          <span class="text-muted">List presets</span></li>
+        </ul>
+        
+        <p><strong>Authentication:</strong><br>
+        Include your token in the Authorization header:</p>
+        <code class="small">Authorization: Token YOUR_TOKEN</code>
+        
+        <hr>
+        
+        <a href="{% url 'api_documentation' %}" class="btn btn-sm btn-outline-primary" target="_blank">
+          <i class="fa fa-book"></i> Full API Documentation
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyToken() {
+  const tokenInput = document.getElementById('api-token');
+  const copyBtn = document.getElementById('copy-btn');
+  
+  tokenInput.select();
+  tokenInput.setSelectionRange(0, 99999); // For mobile devices
+  
+  navigator.clipboard.writeText(tokenInput.value).then(function() {
+    const originalText = copyBtn.innerHTML;
+    copyBtn.innerHTML = '<i class="fa fa-check"></i> Copied!';
+    copyBtn.classList.remove('btn-outline-secondary');
+    copyBtn.classList.add('btn-success');
+    
+    setTimeout(function() {
+      copyBtn.innerHTML = originalText;
+      copyBtn.classList.remove('btn-success');
+      copyBtn.classList.add('btn-outline-secondary');
+    }, 2000);
+  }, function(err) {
+    console.error('Could not copy text: ', err);
+    // Fallback for older browsers
+    tokenInput.select();
+    document.execCommand('copy');
+    copyBtn.innerHTML = '<i class="fa fa-check"></i> Copied!';
+  });
+}
+
+function confirmRegenerate() {
+  return confirm('Are you sure you want to regenerate your API token? This will invalidate the current token and any applications using it will need to be updated.');
+}
+</script>
+{% endblock %} 

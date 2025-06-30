@@ -1,4 +1,5 @@
 Django
+djangorestframework
 python-decouple
 python-magic
 django-crispy-forms
