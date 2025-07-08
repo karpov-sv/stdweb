@@ -178,4 +178,107 @@ def preset_list_api(request):
     """List available presets"""
     presets = Preset.objects.all()
     serializer = PresetSerializer(presets, many=True)
-    return Response(serializer.data) 
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def task_action_api(request, task_id):
+    """Trigger processing actions on existing tasks"""
+    try:
+        task = Task.objects.get(id=task_id, user=request.user)
+        
+        # Check if task is already running
+        if task.celery_id is not None:
+            # Check if the task is actually running
+            from . import celery
+            ctask = celery.app.AsyncResult(task.celery_id)
+            if ctask.state not in ['REVOKED', 'FAILURE', 'SUCCESS']:
+                return Response(
+                    {'error': f'Task {task_id} is already running'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        action = request.data.get('action')
+        if not action:
+            return Response(
+                {'error': 'Action parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Import celery tasks
+        from . import celery_tasks
+
+        # --- NEW: update configuration if extra parameters are supplied ---
+        # Allow the same subset we accept on upload so that users can tweak
+        # parameters like gain/saturation before re-running an action.
+        extra_config_params = [
+            # Photometry parameters
+            'sn', 'initial_aper', 'initial_r0', 'bg_size', 'minarea',
+            'rel_aper', 'rel_bg1', 'rel_bg2', 'fwhm_override',
+            'filter', 'cat_name', 'cat_limit', 'spatial_order', 'use_color', 'sr_override',
+            'prefilter_detections', 'filter_blends', 'diagnose_color', 'refine_wcs',
+            'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
+            'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
+            # Inspection parameters
+            'target', 'gain', 'saturation', 'time'
+        ]
+
+        updated = False
+        for param in extra_config_params:
+            if param in request.data:
+                # DRF gives QueryDict, convert e.g. "true"/"false" to bool where possible
+                value = request.data.get(param)
+                if isinstance(value, str):
+                    if value.lower() == 'true':
+                        value = True
+                    elif value.lower() == 'false':
+                        value = False
+                task.config[param] = value
+                updated = True
+        if updated:
+            task.save()
+        # --- END NEW CODE ---
+
+        # Handle different actions
+        if action == 'inspect':
+            task.celery_id = celery_tasks.task_inspect.delay(task.id).id
+            task.state = 'inspect'
+            task.save()
+            return Response({'message': f'Started inspection for task {task_id}'})
+            
+        elif action == 'photometry':
+            task.celery_id = celery_tasks.task_photometry.delay(task.id).id
+            task.state = 'photometry'
+            task.save()
+            return Response({'message': f'Started photometry for task {task_id}'})
+            
+        elif action == 'transients_simple':
+            task.celery_id = celery_tasks.task_transients_simple.delay(task.id).id
+            task.state = 'transients_simple'
+            task.save()
+            return Response({'message': f'Started simple transient detection for task {task_id}'})
+            
+        elif action == 'subtraction':
+            task.celery_id = celery_tasks.task_subtraction.delay(task.id).id
+            task.state = 'subtraction'
+            task.save()
+            return Response({'message': f'Started subtraction for task {task_id}'})
+            
+        elif action == 'cleanup':
+            task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
+            task.state = 'cleanup'
+            task.save()
+            return Response({'message': f'Started cleanup for task {task_id}'})
+            
+        else:
+            return Response(
+                {'error': f'Unknown action: {action}. Valid actions are: inspect, photometry, transients_simple, subtraction, cleanup'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+    except Task.DoesNotExist:
+        return Response(
+            {'error': 'Task not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        ) 
