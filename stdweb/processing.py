@@ -1341,6 +1341,15 @@ def photometry_image(filename, config, verbose=True, show=False):
             config['blind_match_wcs'] = False
             config['refine_wcs'] = True # We need to do it as we got SIP solution
             log("Blind matched WCS stored to file:image.wcs")
+
+            # Save field centre of the (possibly refined) WCS for API consumers
+            if wcs and wcs.is_celestial:
+                ra_cen, dec_cen, sr_cen = astrometry.get_frame_center(
+                    wcs=wcs, width=image.shape[1], height=image.shape[0]
+                )
+                config['field_ra'] = float(ra_cen)
+                config['field_dec'] = float(dec_cen)
+                config['field_sr'] = float(sr_cen)
         else:
             log("Blind matching failed")
 
@@ -1442,6 +1451,15 @@ def photometry_image(filename, config, verbose=True, show=False):
             header += wcs.to_header(relax=True)
             config['refine_wcs'] = False
             log("Refined WCS stored to file:image.wcs")
+
+            # Save field centre of the (possibly refined) WCS for API consumers
+            if wcs and wcs.is_celestial:
+                ra_cen, dec_cen, sr_cen = astrometry.get_frame_center(
+                    wcs=wcs, width=image.shape[1], height=image.shape[0]
+                )
+                config['field_ra'] = float(ra_cen)
+                config['field_dec'] = float(dec_cen)
+                config['field_sr'] = float(sr_cen)
 
     log("\n---- Photometric calibration ----\n")
 
