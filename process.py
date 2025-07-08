@@ -91,6 +91,10 @@ if __name__ == '__main__':
     # Config values as key-value pairs
     parser.add_argument("-c", "--config", metavar="KEY=VALUE", action=store_kw, nargs=1, dest="config", help="Initial parameters for the task")
 
+    # Explicit shortcuts for most-used config parameters
+    parser.add_argument("--gain", dest="gain", type=float, help="Detector gain (e/ADU)")
+    parser.add_argument("--saturation", dest="saturation", type=float, help="Saturation level (ADU)")
+
     parser.add_argument('--preset', dest='preset', action='store', help='Read configuration preset from file', default=None)
 
     options, filenames = parser.parse_known_args()
@@ -127,6 +131,12 @@ if __name__ == '__main__':
 
         # Now apply config params from command line
         config.update(parse_kw(options.config))
+
+        # Explicit params override everything else
+        if options.gain is not None:
+            config['gain'] = options.gain
+        if options.saturation is not None:
+            config['saturation'] = options.saturation
         log('Config:', config)
 
         # Inspect
