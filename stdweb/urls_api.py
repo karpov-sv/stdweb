@@ -13,6 +13,7 @@ urlpatterns = [
     path('tasks/upload/', views_api.TaskUploadAPIView.as_view(), name='task_upload'),
     path('tasks/', views_api.task_list_api, name='task_list'),
     path('tasks/<int:task_id>/', views_api.task_detail_api, name='task_detail'),
+    path('tasks/<int:task_id>/action/', views_api.task_action_api, name='task_action'),
     
     # Preset endpoints
     path('presets/', views_api.preset_list_api, name='preset_list'),
