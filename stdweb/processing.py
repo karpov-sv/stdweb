@@ -2436,6 +2436,10 @@ def subtract_image(filename, config, verbose=True, show=False):
                 verbose=sub_verbose
             )
 
+            # Ensure flags are 32-bit ints to avoid OverflowError during bitmask operations
+            if 'flags' in sobj.colnames and sobj['flags'].dtype != np.int32:
+                sobj['flags'] = sobj['flags'].astype(np.int32)
+
             if len(sobj):
                 sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](
                     sobj['x'] + x0,
