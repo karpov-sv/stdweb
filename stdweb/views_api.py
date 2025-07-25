@@ -83,8 +83,27 @@ class TaskUploadAPIView(APIView):
                 'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
                 'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
                 # Inspection parameters
-                'target', 'gain', 'saturation', 'time'
+                'target', 'gain', 'saturation', 'time',
+                # Template selection
+                'template'
             ]
+
+            # Handle `template_catalog` alias if provided (e.g., "ZTF_DR7")
+            template_catalog = serializer.validated_data.get('template_catalog') if hasattr(serializer, 'validated_data') else None
+            if template_catalog:
+                # Normalise input
+                tc_norm = str(template_catalog).lower()
+                alias_map = {
+                    'ztf_dr7': 'ztf',
+                    'ztf': 'ztf',
+                    'ps1': 'ps1',
+                    'ps1_dr2': 'ps1',
+                    'pan-starrs': 'ps1',
+                    'pan-starrs_dr2': 'ps1',
+                    'ls_dr10': 'ls',
+                    'legacy': 'ls',
+                }
+                task.config['template'] = alias_map.get(tc_norm, tc_norm)
             
             for param in config_params:
                 value = serializer.validated_data.get(param)
@@ -221,7 +240,9 @@ def task_action_api(request, task_id):
             'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
             'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
             # Inspection parameters
-            'target', 'gain', 'saturation', 'time'
+            'target', 'gain', 'saturation', 'time',
+            # Template selection
+            'template'
         ]
 
         updated = False
@@ -236,6 +257,22 @@ def task_action_api(request, task_id):
                         value = False
                 task.config[param] = value
                 updated = True
+        # Handle `template_catalog` alias here as well
+        if 'template_catalog' in request.data:
+            tc_norm = str(request.data.get('template_catalog')).lower()
+            alias_map = {
+                'ztf_dr7': 'ztf',
+                'ztf': 'ztf',
+                'ps1': 'ps1',
+                'ps1_dr2': 'ps1',
+                'pan-starrs': 'ps1',
+                'pan-starrs_dr2': 'ps1',
+                'ls_dr10': 'ls',
+                'legacy': 'ls',
+            }
+            task.config['template'] = alias_map.get(tc_norm, tc_norm)
+            updated = True
+
         if updated:
             task.save()
         # --- END NEW CODE ---

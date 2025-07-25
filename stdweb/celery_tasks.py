@@ -15,9 +15,16 @@ def fix_config(config):
     """
     Fix non-serializable Numpy types in config
     """
-    for key in config.keys():
-        if type(config[key]) == np.float32:
-            config[key] = float(config[key])
+    for key in list(config.keys()):
+        val = config[key]
+        # Convert numpy scalar types to plain Python types
+        if isinstance(val, (np.float32, np.float64, np.int32, np.int64)):
+            config[key] = val.item()
+            val = config[key]
+
+        # Replace NaN / Inf with None so that JSON serialization succeeds
+        if isinstance(val, float) and (np.isnan(val) or np.isinf(val)):
+            config[key] = None
 
 
 @shared_task(bind=True)

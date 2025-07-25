@@ -1606,12 +1606,15 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config.get('sn', 5) not in sns:
         sns.append(config.get('sn', 5))
     for sn in sns:
-        # Just print the value
         mag0 = pipeline.get_detection_limit(obj, sn=sn, verbose=False)
-        log(f"Detection limit at S/N={sn:.0f} level is {mag0:.2f}")
+        if mag0 is not None:
+            log(f"Detection limit at S/N={sn:.0f} level is {mag0:.2f}")
+        else:
+            log(f"Detection limit at S/N={sn:.0f} level could not be computed",)
 
     mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=False)
-    config['mag_limit'] = mag0
+    # Store result only if available
+    config['mag_limit'] = mag0 if mag0 is not None else np.nan
 
     if 'bg_fluxerr' in obj.colnames and np.any(obj['bg_fluxerr'] > 0):
         fluxerr = obj['bg_fluxerr']
