@@ -31,6 +31,37 @@ Include the token in the Authorization header for all API requests:
 Authorization: Token your_api_token_here
 ```
 
+## REST API – Quick Usage
+
+The remainder of this document goes into detail for every endpoint, but if you
+just want the **TL;DR** for the most common operations via cURL here it is.
+
+### Upload a FITS file and start inspection, photometry & transient detection
+
+```bash
+curl -X POST http://your-domain/api/tasks/upload/ \
+  -H "Authorization: Token your_api_token_here" \
+  -F "file=@path/to/your/image.fits" \
+  -F "title=Full processing run" \
+  -F "do_inspect=true" \
+  -F "do_photometry=true" \
+  -F "do_simple_transients=true"
+```
+
+The response will contain the `id` of the newly-created task.  Use that ID to
+check progress or results later.
+
+### Consult / check task status
+
+```bash
+curl -X GET http://your-domain/api/tasks/{task_id}/ \
+  -H "Authorization: Token your_api_token_here"
+```
+
+Replace `{task_id}` with the numeric ID returned by the upload call.  The JSON
+response includes the current `state` field plus any configuration and timing
+information.
+
 ## Endpoints
 
 ### 1. Upload FITS Image
