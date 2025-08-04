@@ -183,9 +183,10 @@ curl -X POST http://your-domain/api/tasks/upload/ \
 
 ### Python example
 
-Below is a minimal Python snippet that performs the same upload — requesting
-inspection, photometry, and simple transient detection in one go — using the
-popular `requests` library.  Replace the placeholders with your own values.
+Minimal snippet below uploads the file and triggers **inspection → photometry
+→ subtraction** in sequence.  It keeps the code short and **does not** handle
+advanced options like gain scaling — for that, use
+`examples/full_workflow.py` described later in this document.
 
 ```python
 import requests
