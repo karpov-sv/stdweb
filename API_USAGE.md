@@ -146,6 +146,44 @@ curl -X POST http://your-domain/api/tasks/upload/ \
 }
 ```
 
+### Python example
+
+Below is a minimal Python snippet that performs the same upload — requesting
+inspection, photometry, and simple transient detection in one go — using the
+popular `requests` library.  Replace the placeholders with your own values.
+
+```python
+import requests
+
+API_TOKEN = "your_api_token_here"  # <-- put your token here
+API_URL = "http://your-domain/api/tasks/upload/"
+FITS_PATH = "path/to/your/image.fits"
+
+# Form-data payload (all values must be **strings**)  
+# Booleans are sent as the strings "true" / "false".
+data = {
+    "title": "My Image Analysis",
+    "do_inspect": "true",
+    "do_photometry": "true",
+    "do_simple_transients": "true",
+}
+
+# Open the FITS file in binary mode for upload
+with open(FITS_PATH, "rb") as fh:
+    files = {"file": (FITS_PATH, fh, "application/fits")}
+
+    # The token goes in the Authorization header
+    headers = {"Authorization": f"Token {API_TOKEN}"}
+
+    response = requests.post(API_URL, headers=headers, files=files, data=data, timeout=60)
+
+print("Status:", response.status_code)
+print(response.json())
+```
+
+If the upload succeeds you will receive a JSON response similar to the cURL
+examples above, containing the newly created task’s ID and its initial state.
+
 ### 2. List Tasks
 
 **Endpoint:** `GET /api/tasks/`
