@@ -293,6 +293,11 @@ def fix_header(header, verbose=True):
     if 'FOCALLEN' in header and not header.get('FOCALLEN'):
         header.remove('FOCALLEN')
 
+    # Fix extra NAXIS headers
+    for _ in ['NAXIS3']:
+        if _ in header:
+            header.remove(_, ignore_missing=True)
+
 
 def pre_fix_image(filename, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
