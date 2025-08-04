@@ -348,3 +348,70 @@ python manage.py create_api_token username
 ```
 
 This command creates or retrieves an API token for the specified user. 
+
+### Python example: full workflow (inspection → photometry → template subtraction)
+
+The first snippet uploads and leaves the rest of the processing to the server.  
+Sometimes you prefer to trigger subsequent steps manually after the previous
+one finishes – for instance, run photometry only after inspection, and run a
+template subtraction after photometry.  The code below does exactly that,
+using simple polling to wait for each step to complete:
+
+```python
+import time
+import requests
+
+API  = "http://your-domain"          # <-- change to http://86.253.141.183:7000 for the public demo
+TOK  = "your_api_token_here"
+FITS = "/absolute/path/image.fits"
+
+# ---------------------------------------------------------------------------
+H = {"Authorization": f"Token {TOK}"}
+
+# 1) upload FITS and ask for inspection only
+with open(FITS, "rb") as fh:
+    r = requests.post(f"{API}/api/tasks/upload/",
+                      headers=H,
+                      files={"file": (FITS, fh, "application/fits")},
+                      data={"title": "Full run", "do_inspect": "true"},
+                      timeout=120)
+    r.raise_for_status()
+    task_id = r.json()["task"]["id"]
+print("Task", task_id, "created → inspection running…")
+
+
+# helper: wait until the task reaches a target state
+def wait_for(state):
+    while True:
+        cur_state = requests.get(f"{API}/api/tasks/{task_id}/", headers=H).json()["state"]
+        print("state =", cur_state)
+        if cur_state == state:
+            return
+        time.sleep(10)
+
+
+# 2) wait for inspection to finish, then launch photometry
+wait_for("inspect_done")
+print("→ launching photometry…")
+
+requests.post(f"{API}/api/tasks/{task_id}/action/",
+              headers={**H, "Content-Type": "application/json"},
+              json={"action": "photometry"}).raise_for_status()
+
+# 3) wait for photometry to finish, then launch template subtraction
+wait_for("photometry_done")
+print("→ launching template subtraction…")
+
+requests.post(f"{API}/api/tasks/{task_id}/action/",
+              headers={**H, "Content-Type": "application/json"},
+              json={"action": "subtraction",
+                    "template_catalog": "ZTF_DR7"}).raise_for_status()
+
+# 4) final wait
+wait_for("subtraction_done")
+print("All processing steps finished ✔")
+```
+
+The script uses the public‐facing steps `inspect`, `photometry`, and
+`subtraction`.  Adjust `template_catalog` if you need a different survey (e.g.
+`PS1`, `LS_DR10`). 
