@@ -85,7 +85,11 @@ with fits_file.open("rb") as fh:
         f"{API}/api/tasks/upload/",
         headers=HEADERS,
         files={"file": (fits_file.name, fh, "application/fits")},
-        data={"title": "Full run", "do_inspect": "true"},
+        data={
+            "title": "Full run",
+            "do_inspect": "true",
+            **({"gain": str(GAIN_VALUE)} if GAIN_VALUE is not None else {})
+        },
         timeout=300,
     )
 resp.raise_for_status()
