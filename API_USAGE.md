@@ -51,6 +51,10 @@ curl -X POST http://your-domain/api/tasks/upload/ \
 The response will contain the `id` of the newly-created task.  Use that ID to
 check progress or results later.
 
+👉 Want a complete Python example that uploads the image, waits for inspection,
+   then runs photometry and template subtraction automatically?  Skip ahead to
+   the section “Running `full_workflow.py` step-by-step”.
+
 ### Consult / check task status
 
 ```bash
