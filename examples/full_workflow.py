@@ -11,6 +11,15 @@ STDWEB_API_URL   – base URL of the STDWeb instance, e.g. http://86.253.141.183
 STDWEB_API_TOKEN – your personal API token (required)
 STDWEB_FITS_FILE – absolute path to the FITS file to upload (required)
 STDWEB_TEMPLATE  – template catalog alias (optional, default ZTF_DR7)
+
+STDWEB_GAIN      – electronic gain in e-/ADU. If your image is stored with
+                    full 16-bit range (0…65535) set the physical gain value
+                    directly (e.g. 2.3).  If the image is normalised 0…1 you
+                    have two options:
+                      1) provide the *scaled* gain yourself (gain*65535), or
+                      2) set STDWEB_GAIN to the physical value *and*
+                         STDWEB_AUTOSCALE_GAIN=true – the script will detect
+                         the 0…1 range and multiply by 65535 automatically.
 """
 import os
 import time
@@ -66,6 +75,9 @@ def compute_gain():
     return gain_val
 
 GAIN_VALUE = compute_gain()
+# Print chosen gain for clarity
+if GAIN_VALUE is not None:
+    print(f"Using gain = {GAIN_VALUE} e-/ADU (scaled: {AUTOSCALE_GAIN})")
 
 def wait_for(task_id: int, target_state: str, poll: int = 10):
     """Poll the task until it reaches *target_state*."""

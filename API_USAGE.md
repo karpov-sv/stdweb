@@ -436,8 +436,12 @@ finally **template subtraction**.
    export STDWEB_API_URL="http://86.253.141.183:7000"
    export STDWEB_API_TOKEN="<your_STDWEB_token>"
    export STDWEB_FITS_FILE="/path/to/image/res.fit"
-   # Optionally pick another template catalogue (defaults to ZTF_DR7)
-   # export STDWEB_TEMPLATE="PS1"
+   # Optional: supply detector gain (e-/ADU)
+   # If your image is in full 16-bit range (0-65535):
+   #   export STDWEB_GAIN="2.3"
+   # If your image is normalised 0-1 and you want the script to scale:
+   #   export STDWEB_GAIN="2.3"
+   #   export STDWEB_AUTOSCALE_GAIN="true"
 
 5) Run the script
    python3 examples/full_workflow.py
