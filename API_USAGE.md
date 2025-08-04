@@ -415,3 +415,40 @@ print("All processing steps finished ✔")
 The script uses the public‐facing steps `inspect`, `photometry`, and
 `subtraction`.  Adjust `template_catalog` if you need a different survey (e.g.
 `PS1`, `LS_DR10`). 
+
+### Lancer le script `full_workflow.py` pas à pas
+
+Le dépôt contient un exemple autonome dans `examples/full_workflow.py` qui
+chaîne inspection → photométrie → soustraction.  Voici la procédure
+complète pour l’exécuter :
+
+```text
+1) Créer un environnement virtuel Python :
+   python3 -m venv venv
+
+2) Activer l’environnement :
+   source venv/bin/activate        # l’invite devient (venv)$
+
+3) Installer la dépendance « requests » :
+   pip3 install requests
+
+4) Définir l’URL de l’API, le jeton d’accès et le fichier FIT/FITS à envoyer :
+   export STDWEB_API_URL="http://86.253.141.183:7000"
+   export STDWEB_API_TOKEN="<votre_clef_API_STDWEB>"
+   export STDWEB_FITS_FILE="/chemin/vers/l_image/res.fit"
+   # (optionnel) choisir un autre catalogue de template :
+   # export STDWEB_TEMPLATE="PS1"
+
+5) Lancer le script :
+   python3 examples/full_workflow.py
+```
+
+Le script :
+* téléverse l’image (`upload`) en demandant seulement l’inspection;
+* attend que l’état passe à `inspect_done` ;
+* déclenche la photométrie (`photometry`) puis attend `photometry_done` ;
+* lance enfin la soustraction de template (`subtraction`) jusqu’à
+  `subtraction_done`.
+
+Toutes les variables sont injectées via l’environnement, ce qui évite de
+laisser des secrets ou chemins absolus dans le code. 
