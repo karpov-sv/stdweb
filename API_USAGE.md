@@ -306,6 +306,39 @@ curl -X GET http://your-domain/api/presets/ \
 ]
 ```
 
+### 5. Upload a custom subtraction template
+
+Use this endpoint to attach your own reference image that will be used when you later trigger the subtraction action with `template="custom"`.
+
+**Endpoint:** `POST /api/tasks/{task_id}/upload_template/`
+
+**Description:** Upload a FITS file that will be stored as `custom_template.fits` in the task folder.
+
+**Request:**
+
+```bash
+curl -X POST http://your-domain/api/tasks/123/upload_template/ \
+     -H "Authorization: Token your_api_token_here" \
+     -F "template_file=@/path/to/your/template.fits"
+```
+
+**Response:**
+
+```json
+{
+  "message": "Custom template uploaded as custom_template.fits"
+}
+```
+
+**Next step:** trigger subtraction with the custom template
+
+```bash
+curl -X POST http://your-domain/api/tasks/123/action/ \
+     -H "Authorization: Token your_api_token_here" \
+     -H "Content-Type: application/json" \
+     -d '{"action":"subtraction","template":"custom"}'
+```
+
 ## Task States
 
 Tasks can have the following states:
