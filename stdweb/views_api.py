@@ -319,3 +319,39 @@ def task_action_api(request, task_id):
             {'error': 'Task not found'}, 
             status=status.HTTP_404_NOT_FOUND
         ) 
+
+
+# ---------------------------------------------------------------------------
+# NEW ENDPOINT: upload custom template FITS file to existing task
+# ---------------------------------------------------------------------------
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def task_upload_template_api(request, task_id):
+    """Upload a custom template FITS for subtraction.
+
+    The request must be multipart/form-data with a single file field named
+    ``template_file``.  The file is stored as ``custom_template.fits`` in the
+    task directory so that the subtraction routine can pick it up when
+    ``template="custom"`` is specified.
+    """
+
+    if 'template_file' not in request.FILES:
+        return Response({'error': 'No file provided. Use form field "template_file".'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        task = Task.objects.get(id=task_id, user=request.user)
+    except Task.DoesNotExist:
+        return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Save the file
+    try:
+        handle_uploaded_file(request.FILES['template_file'],
+                             os.path.join(task.path(), 'custom_template.fits'))
+    except Exception as exc:
+        return Response({'error': f'Upload failed: {exc}'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({'message': 'Custom template uploaded as custom_template.fits'}) 
