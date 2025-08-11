@@ -132,6 +132,10 @@ def list_files(request, path='', base=settings.DATA_PATH):
         files = []
 
         for entry in os.scandir(fullpath):
+            # Check for broken symlinks
+            if not os.path.exists(os.path.join(fullpath, entry.name)):
+                continue
+
             stat = entry.stat()
 
             elem = {
