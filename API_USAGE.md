@@ -31,41 +31,6 @@ Include the token in the Authorization header for all API requests:
 Authorization: Token your_api_token_here
 ```
 
-## REST API – Quick Usage
-
-The remainder of this document goes into detail for every endpoint, but if you
-just want the **TL;DR** for the most common operations via cURL here it is.
-
-### Upload a FITS file and start inspection, photometry & transient detection
-
-```bash
-curl -X POST http://your-domain/api/tasks/upload/ \
-  -H "Authorization: Token your_api_token_here" \
-  -F "file=@path/to/your/image.fits" \
-  -F "title=Full processing run" \
-  -F "do_inspect=true" \
-  -F "do_photometry=true" \
-  -F "do_simple_transients=true"
-```
-
-The response will contain the `id` of the newly-created task.  Use that ID to
-check progress or results later.
-
-👉 Want a complete Python example that uploads the image, waits for inspection,
-   then runs photometry and template subtraction automatically?  Skip ahead to
-   the section “Running `full_workflow.py` step-by-step”.
-
-### Consult / check task status
-
-```bash
-curl -X GET http://your-domain/api/tasks/{task_id}/ \
-  -H "Authorization: Token your_api_token_here"
-```
-
-Replace `{task_id}` with the numeric ID returned by the upload call.  The JSON
-response includes the current `state` field plus any configuration and timing
-information.
-
 ## Endpoints
 
 ### 1. Upload FITS Image
@@ -181,45 +146,6 @@ curl -X POST http://your-domain/api/tasks/upload/ \
 }
 ```
 
-### Python example
-
-Minimal snippet below uploads the file and triggers **inspection → photometry
-→ subtraction** in sequence.  It keeps the code short and **does not** handle
-advanced options like gain scaling — for that, use
-`examples/full_workflow.py` described later in this document.
-
-```python
-import requests
-
-API_TOKEN = "your_api_token_here"  # <-- put your token here
-API_URL = "http://your-domain/api/tasks/upload/"
-FITS_PATH = "path/to/your/image.fits"
-
-# Form-data payload (all values must be **strings**)  
-# Booleans are sent as the strings "true" / "false".
-data = {
-    "title": "My Image Analysis",
-    "do_inspect": "true",
-    "do_photometry": "true",
-    "do_simple_transients": "true",
-}
-
-# Open the FITS file in binary mode for upload
-with open(FITS_PATH, "rb") as fh:
-    files = {"file": (FITS_PATH, fh, "application/fits")}
-
-    # The token goes in the Authorization header
-    headers = {"Authorization": f"Token {API_TOKEN}"}
-
-    response = requests.post(API_URL, headers=headers, files=files, data=data, timeout=60)
-
-print("Status:", response.status_code)
-print(response.json())
-```
-
-If the upload succeeds you will receive a JSON response similar to the cURL
-examples above, containing the newly created task’s ID and its initial state.
-
 ### 2. List Tasks
 
 **Endpoint:** `GET /api/tasks/`
@@ -306,37 +232,47 @@ curl -X GET http://your-domain/api/presets/ \
 ]
 ```
 
-### 5. Upload a custom subtraction template
+### 5. Trigger template subtraction on an existing task
 
-Use this endpoint to attach your own reference image that will be used when you later trigger the subtraction action with `template="custom"`.
+**Endpoint:** `POST /api/tasks/{task_id}/action/`
 
-**Endpoint:** `POST /api/tasks/{task_id}/upload_template/`
-
-**Description:** Upload a FITS file that will be stored as `custom_template.fits` in the task folder.
-
-**Request:**
-
-```bash
-curl -X POST http://your-domain/api/tasks/123/upload_template/ \
-     -H "Authorization: Token your_api_token_here" \
-     -F "template_file=@/path/to/your/template.fits"
-```
-
-**Response:**
+**Description:** Start the template-subtraction step (difference imaging) on a previously uploaded task.  The request body must be JSON and **must** include
 
 ```json
-{
-  "message": "Custom template uploaded as custom_template.fits"
-}
+{"action": "subtraction"}
 ```
 
-**Next step:** trigger subtraction with the custom template
+Any additional keys listed below are optional; when absent the backend uses the default shown in the “Default” column.
+
+| Key | Purpose | Type | Default if omitted |
+|-----|---------|------|--------------------|
+| `template_catalog` \| `template` | Choose the catalogue or internal code for the reference image (e.g. `"ZTF_DR7"`, `"PS1"`, `"ztf"`, `"custom"`) | string | `"ps1"` |
+| `sub_size` | Split image into tiles of this width (pixels) when searching for transients | integer | `1000` |
+| `sub_overlap` | Overlap between tiles (pixels) | integer | `50` |
+| `subtraction_method` | Algorithm: `"hotpants"` or `"zogy"` | string | `"hotpants"` |
+| `hotpants_extra` | Extra parameters forwarded to HOTPANTS | JSON object | `{ "ko":0, "bgo":0 }` |
+| `subtraction_mode` | `"detection"` (transient search) or `"target"` (forced photometry) | string | `"detection"` |
+| `sub_verbose` | Produce verbose intermediate products | boolean | `false` |
+| | **Filtering flags (NEW in v0.10.4):** |||
+| `filter_vizier` | Reject detections present in Gaia EDR3 / PS1 / SkyMapper | boolean | `false` |
+| `filter_skybot` | Reject known moving objects (IMCCE SkyBoT) | boolean | `false` |
+| `filter_prefilter` | Machine-learning pre-filter for spurious detections | boolean | `false` (UI default = **true**) |
+
+> ⚠️  The web UI shows “Pre-filtering” ticked by default; if you want the same behaviour via the API remember to add `"filter_prefilter": true` in your JSON payload.
+
+**Example:**
 
 ```bash
 curl -X POST http://your-domain/api/tasks/123/action/ \
-     -H "Authorization: Token your_api_token_here" \
+     -H "Authorization: Token $TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"action":"subtraction","template":"custom"}'
+     -d '{
+           "action": "subtraction",
+           "template_catalog": "ZTF_DR7",
+           "filter_vizier": true,
+           "filter_skybot": true,
+           "filter_prefilter": true
+         }'
 ```
 
 ## Task States
@@ -386,111 +322,3 @@ python manage.py create_api_token username
 ```
 
 This command creates or retrieves an API token for the specified user. 
-
-### Python example: full workflow (inspection → photometry → template subtraction)
-
-The first snippet uploads and leaves the rest of the processing to the server.  
-Sometimes you prefer to trigger subsequent steps manually after the previous
-one finishes – for instance, run photometry only after inspection, and run a
-template subtraction after photometry.  The code below does exactly that,
-using simple polling to wait for each step to complete:
-
-```python
-import time
-import requests
-
-API  = "http://your-domain"          # <-- change to http://86.253.141.183:7000 for the public demo
-TOK  = "your_api_token_here"
-FITS = "/absolute/path/image.fits"
-
-# ---------------------------------------------------------------------------
-H = {"Authorization": f"Token {TOK}"}
-
-# 1) upload FITS and ask for inspection only
-with open(FITS, "rb") as fh:
-    r = requests.post(f"{API}/api/tasks/upload/",
-                      headers=H,
-                      files={"file": (FITS, fh, "application/fits")},
-                      data={"title": "Full run", "do_inspect": "true"},
-                      timeout=120)
-    r.raise_for_status()
-    task_id = r.json()["task"]["id"]
-print("Task", task_id, "created → inspection running…")
-
-
-# helper: wait until the task reaches a target state
-def wait_for(state):
-    while True:
-        cur_state = requests.get(f"{API}/api/tasks/{task_id}/", headers=H).json()["state"]
-        print("state =", cur_state)
-        if cur_state == state:
-            return
-        time.sleep(10)
-
-
-# 2) wait for inspection to finish, then launch photometry
-wait_for("inspect_done")
-print("→ launching photometry…")
-
-requests.post(f"{API}/api/tasks/{task_id}/action/",
-              headers={**H, "Content-Type": "application/json"},
-              json={"action": "photometry"}).raise_for_status()
-
-# 3) wait for photometry to finish, then launch template subtraction
-wait_for("photometry_done")
-print("→ launching template subtraction…")
-
-requests.post(f"{API}/api/tasks/{task_id}/action/",
-              headers={**H, "Content-Type": "application/json"},
-              json={"action": "subtraction",
-                    "template_catalog": "ZTF_DR7"}).raise_for_status()
-
-# 4) final wait
-wait_for("subtraction_done")
-print("All processing steps finished ✔")
-```
-
-The script uses the public‐facing steps `inspect`, `photometry`, and
-`subtraction`.  Adjust `template_catalog` if you need a different survey (e.g.
-`PS1`, `LS_DR10`). 
-
-### Running `full_workflow.py` step-by-step
-
-You’ll find a self-contained example in `examples/full_workflow.py`.  It
-uploads an image, waits for **inspection**, then starts **photometry** and
-finally **template subtraction**.
-
-```text
-1) Create a virtual environment
-   python3 -m venv venv
-
-2) Activate it
-   source venv/bin/activate        # prompt becomes (venv)$
-
-3) Install the only dependency
-   pip3 install requests
-
-4) Export the API url, your token and the FIT/FITS file to upload
-   export STDWEB_API_URL="http://86.253.141.183:7000"
-   export STDWEB_API_TOKEN="<your_STDWEB_token>"
-   export STDWEB_FITS_FILE="/path/to/image/res.fit"
-   # Optional: supply detector gain (e-/ADU)
-   # If your image is in full 16-bit range (0-65535):
-   #   export STDWEB_GAIN="2.3"
-   # If your image is normalised 0-1 and you want the script to scale:
-   #   export STDWEB_GAIN="2.3"
-   #   export STDWEB_AUTOSCALE_GAIN="true"
-
-5) Run the script
-   python3 examples/full_workflow.py
-```
-
-What the script does
-* uploads the image (`upload`) with `do_inspect=true`;
-* polls until the task reaches `inspect_done`;
-* triggers photometry (`photometry`) and waits for `photometry_done`;
-* triggers template subtraction (`subtraction`) and waits for
-  `subtraction_done`.
-
-All credentials / paths are provided via environment variables so nothing
-sensitive is hard-coded in the script. 

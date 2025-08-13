@@ -82,28 +82,13 @@ class TaskUploadAPIView(APIView):
                 'prefilter_detections', 'filter_blends', 'diagnose_color', 'refine_wcs',
                 'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
                 'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
+                # Template-subtraction filter flags (NEW)
+                'filter_vizier', 'filter_skybot', 'filter_prefilter',
                 # Inspection parameters
                 'target', 'gain', 'saturation', 'time',
                 # Template selection
                 'template'
             ]
-
-            # Handle `template_catalog` alias if provided (e.g., "ZTF_DR7")
-            template_catalog = serializer.validated_data.get('template_catalog') if hasattr(serializer, 'validated_data') else None
-            if template_catalog:
-                # Normalise input
-                tc_norm = str(template_catalog).lower()
-                alias_map = {
-                    'ztf_dr7': 'ztf',
-                    'ztf': 'ztf',
-                    'ps1': 'ps1',
-                    'ps1_dr2': 'ps1',
-                    'pan-starrs': 'ps1',
-                    'pan-starrs_dr2': 'ps1',
-                    'ls_dr10': 'ls',
-                    'legacy': 'ls',
-                }
-                task.config['template'] = alias_map.get(tc_norm, tc_norm)
             
             for param in config_params:
                 value = serializer.validated_data.get(param)
@@ -239,6 +224,8 @@ def task_action_api(request, task_id):
             'prefilter_detections', 'filter_blends', 'diagnose_color', 'refine_wcs',
             'blind_match_wcs', 'inspect_bg', 'centroid_targets', 'nonlin',
             'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
+            # Template-subtraction filter flags (NEW)
+            'filter_vizier', 'filter_skybot', 'filter_prefilter',
             # Inspection parameters
             'target', 'gain', 'saturation', 'time',
             # Template selection
@@ -257,22 +244,6 @@ def task_action_api(request, task_id):
                         value = False
                 task.config[param] = value
                 updated = True
-        # Handle `template_catalog` alias here as well
-        if 'template_catalog' in request.data:
-            tc_norm = str(request.data.get('template_catalog')).lower()
-            alias_map = {
-                'ztf_dr7': 'ztf',
-                'ztf': 'ztf',
-                'ps1': 'ps1',
-                'ps1_dr2': 'ps1',
-                'pan-starrs': 'ps1',
-                'pan-starrs_dr2': 'ps1',
-                'ls_dr10': 'ls',
-                'legacy': 'ls',
-            }
-            task.config['template'] = alias_map.get(tc_norm, tc_norm)
-            updated = True
-
         if updated:
             task.save()
         # --- END NEW CODE ---
@@ -319,39 +290,3 @@ def task_action_api(request, task_id):
             {'error': 'Task not found'}, 
             status=status.HTTP_404_NOT_FOUND
         ) 
-
-
-# ---------------------------------------------------------------------------
-# NEW ENDPOINT: upload custom template FITS file to existing task
-# ---------------------------------------------------------------------------
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def task_upload_template_api(request, task_id):
-    """Upload a custom template FITS for subtraction.
-
-    The request must be multipart/form-data with a single file field named
-    ``template_file``.  The file is stored as ``custom_template.fits`` in the
-    task directory so that the subtraction routine can pick it up when
-    ``template="custom"`` is specified.
-    """
-
-    if 'template_file' not in request.FILES:
-        return Response({'error': 'No file provided. Use form field "template_file".'},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        task = Task.objects.get(id=task_id, user=request.user)
-    except Task.DoesNotExist:
-        return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    # Save the file
-    try:
-        handle_uploaded_file(request.FILES['template_file'],
-                             os.path.join(task.path(), 'custom_template.fits'))
-    except Exception as exc:
-        return Response({'error': f'Upload failed: {exc}'},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    return Response({'message': 'Custom template uploaded as custom_template.fits'}) 

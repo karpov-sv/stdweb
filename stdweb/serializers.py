@@ -37,6 +37,11 @@ class TaskUploadSerializer(serializers.ModelSerializer):
     inspect_bg = serializers.BooleanField(required=False, help_text="Inspect background")
     centroid_targets = serializers.BooleanField(required=False, help_text="Centroid targets")
     nonlin = serializers.BooleanField(required=False, help_text="Non-linearity correction")
+
+    # --- NEW flags for template-subtraction filtering ---
+    filter_vizier = serializers.BooleanField(required=False, help_text="Filter Vizier catalogues")
+    filter_skybot = serializers.BooleanField(required=False, help_text="Filter SkyBoT")
+    filter_prefilter = serializers.BooleanField(required=False, help_text="Pre-filtering of difference detections")
     
     # Blind matching parameters
     blind_match_ps_lo = serializers.FloatField(required=False, allow_null=True, help_text="Scale lower limit, arcsec/pix")
@@ -51,10 +56,6 @@ class TaskUploadSerializer(serializers.ModelSerializer):
     gain = serializers.FloatField(required=False, allow_null=True, help_text="Gain, e/ADU")
     saturation = serializers.FloatField(required=False, allow_null=True, help_text="Saturation level, ADU")
     time = serializers.CharField(required=False, allow_blank=True, help_text="Time")
-
-    # Template selection
-    template = serializers.CharField(required=False, allow_blank=True, help_text="Internal template code (e.g. 'ztf')")
-    template_catalog = serializers.CharField(required=False, allow_blank=True, help_text="Template catalogue alias (e.g. 'ZTF_DR7')")
     
     class Meta:
         model = Task
@@ -70,6 +71,7 @@ class TaskUploadSerializer(serializers.ModelSerializer):
             'blind_match_ps_lo', 'blind_match_ps_up', 'blind_match_center', 'blind_match_sr0',
             'target', 'gain', 'saturation', 'time',
             'template', 'template_catalog'
+            , 'filter_vizier', 'filter_skybot', 'filter_prefilter'
         ]
         read_only_fields = ['original_name']
     
