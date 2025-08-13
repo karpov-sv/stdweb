@@ -79,7 +79,7 @@
 
             <i class="ms-2 me-2 fa fa-{% if file.type == 'dir' %}folder-open-o{% elif file.type == 'up' %}level-up{% elif file.type == 'text' %}file-text-o{% elif file.type == 'file' %}file-o{% else %}file-image-o{% endif %}"></i>
 
-            <a href='{% url 'files' path=file.path %}' class="text-decoration-none link-dark">
+            <a href='{% url 'files' path=file.path %}' class="text-decoration-none text-body">
               {{ file.name }}
             </a>
 

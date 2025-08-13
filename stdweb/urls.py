@@ -43,6 +43,7 @@ urlpatterns = [
 
     # Tasks
     path('tasks/', views_tasks.tasks, {'id':None}, name='tasks'),
+    path('tasks/actions', views_tasks.tasks_actions, name='tasks_actions'),
     path('tasks/<int:id>', views_tasks.tasks, name='tasks'),
 
     path('tasks/<int:id>/preview/<path:path>', views_tasks.task_preview, name='task_preview'),

@@ -113,6 +113,18 @@ class TasksFilterForm(forms.Form):
         )
 
 
+class TasksActionsForm(forms.Form):
+    tasks = MultipleChoiceFieldNoValidation(required=False, widget=forms.CheckboxSelectMultiple)
+    referer = forms.CharField(widget=forms.HiddenInput())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.form_action = 'tasks_actions'
+        self.helper.layout = Layout()
+
+
 class PrettyJSONEncoder(json.JSONEncoder):
     def __init__(self, *args, indent, sort_keys, **kwargs):
         super().__init__(*args, indent=4, sort_keys=False, **kwargs)

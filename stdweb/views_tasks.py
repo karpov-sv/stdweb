@@ -150,9 +150,10 @@ def tasks(request, id=None):
                 if action == 'make_custom_mask':
                     return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id}))
 
-                if action == 'cleanup_task' or action == 'crop_image':
+                if action == 'cleanup_task' or action == 'archive_task' or action == 'crop_image':
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
-                    task.config = {} # should we reset the config on cleanup?..
+                    if action != 'archive_task':
+                        task.config = {} # We reset the config on cleanup but keep on archiving
                     task.state = 'cleanup'
                     task.save()
                     messages.success(request, "Started cleanup for task " + str(id))
@@ -241,17 +242,54 @@ def tasks(request, id=None):
                 query = form.cleaned_data.get('query')
                 if query:
                     for token in query.split():
-                        tasks = tasks.filter(Q(original_name__icontains = token) |
-                                             Q(title__icontains = token) |
-                                             Q(user__username__icontains = token) |
-                                             Q(user__first_name__icontains = token) |
-                                             Q(user__last_name__icontains = token)
-                                             )
-
+                        tasks = tasks.filter(
+                            Q(original_name__icontains = token) |
+                            Q(title__icontains = token) |
+                            Q(user__username__icontains = token) |
+                            Q(user__first_name__icontains = token) |
+                            Q(user__last_name__icontains = token)
+                        )
 
         context['tasks'] = tasks
+        context['referer'] = request.path + '?' + request.GET.urlencode();
 
     return TemplateResponse(request, 'tasks.html', context=context)
+
+
+def tasks_actions(request):
+    form = forms.TasksActionsForm(request.POST)
+
+    if request.method == 'POST':
+        if form.is_valid():
+            task_ids = form.cleaned_data['tasks']
+            action = request.POST.get('action')
+
+            for id in task_ids:
+                task = models.Task.objects.get(id=id)
+
+                if action == 'archive':
+                    task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
+                    task.state = 'archive'
+                    task.save()
+                    messages.success(request, "Started archiving for task " + str(id))
+
+                if action == 'cleanup':
+                    task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
+                    task.config = {} # should we reset the config on cleanup?..
+                    task.state = 'cleanup'
+                    task.save()
+                    messages.success(request, "Started cleanup for task " + str(id))
+
+                if action == 'delete':
+                    if request.user.is_staff or request.user == task.user:
+                        task.delete()
+                        messages.success(request, "Task " + str(id ) + " is deleted")
+                    else:
+                        messages.error(request, "Cannot delete task " + str(id) + " belonging to " + task.user.username)
+
+            return HttpResponseRedirect(form.cleaned_data['referer'])
+
+    return HttpResponseRedirect(reverse('tasks'))
 
 
 def task_download(request, id=None, path='', **kwargs):

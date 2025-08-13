@@ -219,7 +219,7 @@
             The mask is created from NaN values in the image, pixels above saturation level, and from optional cosmic ray detection. The latter is not always working perfectly, so disable it if it starts masking the actual stars! If the image has unusable regions (e.g. overscans) around it - you may mask them manually using custom mask editor.
           </p>
           <p>
-            Cleanup operation will remove all processing results and settings, except for the image itself.
+            Cleanup operation will remove all processing results and settings, except for the image itself. Archiving will only remove generated files, but will keep the settings so that the processing may be repeated in exactly the same configuration.
           </p>
           <p>
             Original image may be modified by the operations hidden under Unsafe controls. There you may either crop the image (using actual pixel coordinates or offsets from the edges), or incorporate refined / blind-matched WCS into the header, so that image with proper astrometry may be downloaded. Also, you may delete the processing task completely if you are done with this image.
@@ -238,6 +238,9 @@
 
           <button type="submit" name="action" value="make_custom_mask" class="btn btn-secondary"
                   title="Create custom mask to define usable image regions">Make custom mask</button>
+
+          <button type="submit" name="action" value="archive_task" class="btn btn-warning"
+                  title="Delete all generated files">Archive</button>
 
           <button type="submit" name="action" value="cleanup_task" class="btn btn-danger"
                   title="Delete all processing results and configurations">Cleanup</button>
