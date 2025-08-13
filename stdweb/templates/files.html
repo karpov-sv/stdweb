@@ -30,6 +30,14 @@
      $('input[name="local_files"]').on('change', check_menu_visibility);
      check_menu_visibility();
    });
+
+   // Select all
+   $(function(){
+     $('input[name="select_all"]').on('change', function() {
+       $('input[name="local_files"]').prop('checked', $(this).prop('checked'));
+       check_menu_visibility();
+     });
+   });
   </script>
 {% endblock %}
 
@@ -69,10 +77,17 @@
       <form method='POST' action="{% url 'upload' %}">
 
       <div class="list-group mb-4">
+
+        <div class="list-group-item d-flex bg-secondary-subtle">
+          <input class="form-check-input" type="checkbox" name="select_all" title="Select all"/>
+          <span class="ms-auto me-auto"><strong>Filename</strong></span>
+          <span class="pull-right me-4"><strong>Size</strong></span>
+        </div>
+
         {% for file in files %}
           <div class="list-group-item">
             {% if file.type == 'fits' %}
-              <input class="form-check-input" type="checkbox" name="local_files" value="{{ file.path }}">
+              <input class="form-check-input" type="checkbox" name="local_files" value="{{ file.path }}"/>
             {% else %}
               <span class="w-1 d-inline-block"></span>
             {% endif %}
@@ -89,10 +104,10 @@
           </div>
 
         {% endfor %}
+
       </div>
 
       <div id='actions_menu'>
-        <hr/>
         <h3>Process selected files</h3>
         {% crispy form %}
       </div>
