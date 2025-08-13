@@ -150,14 +150,14 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
             if elem['is_dir']:
                 elem['type'] = 'dir'
-            elif elem['mime'] and 'image' in elem['mime']:
-                elem['type'] = 'image'
-            elif elem['mime'] and 'text' in elem['mime']:
-                elem['type'] = 'text'
             elif elem['mime'] and 'fits' in elem['mime']:
                 elem['type'] = 'fits'
             elif os.path.splitext(entry.name)[1].lower().startswith('.fit'):
                 elem['type'] = 'fits'
+            elif elem['mime'] and 'image' in elem['mime']:
+                elem['type'] = 'image'
+            elif elem['mime'] and 'text' in elem['mime']:
+                elem['type'] = 'text'
             else:
                 elem['type'] = 'file'
 
@@ -170,6 +170,8 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
         context['files'] = files
         context['mode'] = 'list'
+        context['form'] = forms.UploadFileForm(filename='*')
+
 
     return TemplateResponse(request, 'files.html', context=context)
 
@@ -346,6 +348,8 @@ def upload_file(request, base=settings.DATA_PATH):
 
     if request.method == "POST":
         if form.is_valid():
+            tasks = []
+
             if 'file' in request.FILES:
                 upload = request.FILES['file']
                 task = models.Task(title=form.cleaned_data.get('title'), original_name=upload.name)
@@ -355,87 +359,99 @@ def upload_file(request, base=settings.DATA_PATH):
                 handle_uploaded_file(upload, os.path.join(task.path(), 'image.fits'))
                 messages.success(request, "File uploaded as task " + str(task.id))
 
+                tasks.append(task)
             else:
-                path = request.POST.get('local_file')
-                ext = request.POST.get('ext')
-                path = sanitize_path(path)
+                files = form.cleaned_data['local_files']
+                if not files:
+                    files = [form.cleaned_data['local_file']]
 
-                fullpath = os.path.join(base, path)
+                for path in files:
+                    ext = request.POST.get('ext')
+                    path = sanitize_path(path)
 
-                task = models.Task(original_name=os.path.split(path)[-1])
-                task.user = request.user
-                task.save() # to populate task.id
+                    fullpath = os.path.join(base, path)
 
-                # TODO: merge into handle_uploaded_file?..
-                try:
-                    os.makedirs(task.path())
-                except OSError:
-                    pass
+                    task = models.Task(original_name=os.path.split(path)[-1])
+                    task.user = request.user
+                    task.save() # to populate task.id
 
-                if ext is None:
-                    shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
-                    messages.success(request, "File copied as task " + str(task.id))
+                    # TODO: merge into handle_uploaded_file?..
+                    try:
+                        os.makedirs(task.path())
+                    except OSError:
+                        pass
 
-                else:
-                    ext = int(ext[0])
-                    image = fits.getdata(fullpath, ext)
-                    header = fits.getheader(fullpath, ext)
-                    fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
-                    messages.success(request, f"Extension {ext} copied as task " + str(task.id))
+                    if ext is None:
+                        shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
+                        messages.success(request, f"File {path} copied as task " + str(task.id))
 
+                    else:
+                        ext = int(ext[0])
+                        image = fits.getdata(fullpath, ext)
+                        header = fits.getheader(fullpath, ext)
+                        fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
+                        messages.success(request, f"Extension {ext} of {path} copied as task " + str(task.id))
 
-            # Apply config preset
-            if form.cleaned_data.get('preset'):
-                preset = models.Preset.objects.get(id=int(form.cleaned_data.get('preset')))
-                task.config.update(preset.config)
-                messages.success(request, "Config updated with preset " + preset.name + " : " + str(preset.config))
+                    tasks.append(task)
 
-                if preset.files:
-                    # Copy preset files into task folder
-                    for filename in preset.files.split('\n'):
-                        shutil.copy(filename, task.path())
-                        messages.success(request, filename + " copied into the task")
+            for task in tasks:
+                # Apply config preset
+                if form.cleaned_data.get('preset'):
+                    preset = models.Preset.objects.get(id=int(form.cleaned_data.get('preset')))
+                    task.config.update(preset.config)
+                    if len(tasks) == 1:
+                        messages.success(request, "Config updated with preset " + preset.name + " : " + str(preset.config))
 
-            task.config['target'] = form.cleaned_data.get('target')
+                    if preset.files:
+                        # Copy preset files into task folder
+                        for filename in preset.files.split('\n'):
+                            shutil.copy(filename, task.path())
+                            if len(tasks) == 1:
+                                messages.success(request, filename + " copied into the task")
 
-            task.state = 'uploaded'
-            task.save()
+                task.config['target'] = form.cleaned_data.get('target')
 
-            # Initiate some processing steps
-            todo = []
-
-            if form.cleaned_data.get('do_inspect'):
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
-                todo.append(celery_tasks.task_inspect.subtask(args=[task.id, False], immutable=True))
-                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
-
-            if form.cleaned_data.get('do_photometry'):
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
-                todo.append(celery_tasks.task_photometry.subtask(args=[task.id, False], immutable=True))
-                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
-
-            if form.cleaned_data.get('do_simple_transients'):
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
-                todo.append(celery_tasks.task_transients_simple.subtask(args=[task.id, False], immutable=True))
-                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
-
-            if form.cleaned_data.get('do_subtraction'):
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
-                todo.append(celery_tasks.task_subtraction.subtask(args=[task.id, False], immutable=True))
-                todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
-
-            if todo:
-                todo.append(celery_tasks.task_finalize.subtask(args=[task.id], immutable=True))
-
-                task.celery_id = celery.chain(todo).apply_async()
-                task.state = 'running'
+                task.state = 'uploaded'
                 task.save()
 
-            return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
+                # Initiate some processing steps
+                todo = []
+
+                if form.cleaned_data.get('do_inspect'):
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
+                    todo.append(celery_tasks.task_inspect.subtask(args=[task.id, False], immutable=True))
+                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
+
+                if form.cleaned_data.get('do_photometry'):
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
+                    todo.append(celery_tasks.task_photometry.subtask(args=[task.id, False], immutable=True))
+                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
+
+                if form.cleaned_data.get('do_simple_transients'):
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
+                    todo.append(celery_tasks.task_transients_simple.subtask(args=[task.id, False], immutable=True))
+                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
+
+                if form.cleaned_data.get('do_subtraction'):
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
+                    todo.append(celery_tasks.task_subtraction.subtask(args=[task.id, False], immutable=True))
+                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
+
+                if todo:
+                    todo.append(celery_tasks.task_finalize.subtask(args=[task.id], immutable=True))
+
+                    task.celery_id = celery.chain(todo).apply_async()
+                    task.state = 'running'
+                    task.save()
+
+            if len(tasks) > 1:
+                return HttpResponseRedirect(reverse('tasks'))
+            else:
+                return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 
         else:
             messages.error(request, "Error uploading file")

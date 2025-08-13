@@ -12,10 +12,16 @@ from .processing import supported_filters, supported_catalogs, supported_catalog
 from . import models
 
 
+class MultipleChoiceFieldNoValidation(forms.MultipleChoiceField):
+    def validate(self, value):
+        pass
+
+
 class UploadFileForm(forms.Form):
     file = forms.FileField(label="FITS file", required=False)
     local_file = forms.CharField(required=False, widget=forms.HiddenInput())
     local_filename = forms.CharField(required=False, label="FITS file", disabled=True) # Will not be sent
+    local_files = MultipleChoiceFieldNoValidation(required=False, widget=forms.CheckboxSelectMultiple)
     preset = forms.ChoiceField(
         choices=[('','')],
         required=False, label="Configuration Preset"
@@ -39,7 +45,12 @@ class UploadFileForm(forms.Form):
         self.helper.form_action = 'upload'
         self.helper.field_template = 'crispy_field.html'
 
-        if filename:
+        if filename == '*':
+            file_field = 'local_filename'
+            self.fields['local_file'].initial = filename
+            self.fields['local_filename'].initial = 'Please select one or more files above'
+            submit = Submit('process_files', 'Process selected files', css_class='btn-primary')
+        elif filename:
             file_field = 'local_filename'
             self.fields['local_file'].initial = filename
             self.fields['local_filename'].initial = filename

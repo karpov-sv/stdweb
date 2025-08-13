@@ -3,6 +3,36 @@
 {% load filters %}
 {% load crispy_forms_tags %}
 
+{% block head %}
+  <script language="javascript">
+   check_menu_visibility = function() {
+     var hidden = true;
+     var menu = $('#actions_menu');
+     var count = 0;
+
+     $('input[name="local_files"]').each(function() {
+       if ($(this).prop('checked')) {
+         hidden = false;
+         count += 1;
+       }
+     });
+
+     $('input[name="local_filename"]').prop('value', count + ' file(s) selected for processing')
+
+     if (hidden)
+       menu.hide();
+     else
+       menu.show();
+   }
+
+   // Toggle visibility of the menu depending on whether something is selected
+   $(function(){
+     $('input[name="local_files"]').on('change', check_menu_visibility);
+     check_menu_visibility();
+   });
+  </script>
+{% endblock %}
+
 {% block ptitle %}{% if path %}{{ path }}{% else %}Files{% endif %} : STDWeb{% endblock %}
 
 {% block title %}File browser{% endblock %}
@@ -36,19 +66,38 @@
       {{ files|length }} entries
       </p> -->
 
+      <form method='POST' action="{% url 'upload' %}">
+
       <div class="list-group mb-4">
         {% for file in files %}
-          <a href='{% url 'files' path=file.path %}' class="list-group-item list-group-item-action">
-              <i class="me-2 fa fa-{% if file.type == 'dir' %}folder-open-o{% elif file.type == 'up' %}level-up{% elif file.type == 'text' %}file-text-o{% elif file.type == 'file' %}file-o{% else %}file-image-o{% endif %}"></i>
-              {{ file.name }}
+          <div class="list-group-item">
+            {% if file.type == 'fits' %}
+              <input class="form-check-input" type="checkbox" name="local_files" value="{{ file.path }}">
+            {% else %}
+              <span class="w-1 d-inline-block"></span>
+            {% endif %}
 
-              {% if file.type != 'dir' and file.type != 'up' %}
-                <span class="pull-right">{{ file.size|naturalsize }}</span>
-              {% endif %}
-          </a>
+            <i class="ms-2 me-2 fa fa-{% if file.type == 'dir' %}folder-open-o{% elif file.type == 'up' %}level-up{% elif file.type == 'text' %}file-text-o{% elif file.type == 'file' %}file-o{% else %}file-image-o{% endif %}"></i>
+
+            <a href='{% url 'files' path=file.path %}' class="text-decoration-none link-dark">
+              {{ file.name }}
+            </a>
+
+            {% if file.type != 'dir' and file.type != 'up' %}
+              <span class="pull-right">{{ file.size|naturalsize }}</span>
+            {% endif %}
+          </div>
 
         {% endfor %}
       </div>
+
+      <div id='actions_menu'>
+        <hr/>
+        <h3>Process selected files</h3>
+        {% crispy form %}
+      </div>
+
+      </form>
 
     {% endif %}
 

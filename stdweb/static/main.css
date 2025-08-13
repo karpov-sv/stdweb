@@ -133,3 +133,8 @@
   font-style: italic;
   display: none;
 }
+
+
+.w-1 {
+  width: 1em;
+}
