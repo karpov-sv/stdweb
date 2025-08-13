@@ -115,8 +115,22 @@
                 title="Delete all generated files">Archive</button>
         <button type="submit" name="action" value="cleanup" class="btn btn-warning"
                 title="Delete all processing results and configurations">Cleanup</button>
-        <button type="submit" name="action" value="delete" class="btn btn-danger ms-4"
-                title="Permanently delete this task">Delete</button>
+
+        <!-- Unsafe controls -->
+        <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#unsafeButtons"
+                aria-expanded="false"
+                aria-controls="unsafeButtons"
+                title="Show / hide unsafe controls">
+        </button>
+
+        <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
+
+          <button type="submit" name="action" value="delete" class="btn btn-danger"
+                  title="Permanently delete this task">Delete</button>
+        </span>
+
       </div>
 
     </form>
