@@ -25,6 +25,7 @@
        menu.show();
    }
 
+   {% if mode == 'list' %}
    // Toggle visibility of the menu depending on whether something is selected
    $(function(){
      $('input[name="local_files"]').on('change', check_menu_visibility);
@@ -38,6 +39,7 @@
        check_menu_visibility();
      });
    });
+   {% endif %}
   </script>
 {% endblock %}
 
