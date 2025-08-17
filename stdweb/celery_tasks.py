@@ -184,3 +184,33 @@ def task_subtraction(self, id, finalize=True):
 
     fix_config(config)
     task.save()
+
+
+@shared_task(bind=True)
+def task_stacking(self, id, finalize=True):
+    task = models.Task.objects.get(id=id)
+    basepath = task.path()
+
+    config = task.config
+
+    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'stacking.log'))
+    log(clear=True)
+
+    # Start processing
+    try:
+        processing.stack_images(config['stack_filenames'], os.path.join(basepath, 'image.fits'), config, verbose=log)
+        task.state = 'stacking_done'
+    except:
+        import traceback
+        log("\nError!\n", traceback.format_exc())
+
+        task.state = 'stacking_failed'
+        task.celery_id = None
+
+    if finalize:
+        # End processing
+        task.celery_id = None
+        task.complete()
+
+    fix_config(config)
+    task.save()

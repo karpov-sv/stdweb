@@ -45,11 +45,14 @@ class UploadFileForm(forms.Form):
         self.helper.form_action = 'upload'
         self.helper.field_template = 'crispy_field.html'
 
+        submit_stack = None
+
         if filename == '*':
             file_field = 'local_filename'
             self.fields['local_file'].initial = filename
             self.fields['local_filename'].initial = 'Please select one or more files above'
             submit = Submit('process_files', 'Process selected files', css_class='btn-primary')
+            submit_stack = Submit('stack_files', 'Stack and Process', css_class='btn-secondary')
         elif filename:
             file_field = 'local_filename'
             self.fields['local_file'].initial = filename
@@ -66,6 +69,7 @@ class UploadFileForm(forms.Form):
                 'local_file',
                 Column('preset', css_class="col-md-auto"),
                 Column(submit, css_class="col-md-auto mb-1"),
+                Column(submit_stack, css_class="col-md-auto mb-1") if submit_stack else None,
                 css_class='align-items-end'
             ),
             Row(

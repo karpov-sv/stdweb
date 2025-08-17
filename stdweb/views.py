@@ -365,34 +365,56 @@ def upload_file(request, base=settings.DATA_PATH):
                 if not files:
                     files = [form.cleaned_data['local_file']]
 
-                for path in files:
-                    ext = request.POST.get('ext')
-                    path = sanitize_path(path)
+                if 'stack_files' in form.data:
+                    # Stacking of multiple images as a single task
+                    filenames = []
 
-                    fullpath = os.path.join(base, path)
+                    for path in files:
+                        path = sanitize_path(path)
+                        fullpath = os.path.join(base, path)
+                        filenames.append(fullpath)
 
                     task = models.Task(original_name=os.path.split(path)[-1])
                     task.user = request.user
                     task.save() # to populate task.id
 
-                    # TODO: merge into handle_uploaded_file?..
-                    try:
-                        os.makedirs(task.path())
-                    except OSError:
-                        pass
+                    os.makedirs(task.path())
 
-                    if ext is None:
-                        shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
-                        messages.success(request, f"File {path} copied as task " + str(task.id))
+                    task.config['stack_filenames'] = filenames
 
-                    else:
-                        ext = int(ext[0])
-                        image = fits.getdata(fullpath, ext)
-                        header = fits.getheader(fullpath, ext)
-                        fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
-                        messages.success(request, f"Extension {ext} of {path} copied as task " + str(task.id))
-
+                    messages.success(request, f"Stacking {len(files)} images as task {task.id}")
                     tasks.append(task)
+
+                else:
+                    # Normal multi-image processing
+                    for path in files:
+                        ext = request.POST.get('ext')
+                        path = sanitize_path(path)
+
+                        fullpath = os.path.join(base, path)
+
+                        task = models.Task(original_name=os.path.split(path)[-1])
+                        task.user = request.user
+                        task.save() # to populate task.id
+
+                        # TODO: merge into handle_uploaded_file?..
+                        try:
+                            os.makedirs(task.path())
+                        except OSError:
+                            pass
+
+                        if ext is None:
+                            shutil.copyfile(fullpath, os.path.join(task.path(), 'image.fits'))
+                            messages.success(request, f"File {path} copied as task " + str(task.id))
+
+                        else:
+                            ext = int(ext[0])
+                            image = fits.getdata(fullpath, ext)
+                            header = fits.getheader(fullpath, ext)
+                            fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
+                            messages.success(request, f"Extension {ext} of {path} copied as task " + str(task.id))
+
+                        tasks.append(task)
 
             for task in tasks:
                 # Apply config preset
@@ -416,6 +438,12 @@ def upload_file(request, base=settings.DATA_PATH):
 
                 # Initiate some processing steps
                 todo = []
+
+                if 'stack_filenames' in task.config:
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'stacking'], immutable=True))
+                    todo.append(celery_tasks.task_stacking.subtask(args=[task.id, False], immutable=True))
+                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
+                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'stacking_done'], immutable=True))
 
                 if form.cleaned_data.get('do_inspect'):
                     todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))

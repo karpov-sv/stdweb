@@ -197,6 +197,16 @@
       {% endif %}
     </div>
 
+    <!-- Stacking -->
+    {% if 'stacking.log' in files %}
+      <h3>Stacking</h3>
+      <div class="row mb-2">
+        <div class="col">
+          {% include "task_block_text.html" with file='stacking.log' %}
+        </div>
+      </div>
+    {% endif %}
+
     <!-- Header -->
     {% if 'image.fits' in files %}
       {% wrapwith 'wrapper_card_collapsed.html' with title='Original FITS header' %}
