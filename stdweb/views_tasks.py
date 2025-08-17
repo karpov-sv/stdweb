@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.cache import cache_page
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 
 import os, glob, shutil
 import json
@@ -26,7 +27,7 @@ def tasks(request, id=None):
     context = {}
 
     if id:
-        task = models.Task.objects.get(id=id)
+        task = get_object_or_404(models.Task, id=id)
         path = task.path()
 
         # Permissions
@@ -265,7 +266,7 @@ def tasks_actions(request):
             action = request.POST.get('action')
 
             for id in task_ids:
-                task = models.Task.objects.get(id=id)
+                task = get_object_or_404(models.Task, id=id)
 
                 if action == 'archive':
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
@@ -293,21 +294,21 @@ def tasks_actions(request):
 
 
 def task_download(request, id=None, path='', **kwargs):
-    task = models.Task.objects.get(id=id)
+    task = get_object_or_404(models.Task, id=id)
 
     return views.download(request, path, base=task.path(), **kwargs)
 
 
 @cache_page(15 * 60)
 def task_preview(request, id=None, path='', **kwargs):
-    task = models.Task.objects.get(id=id)
+    task = get_object_or_404(models.Task, id=id)
 
     return views.preview(request, path, base=task.path(), **kwargs)
 
 
 @cache_page(15 * 60)
 def task_cutout(request, id=None, path='', **kwargs):
-    task = models.Task.objects.get(id=id)
+    task = get_object_or_404(models.Task, id=id)
 
     return views.cutout(request, path, base=task.path(), **kwargs)
 
@@ -341,7 +342,7 @@ def handle_task_mask_creation(task, width, height, areas):
 
 
 def task_mask(request, id=None, path=''):
-    task = models.Task.objects.get(id=id)
+    task = get_object_or_404(models.Task, id=id)
 
     if request.method == 'POST':
         areas = json.loads(request.POST.get('areas'))
@@ -373,7 +374,7 @@ def task_mask(request, id=None, path=''):
 def task_candidates(request, id, filename='candidates.vot'):
     context = {}
 
-    task = models.Task.objects.get(id=id)
+    task = get_object_or_404(models.Task, id=id)
     path = task.path()
 
     context['task'] = task
@@ -391,6 +392,6 @@ def task_candidates(request, id, filename='candidates.vot'):
 
 
 def task_state(request, id):
-    task = models.Task.objects.get(id=id)
+    task = get_object_or_404(models.Task, id=id)
 
     return JsonResponse({'state': task.state, 'id': task.id, 'celery_id': task.celery_id})
