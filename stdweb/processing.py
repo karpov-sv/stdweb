@@ -924,6 +924,10 @@ def inspect_image(filename, config, verbose=True, show=False):
     if not 'target' in config:
         config['target'] = str(header.get('TARGET'))
 
+    # If target field is empty or literally 'None' skip remote resolution
+    if config.get('target') and str(config['target']).strip().lower() in ['none', 'null', '']:
+        config.pop('target')
+
     if config.get('target'):
         config['targets'] = []
         for i,target_name in enumerate(config['target'].splitlines()):
