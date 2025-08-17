@@ -51,6 +51,10 @@ class TaskUploadSerializer(serializers.ModelSerializer):
     
     # Target specification
     target = serializers.CharField(required=False, allow_blank=True, help_text="Target name or coordinates")
+
+    # Template selection
+    template = serializers.CharField(required=False, allow_blank=True, help_text="Internal template code (e.g. 'ps1')")
+    template_catalog = serializers.CharField(required=False, allow_blank=True, help_text="Template catalogue alias (e.g. 'ZTF_DR7')")
     
     # Inspection parameters
     gain = serializers.FloatField(required=False, allow_null=True, help_text="Gain, e/ADU")
