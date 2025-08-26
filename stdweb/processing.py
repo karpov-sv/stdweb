@@ -1662,6 +1662,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
         if config.get('centroid_targets'):
             # Centroiding might change target pixel positions - let's update sky positions too
+            target_obj['ra_orig'],target_obj['dec_orig'] = target_obj['ra'],target_obj['dec']
             target_obj['ra'],target_obj['dec'] = wcs.all_pix2world(target_obj['x'], target_obj['y'], 0)
 
         # Local detection limit from background rms, if available
@@ -2303,7 +2304,15 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             if config.get('centroid_targets'):
                 # Centroiding might change target pixel positions - let's update sky positions too
+                target_obj['ra_orig'],target_obj['dec_orig'] = target_obj['ra'],target_obj['dec']
                 target_obj['ra'],target_obj['dec'] = wcs1.all_pix2world(target_obj['x'], target_obj['y'], 0)
+
+                dist = astrometry.spherical_distance(
+                    target_obj['ra'][0], target_obj['dec'][0],
+                    target_obj['ra_orig'][0], target_obj['dec_orig'][0]
+                )
+                log(f"Target position adjusted to {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f}"
+                    f" which is {3600*dist:.2f} arcsec from original position")
 
             target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](
                 target_obj['x'] + x0,
