@@ -313,7 +313,7 @@ def task_cutout(request, id=None, path='', **kwargs):
     return views.cutout(request, path, base=task.path(), **kwargs)
 
 
-def handle_task_mask_creation(task, width, height, areas):
+def handle_task_mask_creation(task, width, height, areas, inverted=False):
     if not areas:
         if os.path.exists(os.path.join(task.path(), 'custom_mask.fits')):
             os.unlink(os.path.join(task.path(), 'custom_mask.fits'))
@@ -336,6 +336,9 @@ def handle_task_mask_creation(task, width, height, areas):
 
         mask = mask[::-1] # Flip the mask vertically as the origin is at bottom
 
+        if inverted:
+            mask = ~mask
+
         processing.fits_write(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.int8), compress=True)
 
     return True
@@ -347,10 +350,13 @@ def task_mask(request, id=None, path=''):
     if request.method == 'POST':
         areas = json.loads(request.POST.get('areas'))
 
-        if handle_task_mask_creation(task,
-                                     int(request.POST.get('width')),
-                                     int(request.POST.get('height')),
-                                     areas):
+        if handle_task_mask_creation(
+                task,
+                int(request.POST.get('width')),
+                int(request.POST.get('height')),
+                areas,
+                inverted=request.POST.get('inverted', False) or False,
+        ):
 
             messages.success(request, "Custom mask created for task " + str(id))
         else:

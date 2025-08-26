@@ -58,6 +58,12 @@
         <input type="hidden" name="width" id="form_width"/>
         <input type="hidden" name="height" id="form_height"/>
         <input type="hidden" name="areas" id="form_areas"/>
+
+        <div class="form-check form-check-inline" title="Selected areas will be masked as unusable">
+          <input class="form-check-input"  type="checkbox" name="inverted" id="inverted"/>
+          <label class="form-check-label" for="inverted">Invert selection</label>
+        </div>
+
         <button class="btn btn-primary">Create mask</button>
         <button class="btn btn-secondary" onclick="$('#image').selectAreas('reset')">Clear</button>
       </form>
