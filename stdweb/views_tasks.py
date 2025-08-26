@@ -16,6 +16,8 @@ import numpy as np
 from astropy.table import Table
 from astropy.io import fits
 
+from stdpipe.utils import file_write, file_read
+
 from . import views
 from . import models
 from . import forms
@@ -116,7 +118,7 @@ def tasks(request, id=None):
                     except OSError:
                         pass
 
-                    for name in ['image.fits', 'image.wcs', 'custom_mask.fits', 'custom_template.fits']:
+                    for name in ['image.fits', 'image.wcs', 'custom_mask.fits', 'custom_mask.json', 'custom_template.fits']:
                         if os.path.exists(os.path.join(old_path, name)):
                             shutil.copyfile(os.path.join(old_path, name), os.path.join(task.path(), name))
 
@@ -318,6 +320,9 @@ def handle_task_mask_creation(task, width, height, areas, inverted=False):
         if os.path.exists(os.path.join(task.path(), 'custom_mask.fits')):
             os.unlink(os.path.join(task.path(), 'custom_mask.fits'))
 
+        if os.path.exists(os.path.join(task.path(), 'custom_mask.json')):
+            os.unlink(os.path.join(task.path(), 'custom_mask.json'))
+
         return False
 
     if os.path.exists(os.path.join(task.path(), 'image.fits')):
@@ -341,6 +346,16 @@ def handle_task_mask_creation(task, width, height, areas, inverted=False):
 
         processing.fits_write(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.int8), compress=True)
 
+        # Store masked areas for future re-use
+        file_write(
+            os.path.join(task.path(), 'custom_mask.json'),
+            json.dumps(
+                {'areas': areas, 'inverted': True if inverted else False},
+                indent=4,
+                sort_keys=False
+            )
+        )
+
     return True
 
 
@@ -355,9 +370,8 @@ def task_mask(request, id=None, path=''):
                 int(request.POST.get('width')),
                 int(request.POST.get('height')),
                 areas,
-                inverted=request.POST.get('inverted', False) or False,
+                inverted=bool(request.POST.get('inverted', False)),
         ):
-
             messages.success(request, "Custom mask created for task " + str(id))
         else:
             messages.success(request, "Custom mask cleared for task " + str(id))
@@ -373,6 +387,12 @@ def task_mask(request, id=None, path=''):
     context = {}
 
     context['task'] = task
+
+    areasname = os.path.join(task.path(), 'custom_mask.json')
+    if os.path.exists(areasname):
+        data = json.loads(file_read(areasname))
+        context['areas'] = data.get('areas')
+        context['inverted'] = data.get('inverted', False)
 
     return TemplateResponse(request, 'task_mask.html', context=context)
 

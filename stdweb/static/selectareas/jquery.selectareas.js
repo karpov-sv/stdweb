@@ -80,6 +80,8 @@
                 // Update the outline layer
                 $outline.css({
                     cursor: "default",
+                    opacity: options.outlineOpacity,
+                    background: options.outlineColor,
                     width: area.width,
                     height: area.height,
                     left: area.x,
@@ -90,6 +92,7 @@
                 // Update the selection layer
                 $selection.css({
                     backgroundPosition : ( - area.x - 1) + "px " + ( - area.y - 1) + "px",
+                    opacity: options.selectionOpacity,
                     cursor : options.allowMove ? "move" : "default",
                     width: (area.width - 2 > 0) ? (area.width - 2) : 0,
                     height: (area.height - 2 > 0) ? (area.height - 2) : 0,
@@ -425,8 +428,8 @@
                     $handler.remove();
                 });
                 if ($btDelete) {
-                    $btDelete.remove();    
-                } 
+                    $btDelete.remove();
+                }
                 parent._remove(id);
                 fireEvent("changed");
             },
@@ -570,10 +573,14 @@
                 width: 0,
                 maxAreas: 0,
                 outlineOpacity: 0.5,
+                outlineColor: null,
                 overlayOpacity: 0.5,
+                overlayColor: null,
+                selectionOpacity: 1.0,
                 areas: [],
                 onChanging: null,
-                onChanged: null
+                onChanged: null,
+                blurred: true
             };
 
         this.options = $.extend(defaultOptions, customOptions);
@@ -683,13 +690,17 @@
         this.$overlay.css({
             display : nbAreas? "block" : "none"
         });
-        if (nbAreas) {
+        if (nbAreas && this.options.blurred) {
             this.$image.addClass("blurred");
         } else {
             this.$image.removeClass("blurred");
         }
         this.$trigger.css({
             cursor : this.options.allowSelect ? "crosshair" : "default"
+        });
+        this.$overlay.css({
+            opacity : this.options.overlayOpacity,
+            backgroundColor : this.options.overlayColor
         });
     };
 
@@ -729,6 +740,11 @@
         }
         return id;
     };
+
+    $.imageSelectAreas.prototype.options = function (options) {
+        this.options = $.extend(this.options, options);
+        this._refresh();
+    }
 
     $.imageSelectAreas.prototype.set = function (id, options, silent) {
         if (this._areas[id]) {

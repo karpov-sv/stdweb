@@ -8,12 +8,19 @@
   <link rel="stylesheet" href="{% static 'selectareas/jquery.selectareas.css' %}">
   <script src="{% static 'selectareas/jquery.selectareas.js' %}"></script>
 
+  {% if areas %}
+    {{ areas|json_script:"areas-data" }}
+  {% endif %}
+
   <script language="javascript">
    $(function(){
      $('#image').selectAreas({
        onChanged: $.noop,    // fired when a selection is released
        onChanging: $.noop,    // fired during the modification of a selection});
-       overlayOpacity: 0.5
+       overlayOpacity: 0.5,
+       {% if areas %}
+       areas: JSON.parse(document.getElementById('areas-data').textContent),
+       {% endif %}
      });
    });
 
@@ -28,6 +35,40 @@
        /* event.preventDefault(); */
      });
    });
+
+   adjust_selections = function(){
+     var $img = $('#image');
+
+     if ($('#inverted').prop('checked')) {
+       $img.selectAreas('options', {
+         blurred: false,
+         overlayOpacity: 0.0,
+         outlineColor: 'red',
+         outlineOpacity: 1.0,
+         selectionOpacity: 0.5,
+       });
+       $img.selectAreas('blurAll'); // Needed for outlineColor to take effect
+     } else {
+       $img.selectAreas('options', {
+         blurred: true,
+         overlayOpacity: 0.5,
+         outlineColor: '',
+         outlineOpacity: 0.5,
+         selectionOpacity: 1.0,
+       });
+       $img.selectAreas('blurAll'); // Needed for outlineColor to take effect
+     }
+   }
+
+   $(function(){
+     $('#inverted').on('change', function(){
+       adjust_selections();
+     });
+     $('#image').on('loaded', function(){
+       adjust_selections();
+     });
+   });
+
   </script>
 
 {% endblock %}
@@ -60,8 +101,8 @@
         <input type="hidden" name="areas" id="form_areas"/>
 
         <div class="form-check form-check-inline" title="Selected areas will be masked as unusable">
-          <input class="form-check-input"  type="checkbox" name="inverted" id="inverted"/>
-          <label class="form-check-label" for="inverted">Invert selection</label>
+          <input class="form-check-input"  type="checkbox" name="inverted" id="inverted" {% if inverted %}checked{% endif %}/>
+          <label class="form-check-label" for="inverted">Mask selected regions</label>
         </div>
 
         <button class="btn btn-primary">Create mask</button>
