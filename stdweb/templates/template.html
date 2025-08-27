@@ -81,7 +81,7 @@
               <li class="nav-item dropdown">
                 <a href="#" class="dropdown-toggle nav-link" data-bs-toggle="dropdown">User: {{ user|user }} <span class="caret"></span></a>
                 <ul class="dropdown-menu shadow-sm">
-                  {% if user.is_staff %}
+                  {% if user.is_staff or True %}
                     <li class="dropdown-item disabled">
                       Free: {% filter naturalsize %}{% free_disk_space %}{% endfilter %}
                     </li>
