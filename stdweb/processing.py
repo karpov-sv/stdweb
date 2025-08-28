@@ -870,7 +870,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     # Custom mask
     if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
         mask |= fits.getdata(os.path.join(basepath, 'custom_mask.fits'), -1) > 0
-        log("Custom mask loaded from custom_mask.fits")
+        log("Custom mask loaded from file:custom_mask.fits")
 
     # Background size
     if not config.get('bg_size'):
@@ -900,7 +900,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if np.sum(mask) > 0.95*mask.shape[0]*mask.shape[1]:
         raise RuntimeError('More than 95% of the image is masked')
 
-    fits_write(os.path.join(basepath, 'mask.fits'), mask.astype(np.int8), compress=True)
+    fits_write(os.path.join(basepath, 'mask.fits'), mask.astype(np.uint8), compress=True)
     log("Mask written to file:mask.fits")
 
     # WCS
@@ -2083,7 +2083,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         log(f"\n---- Sub-image {i}: {x0} {y0} - {x0 + image1.shape[1]} {y0 + image1.shape[0]} ----\n")
 
         fits.writeto(os.path.join(basepath, 'sub_image.fits'), image1, header1, overwrite=True)
-        fits_write(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.int8), header1, compress=True)
+        fits_write(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.uint8), header1, compress=True)
 
         # Get the template
         if tname == 'ps1' or tname == 'ls':
@@ -2163,7 +2163,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         template_fwhm = np.median(tobj['fwhm'])
 
         fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
-        fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.int8), header1, compress=True)
+        fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.uint8), header1, compress=True)
 
         if subtraction_method == 'zogy':
             # ZOGY

@@ -347,7 +347,7 @@ def handle_task_mask_creation(task, width, height, areas, inverted=False):
         if inverted:
             mask = ~mask
 
-        processing.fits_write(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.int8), compress=True)
+        processing.fits_write(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.uint8), compress=True)
 
         # Store masked areas for future re-use
         file_write(
