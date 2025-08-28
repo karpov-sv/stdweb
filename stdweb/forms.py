@@ -95,7 +95,7 @@ class TasksFilterForm(forms.Form):
     query = forms.CharField(max_length=100, required=False, label="Filter Tasks")
     show_all = forms.BooleanField(initial=False, required=False, label="Show all")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, show_all=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.form_method = 'GET'
@@ -112,7 +112,7 @@ class TasksFilterForm(forms.Form):
                 Column(
                     InlineField('show_all'),
                     css_class="col-md-auto mt-2"
-                ),
+                ) if show_all else None,
             )
         )
 

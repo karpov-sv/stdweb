@@ -232,7 +232,10 @@ def tasks(request, id=None):
         tasks = models.Task.objects.all()
         tasks = tasks.order_by('-created')
 
-        form = forms.TasksFilterForm(request.GET)
+        form = forms.TasksFilterForm(
+            request.GET,
+            show_all=request.user.is_staff or request.user.has_perm('stdweb.view_all_tasks'),
+        )
         context['form'] = form
 
         if request.method == 'GET':

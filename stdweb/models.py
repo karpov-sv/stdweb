@@ -37,7 +37,8 @@ class Task(models.Model):
 
     class Meta:
         permissions = [
-            ('skyportal_upload', 'Can upload the task results to SkyPortal')
+            ('skyportal_upload', 'Can upload the task results to SkyPortal'),
+            ('view_all_tasks', 'Can view tasks from all users'),
         ]
 
 
