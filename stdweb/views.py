@@ -374,7 +374,7 @@ def upload_file(request, base=settings.DATA_PATH):
                         fullpath = os.path.join(base, path)
                         filenames.append(fullpath)
 
-                    task = models.Task(original_name=os.path.split(path)[-1])
+                    task = models.Task(title=form.cleaned_data.get('title'), original_name=os.path.split(path)[-1])
                     task.user = request.user
                     task.save() # to populate task.id
 
@@ -393,7 +393,7 @@ def upload_file(request, base=settings.DATA_PATH):
 
                         fullpath = os.path.join(base, path)
 
-                        task = models.Task(original_name=os.path.split(path)[-1])
+                        task = models.Task(title=form.cleaned_data.get('title'), original_name=os.path.split(path)[-1])
                         task.user = request.user
                         task.save() # to populate task.id
 
