@@ -2149,7 +2149,11 @@ def subtract_image(filename, config, verbose=True, show=False):
 
         # Estimate template FWHM
         tobj,tsegm = photometry.get_objects_sextractor(
-            tmpl, mask=tmask, sn=5,
+            tmpl, mask=tmask, sn=5, gain=template_gain,
+            extra={
+                'BACK_SIZE': config.get('bg_size', 256),
+                # 'SATUR_LEVEL': template_saturation,
+            },
             extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
             checkimages=['SEGMENTATION'],
             _tmpdir=settings.STDPIPE_TMPDIR,
@@ -2159,8 +2163,13 @@ def subtract_image(filename, config, verbose=True, show=False):
         # Mask the footprints of masked objects
         # for _ in tobj[(tobj['flags'] & 0x100) > 0]:
         #     tmask |= tsegm == _['NUMBER']
+
+        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
+        fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.uint8), header1, compress=True)
+
         tidx = tobj['flags'] == 0
-        tidx &= filter_sextractor_detections(tobj, verbose=verbose)
+        if len(tobj) > 20:
+            tidx &= filter_sextractor_detections(tobj, verbose=verbose)
         template_fwhm = np.median(tobj[tidx]['fwhm'])
 
         if config.get('template_fwhm_override'):
@@ -2181,9 +2190,6 @@ def subtract_image(filename, config, verbose=True, show=False):
             ax.set_xlabel('FWHM, pixels')
             ax.set_ylabel('Instrumental magnitude')
             ax.set_xlim(0, np.percentile(fwhm_values, 98))
-
-        fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
-        fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.uint8), header1, compress=True)
 
         if subtraction_method == 'zogy':
             # ZOGY
