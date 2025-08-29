@@ -307,6 +307,7 @@ class TaskSubtractionForm(forms.Form):
     sub_overlap = forms.IntegerField(min_value=0, required=False, label="Sub-image overlap")
     sub_verbose = forms.BooleanField(required=False, label="Verbose")
     custom_template = forms.FileField(required=False, label="Custom template file")
+    template_fwhm_override = forms.FloatField(min_value=0, required=False, label="Template FWHM override, image pixels")
     custom_template_gain = forms.FloatField(min_value=0, required=False, label="Custom template gain, e/ADU")
     custom_template_saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
 
@@ -342,6 +343,7 @@ class TaskSubtractionForm(forms.Form):
             ),
             Row(
                 Column('custom_template'),
+                Column('template_fwhm_override'),
                 Column('custom_template_gain'),
                 Column('custom_template_saturation'),
                 css_class='align-items-end',

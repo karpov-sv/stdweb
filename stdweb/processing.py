@@ -2150,7 +2150,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         # Estimate template FWHM
         tobj,tsegm = photometry.get_objects_sextractor(
             tmpl, mask=tmask, sn=5,
-            extra_params=['NUMBER'],
+            extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
             checkimages=['SEGMENTATION'],
             _tmpdir=settings.STDPIPE_TMPDIR,
             _exe=settings.STDPIPE_SEXTRACTOR
@@ -2159,8 +2159,28 @@ def subtract_image(filename, config, verbose=True, show=False):
         # Mask the footprints of masked objects
         # for _ in tobj[(tobj['flags'] & 0x100) > 0]:
         #     tmask |= tsegm == _['NUMBER']
-        tobj = tobj[tobj['flags'] == 0]
-        template_fwhm = np.median(tobj['fwhm'])
+        tidx = tobj['flags'] == 0
+        tidx &= filter_sextractor_detections(tobj, verbose=verbose)
+        template_fwhm = np.median(tobj[tidx]['fwhm'])
+
+        if config.get('template_fwhm_override'):
+            template_fwhm = config.get('template_fwhm_override')
+
+        # Plot FWHM vs instrumental. TODO: make generic function for that?..
+        with plots.figure_saver(os.path.join(basepath, 'sub_fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
+            fwhm_values = 2.0*tobj['FLUX_RADIUS'] # obj['fwhm']
+            ax = fig.add_subplot(1, 1, 1)
+            ax.plot(fwhm_values, tobj['mag'], '.', label='All objects')
+            ax.plot(fwhm_values[tidx], tobj['mag'][tidx], '.', label='Used for FWHM')
+
+            ax.axvline(template_fwhm, ls='--', color='red')
+            ax.invert_yaxis()
+            ax.legend()
+            ax.grid(alpha=0.2)
+            ax.set_title(f"FWHM: median {np.median(fwhm_values[tidx]):.2f} pix RMS {np.std(fwhm_values[tidx]):.2f} pix")
+            ax.set_xlabel('FWHM, pixels')
+            ax.set_ylabel('Instrumental magnitude')
+            ax.set_xlim(0, np.percentile(fwhm_values, 98))
 
         fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
         fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.uint8), header1, compress=True)
@@ -2216,13 +2236,13 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             bg = sep.Background(
                 image1.astype(np.double), mask=mask1,
-                bw=32 if fwhm < 4 else 64,
-                bh=32 if fwhm < 4 else 64
+                bw=config.get('bg_size', 256),
+                bh=config.get('bg_size', 256),
             )
             tbg = sep.Background(
                 tmpl.astype(np.double), mask=tmask,
-                bw=32 if template_fwhm < 4 else 64,
-                bh=32 if template_fwhm < 4 else 64
+                bw=config.get('bg_size', 256),
+                bh=config.get('bg_size', 256),
             )
 
             res = subtraction.run_hotpants(
@@ -2295,6 +2315,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 sn=0,
                 # We assume no background
                 bg=None,
+                bg_size=config.get('bg_size', 256),
                 # ..and known error model
                 err=ediff,
                 gain=config.get('gain', 1.0),
