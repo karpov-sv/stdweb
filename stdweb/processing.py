@@ -2176,7 +2176,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             template_fwhm = config.get('template_fwhm_override')
 
         # Plot FWHM vs instrumental. TODO: make generic function for that?..
-        with plots.figure_saver(os.path.join(basepath, 'sub_fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
+        with plots.figure_saver(os.path.join(basepath, 'sub_template_fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
             fwhm_values = 2.0*tobj['FLUX_RADIUS'] # obj['fwhm']
             ax = fig.add_subplot(1, 1, 1)
             ax.plot(fwhm_values, tobj['mag'], '.', label='All objects')

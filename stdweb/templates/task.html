@@ -617,7 +617,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_fwhm_mag.png' as list %}
+              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
