@@ -2415,7 +2415,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                     thresh=config.get('sn', 5.0),
                     wcs=wcs1, edge=sub_overlap,
                     minarea=config.get('minarea', 1),
-                    extra_params=['NUMBER'],
+                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
                     extra={
                         'ANALYSIS_THRESH': config.get('sn', 5.0),
                         'THRESH_TYPE': 'ABSOLUTE',
