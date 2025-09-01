@@ -2522,7 +2522,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 pixscale=pixscale,
                 vizier=vizier,
                 # Filter out any flags except for 0x100 which is isophotal masked
-                flagged=True, flagmask=0xfe00,
+                flagged=True, flagmask=0x7e00,
                 time=time,
                 skybot=config.get('filter_skybot', False),
                 verbose=verbose
