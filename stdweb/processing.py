@@ -51,6 +51,7 @@ supported_filters = {
     'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS r", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "Sloan r", "Sr", "SR", "sR", "ZTF_r"]},
     'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS i", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "Sloan i", "Si", "SI", "sI", "ZTF_i"]},
     'z': {'name':'Sloan z', 'aliases':["sdssz", "SDSS z", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz", "Sloan z", "Sz", "SZ", "sZ"]},
+    'y': {'name':'Sloan y', 'aliases':["sdssy", "SDSS y", "SDSS-y", "SDSS-y'", "Sloan-y", "sloany", "Sloan y", "Sy", "SY", "sY"]},
     # Gaia
     'G': {'name':'Gaia G', 'aliases':[]},
     'BP': {'name':'Gaia BP', 'aliases':[]},
@@ -60,7 +61,7 @@ supported_filters = {
 supported_catalogs = {
     'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'u', 'g', 'r', 'i', 'z', 'y'],
                    'limit': 'rmag'},
-    'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
+    'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
             'limit':'rmag'},
     'skymapper': {'name':'SkyMapper DR4', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
                   'limit':'rPSF'},
@@ -123,7 +124,8 @@ filter_mappings = {
     'g': ['g', 'g'],
     'r': ['r', 'i'],
     'i': ['i', 'r'],
-    'z': ['z', 'r'],
+    'z': ['z', 'i', 'r'],
+    'y': ['y', 'z', 'i', 'r'],
     'G': ['r', 'g'],
     'BP': ['g'],
     'RP': ['i', 'r'],
@@ -142,6 +144,7 @@ filter_ab_offset = {
     'r': 0,
     'i': 0,
     'z': 0,
+    'y': 0,
     'G': 0,
     'BP': 0,
     'RP': 0,
@@ -1405,7 +1408,7 @@ def photometry_image(filename, config, verbose=True, show=False):
     elif config['cat_col_mag'] in ['umag', 'gmag', 'rmag', 'imag']:
         config['cat_col_color_mag1'] = 'gmag'
         config['cat_col_color_mag2'] = 'rmag'
-    elif config['cat_col_mag'] in ['zmag']:
+    elif config['cat_col_mag'] in ['zmag', 'ymag']:
         config['cat_col_color_mag1'] = 'rmag'
         config['cat_col_color_mag2'] = 'imag'
     elif config['cat_col_mag'] in ['Gmag', 'BPmag', 'RPmag']:
