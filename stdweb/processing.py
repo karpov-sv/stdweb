@@ -47,11 +47,11 @@ supported_filters = {
     'I': {'name':'Johnson-Cousins I', 'aliases':["Ic", "I'"]},
     # Sloan-like
     'u': {'name':'Sloan u', 'aliases':["sdssu", "SDSS u", "SDSS-u", "SDSS-u'", "Sloan-u", "sloanu", "Sloan u", "Su", "SU", "sU"]},
-    'g': {'name':'Sloan g', 'aliases':["sdssg", "SDSS g", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "Sloan g", "Sg", "SG", "sG", "ZTF_g"]},
-    'r': {'name':'Sloan r', 'aliases':["sdssr", "SDSS r", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "Sloan r", "Sr", "SR", "sR", "ZTF_r"]},
-    'i': {'name':'Sloan i', 'aliases':["sdssi", "SDSS i", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "Sloan i", "Si", "SI", "sI", "ZTF_i"]},
-    'z': {'name':'Sloan z', 'aliases':["sdssz", "SDSS z", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz", "Sloan z", "Sz", "SZ", "sZ"]},
-    'y': {'name':'Sloan y', 'aliases':["sdssy", "SDSS y", "SDSS-y", "SDSS-y'", "Sloan-y", "sloany", "Sloan y", "Sy", "SY", "sY"]},
+    'g': {'name':'Pan-STARRS g', 'aliases':["sdssg", "SDSS g", "SDSS-g", "SDSS-g'", "Sloan-g", "sloang", "Sloan g", "Sg", "SG", "sG", "ZTF_g"]},
+    'r': {'name':'Pan-STARRS r', 'aliases':["sdssr", "SDSS r", "SDSS-r", "SDSS-r'", "Sloan-r", "sloanr", "Sloan r", "Sr", "SR", "sR", "ZTF_r"]},
+    'i': {'name':'Pan-STARRS i', 'aliases':["sdssi", "SDSS i", "SDSS-i", "SDSS-i'", "Sloan-i", "sloani", "Sloan i", "Si", "SI", "sI", "ZTF_i"]},
+    'z': {'name':'Pan-STARRS z', 'aliases':["sdssz", "SDSS z", "SDSS-z", "SDSS-z'", "Sloan-z", "sloanz", "Sloan z", "Sz", "SZ", "sZ"]},
+    'y': {'name':'Pan-STARRS y', 'aliases':["sdssy", "SDSS y", "SDSS-y", "SDSS-y'", "Sloan-y", "sloany", "Sloan y", "Sy", "SY", "sY"]},
     # Gaia
     'G': {'name':'Gaia G', 'aliases':[]},
     'BP': {'name':'Gaia BP', 'aliases':[]},
