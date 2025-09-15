@@ -61,6 +61,8 @@ conda install watchdog
 
 The rest is deployed like any other *Django* based app (see the [official documentation](https://docs.djangoproject.com/en/5.0/howto/deployment/)), or just by running 
 ```
+python manage.py migrate
+
 python manage.py runserver
 ```
 
@@ -127,7 +129,7 @@ SKYPORTAL_TOKEN =
 # Referencing & Attribution
 STDWeb is being developed by Sergey Karpov, and was originally created as part of [GRANDMA](https://grandma.ijclab.in2p3.fr) project.
 
-If you STDWeb in your work, or use results from STDWeb in a publication, please cite:
+If you use STDWeb in your work, or use results from STDWeb in a publication, please cite:
 > Karpov, S. (2025).
 > **STDweb: simple transient detection pipeline for the web**. _Acta Polytechnica_, 65(1), 50-64. 
 > https://doi.org/10.14311/AP.2025.65.0050
