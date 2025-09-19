@@ -1700,7 +1700,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                 continue
 
             cutout = cutouts.get_cutout(
-                image, tobj, 30,
+                image, tobj, config.get('cutout_size', 30),
                 mask=mask,
                 header=header,
                 time=time,
@@ -1901,7 +1901,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         cutout = cutouts.get_cutout(
             image.astype(np.double),
             cand,
-            30,
+            config.get('cutout_size', 30),
             header=header,
             mask=mask,
             footprint=(segm==cand['NUMBER']) if segm is not None else None,
@@ -2386,7 +2386,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             # Create the cutout from image based on the candidate
             cutout = cutouts.get_cutout(
-                image1, target_obj[0], 30,
+                image1, target_obj[0], config.get('cutout_size', 30),
                 mask=fullmask1,
                 header=header1,
                 time=time,
@@ -2540,7 +2540,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             Ngood = 0
             for cand in candidates:
                 cutout = cutouts.get_cutout(
-                    image1, cand, 30,
+                    image1, cand, config.get('cutout_size', 30),
                     mask=fullmask1,
                     diff=diff,
                     template=tmpl,
