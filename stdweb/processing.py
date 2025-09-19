@@ -443,7 +443,7 @@ def guess_vizier_catalogues(ra, dec):
     return vizier
 
 
-def guess_catalogue_mag_columns(fname, cat):
+def guess_catalogue_mag_columns(fname, cat, augmented_only=False):
     cat_col_mag = None
     cat_col_mag_err = None
 
@@ -453,6 +453,9 @@ def guess_catalogue_mag_columns(fname, cat):
 
         if f"e_{fname}mag" in cat.colnames:
             cat_col_mag_err = f"e_{fname}mag"
+
+    elif augmented_only:
+        raise RuntimeError(f"Unsupported filter {fname} for this catalogue")
 
     # Non-augmented PS1 etc
     elif "gmag" in cat.colnames and "rmag" in cat.colnames:
@@ -1399,7 +1402,8 @@ def photometry_image(filename, config, verbose=True, show=False):
     # Catalogue settings
     config['cat_col_mag'],config['cat_col_mag_err'] = guess_catalogue_mag_columns(
         config['filter'],
-        cat
+        cat,
+        augmented_only=True
     )
 
     if config['cat_col_mag'] in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag']:
