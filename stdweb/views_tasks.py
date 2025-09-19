@@ -81,6 +81,7 @@ def tasks(request, id=None):
                             'form_type',
                             'crop_x1', 'crop_y1', 'crop_x2', 'crop_y2',
                             'raw_config',
+                            # 'run_photometry', 'run_simple_transients', 'run_subtraction',
                         ]
                         if name not in ignored_fields:
                             if name in form.changed_data or name not in task.config:
@@ -91,8 +92,6 @@ def tasks(request, id=None):
 
                 # Handle actions
                 action = request.POST.get('action')
-
-                print(action)
 
                 if action == 'delete_task':
                     if request.user.is_staff or request.user == task.user:
@@ -154,35 +153,38 @@ def tasks(request, id=None):
                     return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id}))
 
                 if action == 'cleanup_task' or action == 'archive_task' or action == 'crop_image':
-                    task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
                     if action != 'archive_task':
                         task.config = {} # We reset the config on cleanup but keep on archiving
-                    task.state = 'cleanup'
-                    task.save()
+                    celery_tasks.run_task_steps(task, ['cleanup'])
                     messages.success(request, "Started cleanup for task " + str(id))
 
                 if action == 'inspect_image':
-                    task.celery_id = celery_tasks.task_inspect.delay(task.id).id
-                    task.state = 'inspect'
-                    task.save()
+                    celery_tasks.run_task_steps(task, [
+                        'inspect',
+                        'photometry' if form.cleaned_data.get('run_photometry') else None,
+                        'subtraction' if form.cleaned_data.get('run_subtraction') else None,
+                    ])
                     messages.success(request, "Started image inspection for task " + str(id))
+                    if form.cleaned_data.get('run_photometry'):
+                        messages.success(request, "Started image photometry for task " + str(id))
+                    if form.cleaned_data.get('run_subtraction'):
+                        messages.success(request, "Started template subtraction for task " + str(id))
 
                 if action == 'photometry_image':
-                    task.celery_id = celery_tasks.task_photometry.delay(task.id).id
-                    task.state = 'photometry'
-                    task.save()
+                    celery_tasks.run_task_steps(task, [
+                        'photometry',
+                        'subtraction' if form.cleaned_data.get('run_subtraction') else None,
+                    ])
                     messages.success(request, "Started image photometry for task " + str(id))
+                    if form.cleaned_data.get('run_subtraction'):
+                        messages.success(request, "Started template subtraction for task " + str(id))
 
                 if action == 'transients_simple_image':
-                    task.celery_id = celery_tasks.task_transients_simple.delay(task.id).id
-                    task.state = 'transients_simple'
-                    task.save()
+                    celery_tasks.run_task_steps(task, ['simple_transients'])
                     messages.success(request, "Started simple transient detection for task " + str(id))
 
                 if action == 'subtract_image':
-                    task.celery_id = celery_tasks.task_subtraction.delay(task.id).id
-                    task.state = 'subtraction'
-                    task.save()
+                    celery_tasks.run_task_steps(task, ['subtraction'])
                     messages.success(request, "Started template subtraction for task " + str(id))
 
                 return HttpResponseRedirect(request.path_info)

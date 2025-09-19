@@ -1,5 +1,5 @@
 # Django + Celery imports
-from celery import shared_task
+from celery import shared_task, chain
 
 import os, glob, shutil
 
@@ -214,3 +214,51 @@ def task_stacking(self, id, finalize=True):
 
     fix_config(config)
     task.save()
+
+
+# Higher-level interface for running (multiple) processing steps for the task
+def run_task_steps(task, steps):
+    todo = []
+
+    for step in steps:
+        print(f"Will run {step} step for task {task.id}")
+
+        if step == 'cleanup':
+            todo.append(task_set_state.subtask(args=[task.id, 'cleanup'], immutable=True))
+            todo.append(task_cleanup.subtask(args=[task.id, False], immutable=True))
+            todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(task_set_state.subtask(args=[task.id, 'cleanup_done'], immutable=True))
+
+        elif step == 'inspect':
+            todo.append(task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
+            todo.append(task_inspect.subtask(args=[task.id, False], immutable=True))
+            todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
+
+        elif step == 'photometry':
+            todo.append(task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
+            todo.append(task_photometry.subtask(args=[task.id, False], immutable=True))
+            todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
+
+        elif step == 'simple_transients':
+            todo.append(task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
+            todo.append(task_transients_simple.subtask(args=[task.id, False], immutable=True))
+            todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
+
+        elif step == 'subtraction':
+            todo.append(task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
+            todo.append(task_subtraction.subtask(args=[task.id, False], immutable=True))
+            todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
+
+        elif step:
+            print(f"Unknown step: {step}")
+
+    if todo:
+        todo.append(task_finalize.subtask(args=[task.id], immutable=True))
+
+        task.celery_id = chain(todo).apply_async()
+        task.state = 'running'
+        task.save()

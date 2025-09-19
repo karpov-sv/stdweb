@@ -145,6 +145,9 @@ class TaskInspectForm(forms.Form):
 
     raw_config = forms.JSONField(initial=False, required=False, label="Raw config JSON", encoder=PrettyJSONEncoder)
 
+    run_photometry = forms.BooleanField(initial=False, required=False, label="Photometry")
+    run_subtraction = forms.BooleanField(initial=False, required=False, label="Subtraction")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
@@ -162,7 +165,16 @@ class TaskInspectForm(forms.Form):
             ),
             Row(
                 Column('mask_cosmics', css_class="col-md-auto"),
-                css_class='align-items-end justify-content-start'
+                Column(
+                    Row(
+                        Column(HTML('Also run:'), css_class="col-md-auto"),
+                        Column('run_photometry', css_class="col-md-auto"),
+                        Column('run_subtraction', css_class="col-md-auto"),
+                        css_class='align-items-start justify-content-start'
+                    ),
+                    css_class="col-md-auto"
+                ),
+                css_class='align-items-end justify-content-between'
             ),
         )
 
@@ -203,6 +215,8 @@ class TaskPhotometryForm(forms.Form):
     blind_match_center = forms.CharField(required=False, empty_value=None, label="Center position for blind match")
     blind_match_sr0 = forms.FloatField(initial=1, min_value=0, required=False, label="Radius, deg")
 
+    run_subtraction = forms.BooleanField(initial=False, required=False, label="Subtraction")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
@@ -232,7 +246,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('cat_name'),
                 Column('cat_limit', css_class="col-md-2"),
                 Column('spatial_order', css_class="col-md-2"),
-                Column('use_color', css_class="col-md-2"),
+                Column('use_color', css_class="col-md-2 mb-2"),
                 css_class='align-items-end'
             ),
             Row(
@@ -253,6 +267,12 @@ class TaskPhotometryForm(forms.Form):
                 Column('diagnose_color', css_class="col-md-auto"),
                 Column('inspect_bg', css_class="col-md-auto"),
                 css_class='align-items-end'
+            ),
+            Row(
+                Column(HTML('Also run:'), css_class="col-md-auto"),
+                # Column('run_photometry', css_class="col-md-auto"),
+                Column('run_subtraction', css_class="col-md-auto"),
+                css_class='align-items-start justify-content-end'
             ),
         )
 
@@ -352,10 +372,10 @@ class TaskSubtractionForm(forms.Form):
             Row(
                 Column('filter_center', css_class="col-md-4"),
                 Column('filter_sr0', css_class="col-md-1"),
-                Column('filter_vizier', css_class="col-md-auto"),
-                Column('filter_skybot', css_class="col-md-auto"),
-                Column('filter_prefilter', css_class="col-md-auto"),
-                Column('filter_adjust', css_class="col-md-auto"),
+                Column('filter_vizier', css_class="col-md-auto mb-2"),
+                Column('filter_skybot', css_class="col-md-auto mb-2"),
+                Column('filter_prefilter', css_class="col-md-auto mb-2"),
+                Column('filter_adjust', css_class="col-md-auto mb-2"),
                 css_class='align-items-end',
                 id='transients_row',
             ),
