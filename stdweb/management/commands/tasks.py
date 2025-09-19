@@ -91,7 +91,7 @@ class Command(BaseCommand):
                     task.save()
 
                     if options['run'] is not None:
-                        run_task(task, options['run'])
+                        celery_tasks.run_task(task, options['run'])
 
 
         elif options['do_delete']:
@@ -150,44 +150,3 @@ class Command(BaseCommand):
                 task = models.Task.objects.get(id=id)
 
                 run_task(task, options['run'])
-
-
-def run_task(task, run):
-    todo = []
-
-    for step in run:
-        print(f"Will run {step} step for task {task.id}")
-
-        if step == 'inspect':
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
-            todo.append(celery_tasks.task_inspect.subtask(args=[task.id, False], immutable=True))
-            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
-
-        elif step == 'photometry':
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
-            todo.append(celery_tasks.task_photometry.subtask(args=[task.id, False], immutable=True))
-            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
-
-        elif step == 'simple_transients':
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
-            todo.append(celery_tasks.task_transients_simple.subtask(args=[task.id, False], immutable=True))
-            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
-
-        elif step == 'subtraction':
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
-            todo.append(celery_tasks.task_subtraction.subtask(args=[task.id, False], immutable=True))
-            todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-            todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
-
-        else:
-            print(f"Unknown step: {step}")
-
-    if todo:
-        todo.append(celery_tasks.task_finalize.subtask(args=[task.id], immutable=True))
-
-        task.celery_id = celery.chain(todo).apply_async()
-        task.state = 'running'
-        task.save()
