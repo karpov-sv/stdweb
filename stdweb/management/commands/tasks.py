@@ -91,7 +91,7 @@ class Command(BaseCommand):
                     task.save()
 
                     if options['run'] is not None:
-                        celery_tasks.run_task(task, options['run'])
+                        celery_tasks.run_task_steps(task, options['run'])
 
 
         elif options['do_delete']:
@@ -149,4 +149,4 @@ class Command(BaseCommand):
                 id = int(name)
                 task = models.Task.objects.get(id=id)
 
-                run_task(task, options['run'])
+                celery_tasks.run_task_steps(task, options['run'])
