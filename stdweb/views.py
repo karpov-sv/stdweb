@@ -437,44 +437,13 @@ def upload_file(request, base=settings.DATA_PATH):
                 task.save()
 
                 # Initiate some processing steps
-                todo = []
-
-                if 'stack_filenames' in task.config:
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'stacking'], immutable=True))
-                    todo.append(celery_tasks.task_stacking.subtask(args=[task.id, False], immutable=True))
-                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'stacking_done'], immutable=True))
-
-                if form.cleaned_data.get('do_inspect'):
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect'], immutable=True))
-                    todo.append(celery_tasks.task_inspect.subtask(args=[task.id, False], immutable=True))
-                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'inspect_done'], immutable=True))
-
-                if form.cleaned_data.get('do_photometry'):
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry'], immutable=True))
-                    todo.append(celery_tasks.task_photometry.subtask(args=[task.id, False], immutable=True))
-                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'photometry_done'], immutable=True))
-
-                if form.cleaned_data.get('do_simple_transients'):
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple'], immutable=True))
-                    todo.append(celery_tasks.task_transients_simple.subtask(args=[task.id, False], immutable=True))
-                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'transients_simple_done'], immutable=True))
-
-                if form.cleaned_data.get('do_subtraction'):
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction'], immutable=True))
-                    todo.append(celery_tasks.task_subtraction.subtask(args=[task.id, False], immutable=True))
-                    todo.append(celery_tasks.task_break_if_failed.subtask(args=[task.id], immutable=True))
-                    todo.append(celery_tasks.task_set_state.subtask(args=[task.id, 'subtraction_done'], immutable=True))
-
-                if todo:
-                    todo.append(celery_tasks.task_finalize.subtask(args=[task.id], immutable=True))
-
-                    task.celery_id = celery.chain(todo).apply_async()
-                    task.state = 'running'
-                    task.save()
+                celery_tasks.run_task_steps(task, [
+                    'stack' if 'stack_filenames' in task.config else None,
+                    'inspect' if form.cleaned_data.get('do_inspect') else None,
+                    'photometry' if form.cleaned_data.get('do_photometry') else None,
+                    'simple_transients' if form.cleaned_data.get('do_simple_transients') else None,
+                    'subtraction' if form.cleaned_data.get('do_subtraction') else None,
+                ])
 
             if len(tasks) > 1:
                 return HttpResponseRedirect(reverse('tasks'))

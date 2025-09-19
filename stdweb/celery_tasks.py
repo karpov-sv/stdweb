@@ -223,7 +223,13 @@ def run_task_steps(task, steps):
     for step in steps:
         print(f"Will run {step} step for task {task.id}")
 
-        if step == 'cleanup':
+        if step == 'stack':
+            todo.append(task_set_state.subtask(args=[task.id, 'stacking'], immutable=True))
+            todo.append(task_stacking.subtask(args=[task.id, False], immutable=True))
+            todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
+            todo.append(task_set_state.subtask(args=[task.id, 'stacking_done'], immutable=True))
+
+        elif step == 'cleanup':
             todo.append(task_set_state.subtask(args=[task.id, 'cleanup'], immutable=True))
             todo.append(task_cleanup.subtask(args=[task.id, False], immutable=True))
             todo.append(task_break_if_failed.subtask(args=[task.id], immutable=True))
