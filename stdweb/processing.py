@@ -395,6 +395,39 @@ def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=Tru
     fits.writeto(filename, image, header, overwrite=True)
 
 
+def preprocess_image(filename, config, destripe_horizontal=False, destripe_vertical=False, verbose=True):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    image,header = fits.getdata(filename, -1), fits.getheader(filename, -1)
+    # fix_header(header)
+
+    if destripe_vertical:
+        # Vertical stripes
+        image1 = image.copy()
+        med = np.nanmedian(image1)
+
+        for _ in range(image1.shape[1]):
+            image1[:,_] += med - np.nanmedian(image1[:,_])
+
+        image = image1
+
+    if destripe_horizontal:
+        # horizontal stripes
+        image1 = image.copy()
+        med = np.nanmedian(image1)
+
+        for _ in range(image1.shape[0]):
+            image1[_,:] += med - np.nanmedian(image1[_,:])
+
+        image = image1
+
+    # Write the image and header back
+    fits.writeto(filename, image, header, overwrite=True)
+
+
 from astropy_healpix import healpy
 def round_coords_to_grid(ra0, dec0, sr0, nside=None):
     """Tries to round the coordinates to nearest HEALPix pixel center"""

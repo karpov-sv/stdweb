@@ -232,7 +232,7 @@
             Cleanup operation will remove all processing results and settings, except for the image itself. Archiving will only remove generated files, but will keep the settings so that the processing may be repeated in exactly the same configuration.
           </p>
           <p>
-            Original image may be modified by the operations hidden under Unsafe controls. There you may either crop the image (using actual pixel coordinates or offsets from the edges), or incorporate refined / blind-matched WCS into the header, so that image with proper astrometry may be downloaded. Also, you may delete the processing task completely if you are done with this image.
+            Original image may be modified by the operations hidden under Unsafe controls. There you may either crop the image (using actual pixel coordinates or offsets from the edges), or incorporate refined / blind-matched WCS into the header, so that image with proper astrometry may be downloaded. Also, you may duplicate the task, or delete it completely if you are done with this image.
           </p>
         </span>
       {% endif %}
@@ -276,23 +276,31 @@
                     aria-controls="cropControls"
                     title="Crop the image">Crop&nbsp;</button>
 
+            <!-- Preprocess control hide/show -->
+            <button type="button" class="btn btn-light collapse-chevron collapsed"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#preprocessControls"
+                    aria-expanded="false"
+                    aria-controls="preprocessControls"
+                    title="Preprocess the image">Preprocess&nbsp;</button>
+
             <!-- Raw config hide/show -->
             <button type="button" class="btn btn-light collapse-chevron collapsed"
                     data-bs-toggle="collapse"
                     data-bs-target="#rawConfig"
                     aria-expanded="false"
                     aria-controls="rawConfig"
-                    title="Show raw JSON config">Raw JSON config&nbsp;</button>
+                    title="Show raw JSON config">Config&nbsp;</button>
 
             <button type="submit" name="action" value="duplicate_task" class="btn btn-info"
                     title="Duplicate this task" formtarget="_blank">Duplicate</button>
 
             <button type="submit" name="action" value="delete_task" class="btn btn-danger"
-                    title="Permanently delete this task">Delete task</button>
+                    title="Permanently delete this task">Delete</button>
           </span>
 
           <!-- Crop controls -->
-          <div id="cropControls" class="collapse collapsed">
+          <div id="cropControls" class="collapse collapsed mt-1">
             <div class="row align-items-end">
               <div class="col">
                 <label for="crop_x1" class="form-label">Min X</label>
@@ -321,8 +329,21 @@
             </div>
           </div>
 
+          <!-- Preprocess controls -->
+          <div id="preprocessControls" class="collapse collapsed mt-1">
+            <div class="row align-items-end">
+              <div class="col-md-auto">
+                <button type="submit" name="action" value="destripe_vertical" class="btn btn-warning"
+                        title="Remove vertical lines from the image">Destripe vertical</button>
+
+                <button type="submit" name="action" value="destripe_horizontal" class="btn btn-warning"
+                        title="Remove horizontal lines from the image">Destripe horizontal</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Raw JSON config -->
-          <div id="rawConfig" class="collapse collapsed">
+          <div id="rawConfig" class="collapse collapsed mt-1">
             {{ form_inspect.raw_config | as_crispy_field }}
             <button type="submit" name="action" value="update_config" class="btn btn-warning"
                     title="Update config">Update!</button>

@@ -132,13 +132,25 @@ def tasks(request, id=None):
 
                 if action == 'crop_image':
                     # TODO: move to async celery task?..
-                    processing.crop_image(os.path.join(task.path(), 'image.fits'), task.config,
-                                          x1=request.POST.get('crop_x1'),
-                                          y1=request.POST.get('crop_y1'),
-                                          x2=request.POST.get('crop_x2'),
-                                          y2=request.POST.get('crop_y2'))
+                    processing.crop_image(
+                        os.path.join(task.path(), 'image.fits'), task.config,
+                        x1=request.POST.get('crop_x1'),
+                        y1=request.POST.get('crop_y1'),
+                        x2=request.POST.get('crop_x2'),
+                        y2=request.POST.get('crop_y2')
+                    )
 
                     messages.success(request, "Cropped the image for task " + str(id))
+                    # Now we have to cleanup, which will be handled below
+
+                if action == 'destripe_vertical' or action == 'destripe_horizontal':
+                    processing.preprocess_image(
+                        os.path.join(task.path(), 'image.fits'), task.config,
+                        destripe_vertical=True if action == 'destripe_vertical' else False,
+                        destripe_horizontal=True if action == 'destripe_horizontal' else False,
+                    )
+
+                    messages.success(request, "Removed the lines from the image for task " + str(id))
                     # Now we have to cleanup, which will be handled below
 
                 if action == 'update_config':
@@ -152,8 +164,12 @@ def tasks(request, id=None):
                 if action == 'make_custom_mask':
                     return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id}))
 
-                if action == 'cleanup_task' or action == 'archive_task' or action == 'crop_image':
-                    if action != 'archive_task':
+                if action in [
+                        'cleanup_task', 'archive_task',
+                        'crop_image',
+                        'destripe_horizontal', 'destripe_vertical'
+                ]:
+                    if action in ['cleanup_task']:
                         task.config = {} # We reset the config on cleanup but keep on archiving
                     celery_tasks.run_task_steps(task, ['cleanup'])
                     messages.success(request, "Started cleanup for task " + str(id))
