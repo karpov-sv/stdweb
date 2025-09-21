@@ -272,14 +272,24 @@ def tasks(request, id=None):
                     # Coordinate query?..
                     ra0,dec0,sr0 = utils.resolve_coordinates(query)
 
-                    if ra0 is not None and dec0 is not None and sr0 is not None:
-                        messages.info(request, f"Looking for tasks inside {sr0:.2f} deg around {ra0:.4f} {dec0:+.4f}")
+                    if ra0 is not None and dec0 is not None:
+                        if sr0 is not None:
+                            messages.info(request, f"Looking for tasks inside {sr0:.2f} deg around {ra0:.4f} {dec0:+.4f}")
+                        else:
+                            messages.info(request, f"Looking for tasks covering {ra0:.4f} {dec0:+.4f}")
+
                         pks = []
                         for task in tasks:
                             ra,dec,sr = [task.config.get(_) for _ in ['field_ra', 'field_dec', 'field_sr']]
                             if ra is not None and dec is not None and sr is not None:
-                                # TODO: for now, ignore image size, only consider its center
-                                if astrometry.spherical_distance(ra, dec, ra0, dec0) < sr0:
+                                dist = astrometry.spherical_distance(ra, dec, ra0, dec0)
+
+                                if sr0 is not None and dist < sr0:
+                                    # Only consider image center if the search radius is defined
+                                    pks.append(task.pk)
+                                elif sr0 is None and dist < sr:
+                                    # Point is in the image
+                                    # TODO: recheck whether the point is actually covered.
                                     pks.append(task.pk)
 
                         tasks = tasks.filter(pk__in = pks)
