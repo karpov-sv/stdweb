@@ -20,20 +20,29 @@ class Command(BaseCommand):
 
             # Missing field center coordinates
             if task.config and not task.config.get('pixscale'):
-                header = fits.getheader(filename, -1)
-                wcs = processing.get_wcs(filename, verbose=False)
+                try:
+                    header = fits.getheader(filename, -1)
 
-                if wcs and wcs.is_celestial:
-                    ra0,dec0,sr0 = astrometry.get_frame_center(
-                        wcs=wcs, width=header['NAXIS1'], height=header['NAXIS2']
-                    )
-                    pixscale = astrometry.get_pixscale(wcs=wcs)
+                    processing.fix_header(header)
 
-                    task.config['field_ra'] = ra0
-                    task.config['field_dec'] = dec0
-                    task.config['field_sr'] = sr0
-                    task.config['pixscale'] = pixscale
+                    wcs = processing.get_wcs(filename, header=header, verbose=False)
 
-                    print(f"Field center for task {task.id} is at {ra0:.4f} {dec0:.4f} sr {sr0:.3f} pixscale {pixscale*3600:.2f} arcsec/pix")
+                    if wcs and wcs.is_celestial:
+                        ra0,dec0,sr0 = astrometry.get_frame_center(
+                            wcs=wcs, width=header['NAXIS1'], height=header['NAXIS2']
+                        )
+                        pixscale = astrometry.get_pixscale(wcs=wcs)
 
-                    task.save()
+                        task.config['field_ra'] = ra0
+                        task.config['field_dec'] = dec0
+                        task.config['field_sr'] = sr0
+                        task.config['pixscale'] = pixscale
+
+                        print(f"Field center for task {task.id} is at {ra0:.4f} {dec0:.4f} sr {sr0:.3f} pixscale {pixscale*3600:.2f} arcsec/pix")
+
+                        task.save()
+
+                except:
+                    import traceback
+                    traceback.print_exc()
+                    print(f"Error upgrading task {task.id}")
