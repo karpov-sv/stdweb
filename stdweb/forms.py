@@ -105,7 +105,7 @@ class TasksFilterForm(forms.Form):
             Row(
                 Column(
                     InlineField(
-                        PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames'),
+                        PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames, or specify field center and radius for positional search.'),
                     ),
                     css_class="col-md"
                 ),

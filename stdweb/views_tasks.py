@@ -17,6 +17,7 @@ from astropy.table import Table
 from astropy.io import fits
 
 from stdpipe.utils import file_write, file_read
+from stdpipe import astrometry
 
 from . import views
 from . import models
@@ -24,6 +25,8 @@ from . import forms
 from . import celery_tasks
 from . import celery
 from . import processing
+from . import utils
+
 
 def tasks(request, id=None):
     context = {}
@@ -266,14 +269,31 @@ def tasks(request, id=None):
 
                 query = form.cleaned_data.get('query')
                 if query:
-                    for token in query.split():
-                        tasks = tasks.filter(
-                            Q(original_name__icontains = token) |
-                            Q(title__icontains = token) |
-                            Q(user__username__icontains = token) |
-                            Q(user__first_name__icontains = token) |
-                            Q(user__last_name__icontains = token)
-                        )
+                    # Coordinate query?..
+                    ra0,dec0,sr0 = utils.resolve_coordinates(query)
+
+                    if ra0 is not None and dec0 is not None and sr0 is not None:
+                        messages.info(request, f"Looking for tasks inside {sr0:.2f} deg around {ra0:.4f} {dec0:+.4f}")
+                        pks = []
+                        for task in tasks:
+                            ra,dec,sr = [task.config.get(_) for _ in ['field_ra', 'field_dec', 'field_sr']]
+                            if ra is not None and dec is not None and sr is not None:
+                                # TODO: for now, ignore image size, only consider its center
+                                if astrometry.spherical_distance(ra, dec, ra0, dec0) < sr0:
+                                    pks.append(task.pk)
+
+                        tasks = tasks.filter(pk__in = pks)
+
+                    else:
+                        # Otherwise plain text search
+                        for token in query.split():
+                            tasks = tasks.filter(
+                                Q(original_name__icontains = token) |
+                                Q(title__icontains = token) |
+                                Q(user__username__icontains = token) |
+                                Q(user__first_name__icontains = token) |
+                                Q(user__last_name__icontains = token)
+                            )
 
         context['tasks'] = tasks
         context['referer'] = request.path + '?' + request.GET.urlencode();
