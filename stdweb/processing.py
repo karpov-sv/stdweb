@@ -968,6 +968,10 @@ def inspect_image(filename, config, verbose=True, show=False):
     if not 'target' in config:
         config['target'] = str(header.get('TARGET'))
 
+    # If target field is empty or literally 'None' skip remote resolution
+    if config.get('target') and str(config['target']).strip().lower() in ['none', 'null', '']:
+        config.pop('target')
+
     if config.get('target'):
         config['targets'] = []
         for i,target_name in enumerate(config['target'].splitlines()):
@@ -1385,6 +1389,15 @@ def photometry_image(filename, config, verbose=True, show=False):
             config['blind_match_wcs'] = False
             config['refine_wcs'] = True # We need to do it as we got SIP solution
             log("Blind matched WCS stored to file:image.wcs")
+
+            # Save field centre of the (possibly refined) WCS for API consumers
+            if wcs and wcs.is_celestial:
+                ra_cen, dec_cen, sr_cen = astrometry.get_frame_center(
+                    wcs=wcs, width=image.shape[1], height=image.shape[0]
+                )
+                config['field_ra'] = float(ra_cen)
+                config['field_dec'] = float(dec_cen)
+                config['field_sr'] = float(sr_cen)
         else:
             log("Blind matching failed")
 
@@ -1488,6 +1501,15 @@ def photometry_image(filename, config, verbose=True, show=False):
             config['refine_wcs'] = False
             log("Refined WCS stored to file:image.wcs")
 
+            # Save field centre of the (possibly refined) WCS for API consumers
+            if wcs and wcs.is_celestial:
+                ra_cen, dec_cen, sr_cen = astrometry.get_frame_center(
+                    wcs=wcs, width=image.shape[1], height=image.shape[0]
+                )
+                config['field_ra'] = float(ra_cen)
+                config['field_dec'] = float(dec_cen)
+                config['field_sr'] = float(sr_cen)
+
     log("\n---- Photometric calibration ----\n")
 
     sr = config.get('sr_override')
@@ -1502,10 +1524,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         cat_col_mag1=config.get('cat_col_color_mag1'),
         cat_col_mag2=config.get('cat_col_color_mag2'),
         use_color=config.get('use_color', True),
-        force_color_term=config.get('force_color_term'),
         order=config.get('spatial_order', 0),
         bg_order=config.get('bg_order', None),
-        nonlin=config.get('nonlin', False),
         robust=True, scale_noise=True,
         accept_flags=0x02, max_intrinsic_rms=0.01,
         verbose=verbose
@@ -1618,7 +1638,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                 cat_col_mag_err='e_' + fname + 'mag',
                 cat_col_mag1=config.get('cat_col_color_mag1'),
                 cat_col_mag2=config.get('cat_col_color_mag2'),
-                use_color=True,
+                use_color=config.get('use_color', True),
                 order=config.get('spatial_order', 0),
                 robust=True, scale_noise=True,
                 accept_flags=0x02, max_intrinsic_rms=0.01,
@@ -1635,12 +1655,15 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config.get('sn', 5) not in sns:
         sns.append(config.get('sn', 5))
     for sn in sns:
-        # Just print the value
         mag0 = pipeline.get_detection_limit(obj, sn=sn, verbose=False)
-        log(f"Detection limit at S/N={sn:.0f} level is {mag0:.2f}")
+        if mag0 is not None:
+            log(f"Detection limit at S/N={sn:.0f} level is {mag0:.2f}")
+        else:
+            log(f"Detection limit at S/N={sn:.0f} level could not be computed",)
 
     mag0 = pipeline.get_detection_limit(obj, sn=config.get('sn'), verbose=False)
-    config['mag_limit'] = mag0
+    # Store result only if available
+    config['mag_limit'] = mag0 if mag0 is not None else np.nan
 
     if 'bg_fluxerr' in obj.colnames and np.any(obj['bg_fluxerr'] > 0):
         fluxerr = obj['bg_fluxerr']
@@ -2500,6 +2523,10 @@ def subtract_image(filename, config, verbose=True, show=False):
                 gain=config.get('gain', 1.0),
                 verbose=sub_verbose
             )
+
+            # Ensure flags are 32-bit ints to avoid OverflowError during bitmask operations
+            if 'flags' in sobj.colnames and sobj['flags'].dtype != np.int32:
+                sobj['flags'] = sobj['flags'].astype(np.int32)
 
             if len(sobj):
                 sobj['mag_calib'] = sobj['mag'] + m['zero_fn'](
