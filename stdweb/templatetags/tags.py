@@ -100,11 +100,32 @@ def task_fits_header(task, filename):
 
     try:
         header = fits.getheader(path, -1)
-        contents = header.tostring('\n')
+        contents = []
+
+        for card in header.cards:
+            cstr = str(card)
+
+            if m := re.match(r'^((HISTORY)|(COMMENT|END))(.*)$', cstr):
+                contents.append(
+                    f"<span class='text-secondary'>{m[1]}</span>"
+                    f"<span class='text-info'>{m[4]}</span>"
+                )
+            elif m := re.match(r'^([^=]+)=(\s*(\'.*?\'|\S+)\s*)(/.*)?$', cstr):
+                contents.append(
+                    f"<span class='text-primary'>{m[1]}</span>"
+                    f"<span class='text-secondary'>=</span>"
+                    f"<span class='text-body-emphasis'>{m[2]}</span>"
+                    f"<span class='text-info'>{m[4] or ''}</span>"
+                )
+            elif cstr:
+                contents.append(cstr)
+
+        contents = "\n".join(contents)
+
     except:
         contents = "Cannot get FITS header from " + filename
 
-    return contents
+    return mark_safe(contents)
 
 
 @register.simple_tag
