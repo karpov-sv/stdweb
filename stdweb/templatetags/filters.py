@@ -181,3 +181,11 @@ def linebreaksimple(string):
     contents = "<br/>".join(string.splitlines())
 
     return mark_safe(contents)
+
+
+@register.filter
+def numformat(value, arg):
+    try:
+        return format(float(value), arg)
+    except (ValueError, TypeError):
+        return ''

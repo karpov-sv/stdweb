@@ -1488,6 +1488,12 @@ def photometry_image(filename, config, verbose=True, show=False):
             config['refine_wcs'] = False
             log("Refined WCS stored to file:image.wcs")
 
+    # Update field center position in the config
+    config['field_ra'],config['field_dec'],config['field_sr'] = astrometry.get_frame_center(
+        wcs=wcs, width=image.shape[1], height=image.shape[0]
+    )
+    config['pixscale'] = astrometry.get_pixscale(wcs=wcs)
+
     log("\n---- Photometric calibration ----\n")
 
     sr = config.get('sr_override')
