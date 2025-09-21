@@ -156,8 +156,8 @@
     </h2>
 
     {% if task.title %}
-    <div class="fst-italic mb-2">
-      {{ task.title }}
+    <div class="fst-italic mb-2 ps-2 border-start border-4 border-secondary" style="--bs-border-opacity: .3;">
+      {{ task.title|linebreaksimple }}
     </div>
     {% endif %}
     <div>

@@ -174,3 +174,10 @@ def skyportal_instrument_id(name):
             return inst[0]
 
     return ''
+
+
+@register.filter
+def linebreaksimple(string):
+    contents = "<br/>".join(string.splitlines())
+
+    return mark_safe(contents)

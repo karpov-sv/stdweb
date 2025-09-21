@@ -110,6 +110,7 @@ def tasks(request, id=None):
                     task._state.adding = True
                     task.user = request.user
                     task.state = 'duplicated'
+                    task.title = ((task.title + '\n') if task.title else '') + f'Duplicated from task {id}'
                     task.save() # To populate new task.id
 
                     try:

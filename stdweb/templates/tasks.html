@@ -86,7 +86,9 @@
                 <div class="fw-bold">{{ task.original_name }}</div>
 
                 {% if task.title %}
-                  <div class="fst-italic">{{ task.title }}</div>
+                  <div class="fst-italic ps-2 border-start border-4 border-secondary" style="--bs-border-opacity: .3;">
+                    {{ task.title|linebreaksimple }}
+                  </div>
                 {% endif %}
 
                 <div>
