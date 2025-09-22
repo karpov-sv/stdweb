@@ -264,8 +264,7 @@ def tasks(request, id=None):
             if form.is_valid():
                 show_all = form.cleaned_data.get('show_all')
                 if not show_all:
-                    if request.user.is_authenticated:
-                        tasks = tasks.filter(user = request.user)
+                    tasks = tasks.filter(user = request.user)
 
                 query = form.cleaned_data.get('query')
                 if query:

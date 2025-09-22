@@ -105,7 +105,7 @@ def task_fits_header(task, filename):
         for card in header.cards:
             cstr = str(card)
 
-            if m := re.match(r'^((HISTORY)|(COMMENT|END))(.*)$', cstr):
+            if m := re.match(r'^((HISTORY)|(COMMENT|END))\b(.*)$', cstr):
                 contents.append(
                     f"<span class='text-secondary'>{m[1]}</span>"
                     f"<span class='text-info'>{m[4]}</span>"
