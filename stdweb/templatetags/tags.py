@@ -14,7 +14,10 @@ from functools import partial
 from astropy.io import fits
 from astropy.table import Table
 
+from . import filters
+
 register = template.Library()
+
 
 def task_file_link(m, task=None):
     name = m.group(2)
@@ -96,32 +99,9 @@ def task_file_table(task, filename):
 def task_fits_header(task, filename):
     path = os.path.join(task.path(), filename)
 
-    contents = ""
-
     try:
         header = fits.getheader(path, -1)
-        contents = []
-
-        for card in header.cards:
-            cstr = str(card)
-
-            if m := re.match(r'^((HISTORY)|(COMMENT|END))\b(.*)$', cstr):
-                contents.append(
-                    f"<span class='text-secondary'>{m[1]}</span>"
-                    f"<span class='text-info'>{m[4]}</span>"
-                )
-            elif m := re.match(r'^([^=]+)=(\s*(\'.*?\'|\S+)\s*)(/.*)?$', cstr):
-                contents.append(
-                    f"<span class='text-primary'>{m[1]}</span>"
-                    f"<span class='text-secondary'>=</span>"
-                    f"<span class='text-body-emphasis'>{m[2]}</span>"
-                    f"<span class='text-info'>{m[4] or ''}</span>"
-                )
-            elif cstr:
-                contents.append(cstr)
-
-        contents = "\n".join(contents)
-
+        contents = filters.header_to_string(header)
     except:
         contents = "Cannot get FITS header from " + filename
 
