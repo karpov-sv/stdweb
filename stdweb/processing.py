@@ -1245,7 +1245,8 @@ def photometry_image(filename, config, verbose=True, show=False):
             ax1.plot(var1[idx3], var2[idx3], '.', alpha=alpha, color='C4', label='Deblended')
             ax1.plot(var1[idx4], var2[idx4], '.', alpha=alpha, color='C5', label='Other flags')
             plot_outline(var1[fidx], var2[fidx], 'r-', ax=ax1)#, label='Good')
-            ax1.legend()
+            leg = ax1.legend()
+            for lh in leg.legend_handles: lh.set_alpha(1)
 
             ax1.set_xscale('log')
             ax1.set_yscale('log')
@@ -1257,7 +1258,8 @@ def photometry_image(filename, config, verbose=True, show=False):
             ax2.plot(var3[idx3], var2[idx3], '.', alpha=alpha, color='C4', label='Deblended')
             ax2.plot(var3[idx4], var2[idx4], '.', alpha=alpha, color='C5', label='Other flags')
             plot_outline(var3[fidx], var2[fidx], 'r-', ax=ax2)#, label='Good')
-            ax2.legend()
+            leg = ax2.legend()
+            for lh in leg.legend_handles: lh.set_alpha(1)
 
             ax3 = fig.add_subplot(223, sharex=ax1)
             ax3.plot(var1[idx0], var3[idx0], '.', alpha=alpha)
@@ -1266,7 +1268,8 @@ def photometry_image(filename, config, verbose=True, show=False):
             ax3.plot(var1[idx3], var3[idx3], '.', alpha=alpha, color='C4', label='Deblended')
             ax3.plot(var1[idx4], var3[idx4], '.', alpha=alpha, color='C5', label='Other flags')
             plot_outline(var1[fidx], var3[fidx], 'r-', ax=ax3)#, label='Good')
-            ax3.legend()
+            leg = ax3.legend()
+            for lh in leg.legend_handles: lh.set_alpha(1)
 
             ax1.grid(alpha=0.2)
             ax2.grid(alpha=0.2)
