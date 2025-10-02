@@ -209,6 +209,12 @@ def tasks(request, id=None):
 
                 return HttpResponseRedirect(request.path_info)
 
+            elif form:
+                for f,err in form.errors.items():
+                    messages.error(request, f"Error in {f} field: {err}")
+
+            return HttpResponseRedirect(request.path_info)
+
         # Display task
         context['task'] = task
 
