@@ -25,7 +25,7 @@
    params = {
      title: title,
      message: body,
-     size: 'large',
+     size: 'xl',
      onEscape: function() {},
    };
 
@@ -39,7 +39,8 @@
      };
    }
 
-   bootbox.dialog(params);
+   dialog = bootbox.dialog(params);
+   dialog.find('.modal-dialog').addClass('modal-fullscreen-xl-down');
 
    // FIXME: prevent updating already created overlays?..
    overlay_stdview_images();
