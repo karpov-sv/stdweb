@@ -56,6 +56,16 @@
     padding-bottom: 0.3em;
 }
 
+.bootbox .modal-dialog {
+    display: inline-block !important;
+}
+
+.bootbox.modal {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
 .collapse-chevron:after {
     font-family:Fontawesome;
     content:'\f077';
