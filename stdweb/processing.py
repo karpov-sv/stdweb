@@ -205,15 +205,27 @@ def cleanup_paths(paths, basepath=None):
                 os.unlink(fullpath)
 
 
-def print_to_file(*args, clear=False, logname='out.log', **kwargs):
+def print_to_file(*args, clear=False, logname='out.log', time0=None, **kwargs):
     if clear and os.path.exists(logname):
         print('Clearing', logname)
         os.unlink(logname)
 
+    if time0 is not None:
+        prefix = "{:6.2f}s ".format((Time.now() - time0).sec)
+    else:
+        prefix = None
+
     if len(args) or len(kwargs):
+        if prefix is not None:
+            print(prefix, end='')
+
         print(*args, **kwargs)
-        with open(logname, 'a+') as lfd:
-            print(file=lfd, *args, **kwargs)
+
+        if logname is not None:
+            with open(logname, 'a+') as lfd:
+                if prefix is not None:
+                    print(prefix, end='', file=lfd)
+                print(file=lfd, *args, **kwargs)
 
 
 def pickle_to_file(filename, obj):

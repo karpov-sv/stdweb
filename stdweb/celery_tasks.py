@@ -6,6 +6,7 @@ import os, glob, shutil
 from functools import partial
 
 import numpy as np
+from astropy.time import Time
 
 from . import models
 from . import processing
@@ -73,7 +74,11 @@ def task_inspect(self, id, finalize=True):
 
     config = task.config
 
-    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'inspect.log'))
+    log = partial(
+        processing.print_to_file,
+        logname=os.path.join(basepath, 'inspect.log'),
+        time0=Time.now() if task.config.get('timing') else None
+    )
     log(clear=True)
 
     # Start processing
@@ -103,7 +108,11 @@ def task_photometry(self, id, finalize=True):
 
     config = task.config
 
-    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'photometry.log'))
+    log = partial(
+        processing.print_to_file,
+        logname=os.path.join(basepath, 'photometry.log'),
+        time0=Time.now() if task.config.get('timing') else None
+    )
     log(clear=True)
 
     # Start processing
@@ -133,7 +142,11 @@ def task_transients_simple(self, id, finalize=True):
 
     config = task.config
 
-    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'transients_simple.log'))
+    log = partial(
+        processing.print_to_file,
+        logname=os.path.join(basepath, 'transients_simple.log'),
+        time0=Time.now() if task.config.get('timing') else None
+    )
     log(clear=True)
 
     # Start processing
@@ -163,7 +176,11 @@ def task_subtraction(self, id, finalize=True):
 
     config = task.config
 
-    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'subtraction.log'))
+    log = partial(
+        processing.print_to_file,
+        logname=os.path.join(basepath, 'subtraction.log'),
+        time0=Time.now() if task.config.get('timing') else None
+    )
     log(clear=True)
 
     # Start processing
@@ -193,7 +210,11 @@ def task_stacking(self, id, finalize=True):
 
     config = task.config
 
-    log = partial(processing.print_to_file, logname=os.path.join(basepath, 'stacking.log'))
+    log = partial(
+        processing.print_to_file,
+        logname=os.path.join(basepath, 'stacking.log'),
+        time0=Time.now() if task.config.get('timing') else None
+    )
     log(clear=True)
 
     # Start processing
