@@ -63,7 +63,7 @@ supported_catalogs = {
                    'limit': 'rmag'},
     'ps1': {'name':'Pan-STARRS DR1', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
             'limit':'rmag'},
-    'skymapper': {'name':'SkyMapper DR4', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z'],
+    'skymapper': {'name':'SkyMapper DR4', 'filters':['B', 'V', 'R', 'I', 'g', 'r', 'i', 'z', 'y'],
                   'limit':'rPSF'},
     'sdss': {'name':'SDSS DR16', 'filters':['u', 'g', 'r', 'i', 'z'],
              'limit':'rmag'},
