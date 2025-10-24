@@ -83,12 +83,12 @@ supported_templates = {
     'custom': {'name': 'Custom template'},
     'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},
     'ls': {'name': 'Legacy Survey DR10', 'filters': {'g', 'r', 'i', 'z'}},
-    'skymapper': {'name': 'SkyMapper DR1 (HiPS)', 'filters': {
-        'u': 'CDS/P/skymapper-U',
-        'g': 'CDS/P/skymapper-G',
-        'r': 'CDS/P/skymapper-R',
-        'i': 'CDS/P/skymapper-I',
-        'z': 'CDS/P/skymapper-Z',
+    'skymapper': {'name': 'SkyMapper DR4 (HiPS)', 'filters': {
+        'u': 'CDS/P/skymapper-U', # DR1 fallback
+        'g': 'CDS/P/Skymapper/DR4/g',
+        'r': 'CDS/P/Skymapper/DR4/r',
+        'i': 'CDS/P/Skymapper/DR4/i',
+        'z': 'CDS/P/skymapper-Z', # DR1 fallback
     }},
     'des': {'name': 'Dark Energy Survey DR2 (HiPS)', 'filters': {
         'g': 'CDS/P/DES-DR2/g',
@@ -471,7 +471,12 @@ def guess_hips_survey(ra, dec, filter_name='R'):
         survey = f"PanSTARRS/DR1/{survey_filter}"
 
     else:
-        survey = f"CDS/P/skymapper-{survey_filter.upper()}"
+        if survey_filter == 'u':
+            survey_filter = 'g'
+        elif survey_filter == 'z' or survey_filter == 'y':
+            survey_filter = 'i'
+
+        survey = f"CDS/P/Skymapper/DR4/{survey_filter}"
 
     return survey
 
