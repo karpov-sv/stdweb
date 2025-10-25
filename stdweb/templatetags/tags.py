@@ -57,6 +57,10 @@ def task_file_contents(task, filename, highlight=False):
                           r"\1<span class='text-danger'>\2</span>",
                           contents, flags=re.MULTILINE)
 
+        contents = re.sub(r"^(\s*\d*\.\d+s\b)(.*)$",
+                          r"<span class='text-info'>\1</span>\2",
+                          contents, flags=re.MULTILINE)
+
         contents = re.sub(r"\b(file:((\w+/)?\w+\.\w+))\b",
                           partial(task_file_link, task=task),
                           contents, flags=re.MULTILINE)
