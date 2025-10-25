@@ -584,6 +584,10 @@ def guess_catalogue_radec_columns(cat):
         cat_col_dec = 'DEdeg'
 
     # cross-match with Gaia eDR3
+    elif 'ra' in cat.keys():
+        cat_col_ra = 'ra'
+        cat_col_dec = 'dec'
+
     elif 'ra_2' in cat.keys():
         cat_col_ra = 'ra_2'
         cat_col_dec = 'dec_2'
@@ -608,7 +612,7 @@ def filter_sextractor_detections(obj, verbose=True, classifier=None, return_clas
         ", ".join([label1, label2, label3])
     ))
 
-     # Exclude blends etc from the fit, as well as broken measurements
+    # Exclude blends etc from the fit, as well as broken measurements
     idx = obj['flags'] == 0
     idx &= np.isfinite(var1) & (var1 > 0)
     idx &= np.isfinite(var2) & (var2 > 0)
@@ -1884,13 +1888,13 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
     # Filter based on flags and Vizier catalogs
     flagmask = 0x7fff - 0x0100 - 0x02 # Allow deblended and isophotal masked
-    if not config.get('simple_prefilter'):
+    if not config.get('simple_prefilter', True):
         flagmask -= 0x800 # Allow pre-filtered
     else:
         log("Will reject pre-filtered detections")
 
-    if config.get('simple_mag_diff'):
-        log(f"Will only keep matches brighter than catalogue by {config.get('simple_mag_diff'):.2f} mags")
+    if config.get('simple_mag_diff', 2.0):
+        log(f"Will only keep matches brighter than catalogue by {config.get('simple_mag_diff', 2.0):.2f} mags")
     else:
         log("Will reject all positional matches")
 
@@ -1898,7 +1902,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     def checker_fn(xobj, xcat, catname):
         xidx = np.ones_like(xobj, dtype=bool)
 
-        if config.get('simple_mag_diff'):
+        if config.get('simple_mag_diff', 2.0):
             # Get filter used for photometric calibration
             fname = config.get('cat_col_mag')
             if fname.endswith('mag'):
@@ -1938,7 +1942,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
     # Additional filtering for blended stars
     # TODO: somehow integrate it into `filter_transient_candidates` proper
-    if len(candidates) > 0 and config.get('simple_blends'):
+    if len(candidates) > 0 and config.get('simple_blends', True):
         candidates = filter_vizier_blends(
             candidates,
             sr=0.5*fwhm*pixscale,
