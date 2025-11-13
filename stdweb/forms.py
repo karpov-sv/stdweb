@@ -30,12 +30,25 @@ class UploadFileForm(forms.Form):
         required=False, empty_value=None, label="Target name or coordinates",
         widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name or coordinates, one per line'})
     )
+
     do_inspect = forms.BooleanField(initial=False, required=False, label="Inspection")
     do_photometry = forms.BooleanField(initial=False, required=False, label="Photometry")
     do_simple_transients = forms.BooleanField(initial=False, required=False, label="Simple transients detection")
     do_subtraction = forms.BooleanField(initial=False, required=False, label="Subtraction")
 
     title = forms.CharField(max_length=150, required=False, label="Optional title or comment")
+
+    # FIXME: changes to these fields should be reflected in views.upload_file() !!!
+    stack_method = forms.ChoiceField(
+        choices=[
+            ('sum', 'Sum'),
+            ('clipped_mean', 'Sigma-clipped mean'),
+            ('median', 'Median'),
+        ],
+        required=False, label="Stacking method"
+    )
+    stack_subtract_bg = forms.BooleanField(initial=True, required=False, label="Subtract background")
+    stack_mask_cosmics = forms.BooleanField(initial=False, required=False, label="Mask cosmics")
 
     def __init__(self, *args, **kwargs):
         filename = kwargs.pop('filename', None)
@@ -45,14 +58,11 @@ class UploadFileForm(forms.Form):
         self.helper.form_action = 'upload'
         self.helper.field_template = 'crispy_field.html'
 
-        submit_stack = None
-
         if filename == '*':
             file_field = 'local_filename'
             self.fields['local_file'].initial = filename
             self.fields['local_filename'].initial = 'Please select one or more files above'
             submit = Submit('process_files', 'Process selected files', css_class='btn-primary')
-            submit_stack = Submit('stack_files', 'Stack and Process', css_class='btn-secondary')
         elif filename:
             file_field = 'local_filename'
             self.fields['local_file'].initial = filename
@@ -69,7 +79,10 @@ class UploadFileForm(forms.Form):
                 'local_file',
                 Column('preset', css_class="col-md-auto"),
                 Column(submit, css_class="col-md-auto mb-1"),
-                Column(submit_stack, css_class="col-md-auto mb-1") if submit_stack else None,
+                Column(
+                    Submit('stack_files', 'Stack and Process', css_class='btn-secondary'),
+                    css_class="col-md-auto mb-1"
+                ) if filename == '*' else None,
                 css_class='align-items-end'
             ),
             Row(
@@ -77,6 +90,12 @@ class UploadFileForm(forms.Form):
                 Column('target', css_class="col-md"),
                 css_class='align-items-end'
             ),
+            Row(
+                Column('stack_method', css_class="col-md"),
+                Column('stack_subtract_bg', css_class="col-md-auto mb-2"),
+                Column('stack_mask_cosmics', css_class="col-md-auto mb-2"),
+                css_class='align-items-end'
+            ) if filename == '*' else None,
             Row(
                 Column(HTML("Run automatically:"), css_class="col-md-auto mb-1"),
                 Column('do_inspect', css_class="col-md-auto"),

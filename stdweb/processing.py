@@ -10,7 +10,7 @@ from astropy.wcs import WCS
 from astropy.io import fits as fits
 
 from astropy.table import Table, vstack
-from astropy.stats import mad_std
+from astropy.stats import mad_std, sigma_clipped_stats
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.time import Time
@@ -2681,8 +2681,35 @@ def stack_images(filenames, outname, config, verbose=True):
 
     images = []
 
+    if config.get('stack_mask_cosmics', False):
+        log('Will mask cosmics in individual images while stacking')
+    if config.get('stack_subtract_bg', True):
+        log('Will subtract the background from individual images while stacking')
+
     for i,filename in enumerate(filenames):
         image,header = fits.getdata(filename, header=True)
+
+        mask = ~np.isfinite(image)
+
+        # Cosmics
+        if config.get('stack_mask_cosmics', False):
+            # We will use custom noise model for astroscrappy as we do not know whether
+            # the image is background-subtracted already, or how it was flatfielded
+            bg = sep.Background(image.astype(np.double), mask=mask)
+            rms = bg.rms()
+            var = rms**2 + np.abs(image - bg.back())/config.get('gain', 1)
+            cmask, cimage = astroscrappy.detect_cosmics(
+                image, mask, verbose=False,
+                invar=var.astype(np.float32),
+                gain=config.get('gain', 1),
+                satlevel=0.05*np.nanmedian(image) + 0.95*np.nanmax(image), # med + 0.95(max-med),
+                cleantype='medmask'
+            )
+            image = cimage / config.get('gain', 1) # Convert back to ADU
+
+        if config.get('stack_subtract_bg', True):
+            bg = sep.Background(image.astype(np.double), mask=mask)
+            image = 1.0*image - bg.back()
 
         wcs = WCS(header)
         if wcs is None or not wcs.is_celestial:
@@ -2701,18 +2728,31 @@ def stack_images(filenames, outname, config, verbose=True):
             log(f"Re-projecting ({i+1}/{len(filenames)}) {filename} onto the grid")
 
             # All other images should be re-projected to first one pixel grid
-            image1,fp = reproject.reproject_adaptive((image, wcs), wcs0, images[0].shape)
+            image1,fp = reproject.reproject_adaptive((image, wcs), wcs0, images[0].shape, conserve_flux=True, parallel=True)
             image1[fp<0.5] = np.nan # Mask parts of the image not completely covered
 
             images.append(image1)
 
-    log(f"Computing the stack by summing {len(images)} images")
-    coadd = np.sum(images, axis=0)
+    stack_method = config.get('stack_method', 'sum')
 
-    for _ in ['SATURATE', 'DATAMAX']:
-        if _ in header0:
-            log(f"Adjusting {_} header keyword")
-            header0[_] *= len(images)
+    if stack_method == 'sum':
+        log(f"Computing the stack as a plain sum of {len(images)} images")
+        coadd = np.sum(images, axis=0)
+
+        for _ in ['SATURATE', 'DATAMAX']:
+            if _ in header0:
+                log(f"Adjusting {_} header keyword")
+                header0[_] *= len(images)
+    elif stack_method == 'clipped_mean':
+        log(f"Computing the stack as a sigma clipped mean of {len(images)} images")
+        coadd = np.nanmedian(images, axis=0)
+
+    elif stack_method == 'median':
+        log(f"Computing the stack as a median of {len(images)} images")
+        coadd = sigma_clipped_stats(images, axis=0)[0]
+
+    else:
+        raise RuntimeError('Unsupported stacking method: ' + stack_method)
 
     fits.writeto(outname, coadd, header0, overwrite=True)
 

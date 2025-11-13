@@ -381,6 +381,8 @@ def upload_file(request, base=settings.DATA_PATH):
                     os.makedirs(task.path())
 
                     task.config['stack_filenames'] = filenames
+                    for _ in ['stack_method', 'stack_subtract_bg', 'stack_mask_cosmics']:
+                        task.config[_] = form.cleaned_data[_]
 
                     messages.success(request, f"Stacking {len(files)} images as task {task.id}")
                     tasks.append(task)

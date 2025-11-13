@@ -11,6 +11,6 @@ humanize
 astroscrappy
 dill
 astropy
-reproject
+reproject>0.17
 scikit-learn
 django-select2
