@@ -98,7 +98,7 @@ def list_files(request, path='', base=settings.DATA_PATH):
             except:
                 pass
 
-        elif 'fits' in context['mime'] or 'FITS' in context['magic_info'] or os.path.splitext(path)[1].lower().startswith('.fit'):
+        elif 'fits' in context['mime'] or 'FITS' in context['magic_info'] or os.path.splitext(path)[1].lower().startswith('.fit') or path.endswith('.fits.gz'):
             context['mode'] = 'fits'
 
             form = forms.UploadFileForm(filename=path)
