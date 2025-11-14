@@ -489,6 +489,7 @@ def guess_vizier_catalogues(ra, dec):
 
     if dec < 0:
         vizier.append('skymapper')
+        vizier.append('II/371/des_dr2')
 
     return vizier
 
