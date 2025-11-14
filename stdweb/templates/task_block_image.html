@@ -47,7 +47,22 @@
 
     <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_download' task.id image %}">{{ image }}</a></small>
+      {% if cand and cand.unstack_name %}
+        <span class="ms-2"><small>
+          <a data-bs-toggle="collapse" href="#collapse{{ cand.unstack_name }}" role="button" aria-expanded="false" aria-controls="collapse{{ cand.unstack_name }}">
+            (Show unstacked)
+          </a>
+        </small></span>
+      {% endif %}
     </figcaption>
+
+    {% if cand and cand.unstack_name %}
+      <div class="collapse" id="collapse{{ cand.unstack_name }}">
+        <img src="{% url 'task_view' task.id cand.unstack_name %}"
+             class="figure-img img-fluid rounded mb-0"
+             title="Cutouts from orininal unstacked images">
+      </div>
+    {% endif %}
 
     {% if cand %}
       <pre style="white-space: pre-wrap;">{{ cand|show_table }}</pre>

@@ -1798,6 +1798,67 @@ def photometry_image(filename, config, verbose=True, show=False):
                 log(f"{target_title} not detected")
 
 
+def candidates_extract_unstacked(filename, candidates, config, verbose=True, show=False):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    basepath = os.path.dirname(filename)
+
+    if not config.get('stack_filenames'):
+        return
+
+    log('Augmenting candidates with cutouts from original unstacked images')
+
+    stack_cutouts = {}
+
+    for sfilename in config['stack_filenames']:
+        if os.path.exists(sfilename):
+            simage,sheader = fits.getdata(sfilename, header=True)
+            swcs = WCS(sheader)
+
+            for cand in candidates:
+                cid = cand['cutout_name']
+
+                if cid not in stack_cutouts:
+                    stack_cutouts[cid] = []
+
+                sx0,sy0 = swcs.all_world2pix(cand['ra'], cand['dec'], 0)
+
+                cut = cutouts.crop_image_centered(simage, sx0, sy0, config.get('cutout_size', 30))
+                stack_cutouts[cid].append(cut)
+
+    unstack_names = []
+
+    for cand in candidates:
+        cutout_name = cand['cutout_name']
+        unstack_name = os.path.splitext(cutout_name)[0] + '.unstack.png'
+        outname = os.path.join(basepath, unstack_name)
+
+        scuts = stack_cutouts.get(cutout_name, [])
+
+        if scuts:
+            N = len(scuts)
+            Nx = 5
+            Ny = int(np.ceil(N/Nx))
+
+            with plots.figure_saver(outname, figsize=(2*Nx, 2*Ny), show=show) as fig:
+                for i,cut in enumerate(scuts):
+                    ax = fig.add_subplot(Ny, Nx, i+1)
+                    plots.imshow(
+                        cut, qq=[0.5, 99.5], ax=ax,
+                        cmap='Blues_r',
+                        show_axis=False, show_colorbar=False, interpolation='nearest'
+                    )
+
+                fig.tight_layout()
+
+            unstack_names.append(unstack_name)
+        else:
+            unstack_names.append(None)
+
+    candidates['unstack_name'] = unstack_names
+
+
 def transients_simple_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -1996,6 +2057,8 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         candidates['cutout_name'] = cutout_names
 
         log(f"{len(candidates)} candidates in total")
+
+        candidates_extract_unstacked(filename, candidates, config, verbose=verbose, show=show)
 
         candidates.write(os.path.join(basepath, 'candidates_simple.vot'), format='votable', overwrite=True)
         log("Candidates written to file:candidates_simple.vot")
@@ -2653,6 +2716,8 @@ def subtract_image(filename, config, verbose=True, show=False):
             all_candidates['cutout_name'] = cutout_names
 
             log(f"{len(all_candidates)} candidates in total")
+
+            candidates_extract_unstacked(filename, all_candidates, config, verbose=verbose, show=show)
 
             all_candidates.write(os.path.join(basepath, 'candidates.vot'), format='votable', overwrite=True)
             log("Candidates written to file:candidates.vot")
