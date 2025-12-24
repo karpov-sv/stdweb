@@ -19,17 +19,31 @@
   {% if not ctask %}
     <div class="list-group mb-4">
       {% for ctask in queue %}
-        <a href="{% url 'queue' id=ctask.id %}" class="text-decoration-none list-group-item list-group-item-action d-flex justify-content-between align-items-start">
-          <div class="ms-2 me-auto">
+        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-start">
+          <div>
+            <a href="{% url 'queue' id=ctask.id %}" class="text-decoration-none text-reset">
+              <div class="ms-2 me-auto">
+                <div>
+                  <span class="fw-bold">{{ ctask.shortname }}</span>
+                  -
+                  <span class="fst-italic">{{ ctask.id }}</span>
+                </div>
+                <small class="me-2">Started: {{ ctask.time_start|time_from_unix|date:"Y-m-d H:i:s" }}</small>
+              </div>
+            </a>
             <div>
-            <span class="fw-bold">{{ ctask.shortname }}</span>
-            -
-            <span class="fst-italic">{{ ctask.id }}</span>
+              <small class="ms-2 me-auto text-muted">
+                {% if ctask.chain_position %}
+                  Step {{ ctask.chain_position }}/{{ ctask.chain_total }} :
+                {% endif %}
+                {% if ctask.task_id %}
+                  Task <a href="{% url 'tasks' id=ctask.task_id %}">{{ ctask.task_id }}</a>: {{ ctask.task_name }}
+                {% endif %}
+              </small>
             </div>
-            <small class="me-2">Started: {{ ctask.time_start|time_from_unix|date:"Y-m-d H:i:s" }}</small>
           </div>
-          <span class="badge bg-{% if ctask.state == 'active' %}primary{% else %}secondary{% endif %} rounded-pill">{{ ctask.state }}</span>
-        </a>
+              <span class="badge bg-{% if ctask.state == 'active' %}primary{% else %}secondary{% endif %} rounded-pill">{{ ctask.state }}</span>
+        </div>
       {% endfor %}
     </div>
 
@@ -56,18 +70,29 @@
         {% endif %}
       </p>
 
+
+      {% if chain_position %}
+        <p>
+          Step: <b>{{ chain_position }}/{{ chain_total }}</b>
+        </p>
+      {% endif %}
+
+      {% if task %}
+        <p>
+          Linked to task: <a href="{% url 'tasks' id=task.id %}">{{ task.id }}</a> - {{ task.original_name }}
+        </p>
+      {% endif %}
+
     </div>
 
     {% if user.is_staff %}
-      {% wrapwith "wrapper_card_collapsed.html" with title="Management" %}
 
       <form action="" method="POST">
         {% csrf_token %}
-        <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task</button>
+        <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task{% if chain_total %} chain ({{ chain_total }} subtasks){% endif %}</button>
         <button type="submit" name="action" value="cleanuplinkedtask" class="btn btn-danger">Cleanup linked tasks</button>
       </form>
 
-      {% endwrapwith %}
     {% endif %}
 
   {% else %}

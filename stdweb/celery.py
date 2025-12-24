@@ -13,6 +13,16 @@ app = Celery('stdweb')
 #   should have a `CELERY_` prefix.
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
+# Additional configuration for better task management
+app.conf.update(
+    # Re-queue tasks if worker is lost (crash, kill, etc.)
+    task_reject_on_worker_lost=True,
+    # Store task state for chain tracking
+    task_track_started=True,
+    # Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
+    worker_term_signal='SIGTERM',
+)
+
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks(related_name='celery_tasks')
 
