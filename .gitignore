@@ -111,6 +111,12 @@ ENV/
 \#*\#
 *~
 *.*.py
+*.patch
+
+*.code-workspace
+.dir-locals.el
+pyrightconfig.json
+CLAUDE.md
 
 # Project specific
 /tests/
@@ -119,7 +125,7 @@ ENV/
 /tasks/
 /static/
 
-db.sqlite3
+db.sqlite3*
 dump.rdb
 
 /notebooks/
