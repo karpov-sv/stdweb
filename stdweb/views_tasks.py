@@ -36,7 +36,9 @@ def tasks(request, id=None):
         path = task.path()
 
         # Permissions
-        if request.user.is_authenticated and (request.user.is_staff or request.user == task.user):
+        if request.user.is_authenticated and (
+                request.user.is_staff or request.user == task.user or request.user.has_perm('stdweb.edit_all_tasks')
+        ):
             context['user_may_submit'] = True
         else:
             context['user_may_submit'] = False
@@ -97,6 +99,7 @@ def tasks(request, id=None):
                 action = request.POST.get('action')
 
                 if action == 'delete_task':
+                    # Only owner or staff may delete the task
                     if request.user.is_staff or request.user == task.user:
                         task.delete()
                         messages.success(request, "Task " + str(id ) + " is deleted")
@@ -128,6 +131,11 @@ def tasks(request, id=None):
                     messages.success(request, "Task duplicated as " + str(task.id))
 
                     return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
+
+                # Ensure we have proper permissions for the rest of the actions
+                if not context['user_may_submit']:
+                    messages.error(request, "Cannot perform action " + action + " on task " + str(id) + " belonging to " + task.user.username)
+                    return HttpResponseRedirect(request.path_info)
 
                 if action == 'fix_image':
                     # TODO: move to async celery task?..
