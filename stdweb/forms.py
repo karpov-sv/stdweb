@@ -232,7 +232,7 @@ class TaskPhotometryForm(forms.Form):
     blind_match_ps_lo = forms.FloatField(initial=0.2, min_value=0, required=False, label="Scale lower limit, arcsec/pix")
     blind_match_ps_up = forms.FloatField(initial=4.0, min_value=0, required=False, label="Scale upper limit, arcsec/pix")
     blind_match_center = forms.CharField(required=False, empty_value=None, label="Center position for blind match")
-    blind_match_sr0 = forms.FloatField(initial=1, min_value=0, required=False, label="Radius, deg")
+    blind_match_sr0 = forms.FloatField(initial=2, min_value=0, required=False, label="Radius, deg")
 
     run_subtraction = forms.BooleanField(initial=False, required=False, label="Subtraction")
 
