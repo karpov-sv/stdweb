@@ -24,7 +24,8 @@
          'data-grid':1, 'data-zoom':1,
          {% if obj %}'data-obj':1,{%endif %}
          {% if cat %}'data-cat':1,{%endif %}
-         })"/>
+         }{% if blink_group %},
+         [{% for blink_img in blink_group %}{% if blink_img != image and blink_img in files %}'{% url 'task_preview' task.id blink_img %}?timestamp={{ task.modified|unix }}',{% endif %}{% endfor %}]{% endif %})"/>
 
     <figcaption class="figure-caption text-center mt-0 mb-3">
       <small><a href="{% url 'task_download' task.id image %}">{{ image }}</a></small>

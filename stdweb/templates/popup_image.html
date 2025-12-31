@@ -3,7 +3,7 @@
 
 <script language="javascript">
 
- popupImage = function(event, url, title, ok, extraClass, extraKwargs)
+ popupImage = function(event, url, title, ok, extraClass, extraKwargs, extraImages)
  {
    // Fix for Safari CMD-click handled by onclick()
    if(event.metaKey)
@@ -11,35 +11,120 @@
 
    extraClass = extraClass || "";
    extraKwargs = extraKwargs || {};
+   extraImages = extraImages || [];
 
    var body = $("<div/>", {class: "text-center"});
-   var params = {class:"img-fluid center-block " + extraClass, src:url};
 
-   if(extraKwargs){
-     params = Object.assign({}, params, extraKwargs);
+   // Build list of all image URLs
+   var allUrls = [url].concat(extraImages);
+
+   // Extract image names from URLs
+   var allNames = allUrls.map(function(u) {
+     var path = u.split('?')[0];
+     return path.split('/').pop();
+   });
+   var baseTitle = title;
+   var currentIndex = 0;
+
+   // Create all images with same class and attributes
+   allUrls.forEach(function(imgUrl, index) {
+     var params = {
+       class: "img-fluid center-block popup-blink-image " + extraClass,
+       src: imgUrl,
+       'data-blink-index': index
+     };
+
+     if(extraKwargs){
+       params = Object.assign({}, params, extraKwargs);
+     }
+
+     var img = $("<img/>", params);
+
+     // Hide all except first
+     if(index > 0) {
+       img.hide();
+     }
+
+     img.appendTo(body);
+   });
+
+   // Navigation helper
+   function showImage(index) {
+     var images = dialog.find('.popup-blink-image');
+     var currentImg = images.filter(':visible');
+     var nextImg = images.filter('[data-blink-index="' + index + '"]');
+
+     // Copy URL parameters from current to next image
+     if(currentImg.length > 0 && nextImg.length > 0) {
+       var currentSrc = currentImg.attr('src');
+       var nextSrc = nextImg.attr('src');
+
+       // Extract query string from current image
+       var currentParams = currentSrc.split('?')[1] || '';
+       // Get base path of next image
+       var nextBase = nextSrc.split('?')[0];
+
+       // Apply current params to next image
+       if(currentParams) {
+         nextImg.attr('src', nextBase + '?' + currentParams);
+       }
+     }
+
+     currentIndex = index;
+     images.hide();
+     nextImg.show();
+
+     // Update title
+     if(allUrls.length > 1) {
+       dialog.find('.modal-title').text(allNames[index]);
+     }
    }
 
-   // FIXME: data-stretch is only needed for class stdview-image
-   $("<img/>", params).appendTo(body);
-
-   params = {
-     title: title,
+   var dialogParams = {
+     title: allUrls.length > 1 ? allNames[0] : title,
      message: body,
      size: 'xl',
      onEscape: function() {},
    };
 
-   if(ok){
-     params.buttons = {
-       success: {
-         label: "Ok",
-         className: "btn-primary",
-         callback: function() {}
+   // Build buttons
+   var buttons = {};
+
+   // Add Prev/Next buttons if there are extra images
+   if(extraImages.length > 0) {
+     buttons.prev = {
+       label: "◁ Prev",
+       className: "btn-info btn-prev ms-1 me-1",
+       callback: function() {
+         var newIndex = (currentIndex - 1 + allUrls.length) % allUrls.length;
+         showImage(newIndex);
+         return false;
+       }
+     };
+     buttons.next = {
+       label: "Next ▷",
+       className: "btn-info btn-next ms-1 me-auto",
+       callback: function() {
+         var newIndex = (currentIndex + 1) % allUrls.length;
+         showImage(newIndex);
+         return false;
        }
      };
    }
 
-   dialog = bootbox.dialog(params);
+   if(ok){
+     buttons.success = {
+       label: "Ok",
+       className: "btn-primary",
+       callback: function() {}
+     };
+   }
+
+   if(Object.keys(buttons).length > 0) {
+     dialogParams.buttons = buttons;
+   }
+
+   dialog = bootbox.dialog(dialogParams);
    dialog.find('.modal-dialog').addClass('modal-fullscreen-xl-down');
 
    // FIXME: prevent updating already created overlays?..

@@ -365,10 +365,15 @@
           <div class="col">
             <div class="row">
               {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' 'image_bg.fits' 'image_rms.fits' as list %}
+              {% make_list 'image.fits' 'mask.fits' 'custom_template.fits' as blink_list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with image=name task=task obj=1 cat=1 only %}
+                    {% if name in blink_list %}
+                      {% include "task_block_image.html" with image=name task=task obj=1 cat=1 blink_group=blink_list files=files only %}
+                    {% else %}
+                      {% include "task_block_image.html" with image=name task=task obj=1 cat=1 only %}
+                    {% endif %}
                   </div>
                 {% endif %}
               {% endfor %}
@@ -639,10 +644,15 @@
           <div class="col">
             <div class="row">
               {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' as list %}
+              {% make_list 'sub_image.fits' 'sub_template.fits' 'sub_diff.fits' as blink_list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
-                    {% include "task_block_image.html" with image=name task=task cat=1 only %}
+                    {% if name in blink_list %}
+                      {% include "task_block_image.html" with image=name task=task cat=1 blink_group=blink_list files=files only %}
+                    {% else %}
+                      {% include "task_block_image.html" with image=name task=task cat=1 only %}
+                    {% endif %}
                   </div>
                 {% endif %}
               {% endfor %}
