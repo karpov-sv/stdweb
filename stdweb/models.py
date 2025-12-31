@@ -61,3 +61,40 @@ class Preset(models.Model):
 
     def __str__(self):
         return f"{self.id}: {self.name}"
+
+
+class ActionLog(models.Model):
+    """Model for logging user actions on tasks."""
+
+    ACTION_TYPES = [
+        ('task_create', 'Task Created'),
+        ('task_delete', 'Task Deleted'),
+        ('task_duplicate', 'Task Duplicated'),
+        ('task_update', 'Task Updated'),
+        ('task_archive', 'Task Archived'),
+        ('task_cleanup', 'Task Cleanup'),
+        ('processing_start', 'Processing Started'),
+        ('processing_complete', 'Processing Completed'),
+        ('processing_failed', 'Processing Failed'),
+        ('processing_cancel', 'Processing Cancelled'),
+        ('file_upload', 'File Uploaded'),
+        ('config_change', 'Config Changed'),
+    ]
+
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=50, choices=ACTION_TYPES, db_index=True)
+    task = models.ForeignKey(Task, on_delete=models.SET_NULL, null=True, blank=True)
+    task_id_ref = models.IntegerField(null=True, blank=True, help_text='Preserved task ID after task deletion')
+    details = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['action', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.timestamp:%Y-%m-%d %H:%M:%S} - {self.user} - {self.get_action_display()}"

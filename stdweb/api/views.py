@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from stdweb.models import Task, Preset
 from stdweb import celery_tasks
 from stdweb import celery as celery_app
+from stdweb.action_logging import log_action
 from stdweb.processing import (
     supported_filters,
     supported_catalogs,
@@ -98,7 +99,9 @@ def task_list(request):
     elif request.method == 'POST':
         serializer = TaskCreateSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            task = serializer.save(user=request.user)
+            log_action('task_create', task=task, request=request,
+                       details={'original_name': task.original_name, 'access': 'api', 'source': 'upload'})
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
 
@@ -128,6 +131,8 @@ def task_detail(request, pk):
         return Response(serializer.errors, status=400)
 
     elif request.method == 'DELETE':
+        log_action('task_delete', task=task, request=request,
+                   details={'original_name': task.original_name, 'access': 'api'})
         task.delete()
         return Response(status=204)
 
@@ -152,6 +157,9 @@ def task_duplicate(request, pk):
     # Copy task directory
     if os.path.exists(task.path()):
         shutil.copytree(task.path(), new_task.path())
+
+    log_action('task_duplicate', task=new_task, request=request,
+               details={'source_task_id': task.id, 'access': 'api'})
 
     serializer = TaskSerializer(new_task)
     return Response(serializer.data, status=201)
@@ -207,6 +215,9 @@ def task_process(request, pk):
     # Start processing
     celery_tasks.run_task_steps(task, celery_steps)
 
+    log_action('processing_start', task=task, request=request,
+               details={'steps': steps, 'access': 'api'})
+
     return Response({
         'id': task.id,
         'state': task.state,
@@ -228,6 +239,10 @@ def task_cancel(request, pk):
         return Response({'error': 'Task is not running'}, status=400)
 
     count = revoke_task_chain(task)
+
+    log_action('processing_cancel', task=task, request=request,
+               details={'revoked_count': count, 'access': 'api'})
+
     return Response({
         'id': task.id,
         'state': task.state,

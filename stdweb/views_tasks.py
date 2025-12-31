@@ -26,6 +26,7 @@ from . import celery_tasks
 from . import celery
 from . import processing
 from . import utils
+from .action_logging import log_action
 
 
 def tasks(request, id=None):
@@ -101,6 +102,8 @@ def tasks(request, id=None):
                 if action == 'delete_task':
                     # Only owner or staff may delete the task
                     if request.user.is_staff or request.user == task.user:
+                        log_action('task_delete', task=task, request=request,
+                                   details={'original_name': task.original_name, 'access': 'web'})
                         task.delete()
                         messages.success(request, "Task " + str(id ) + " is deleted")
                         return HttpResponseRedirect(reverse('tasks'))
@@ -110,6 +113,7 @@ def tasks(request, id=None):
 
                 if action == 'duplicate_task':
                     old_path = task.path()
+                    old_id = task.id
 
                     # As per https://docs.djangoproject.com/en/5.2/topics/db/queries/#copying-model-instances
                     task.pk = None
@@ -128,6 +132,8 @@ def tasks(request, id=None):
                         if os.path.exists(os.path.join(old_path, name)):
                             shutil.copyfile(os.path.join(old_path, name), os.path.join(task.path(), name))
 
+                    log_action('task_duplicate', task=task, request=request,
+                               details={'source_task_id': old_id, 'access': 'web'})
                     messages.success(request, "Task duplicated as " + str(task.id))
 
                     return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
@@ -183,15 +189,21 @@ def tasks(request, id=None):
                 ]:
                     if action in ['cleanup_task']:
                         task.config = {} # We reset the config on cleanup but keep on archiving
+                        log_action('task_cleanup', task=task, request=request, details={'access': 'web'})
+                    elif action in ['archive_task']:
+                        log_action('task_archive', task=task, request=request, details={'access': 'web'})
                     celery_tasks.run_task_steps(task, ['cleanup'])
                     messages.success(request, "Started cleanup for task " + str(id))
 
                 if action == 'inspect_image':
-                    celery_tasks.run_task_steps(task, [
-                        'inspect',
-                        'photometry' if form.cleaned_data.get('run_photometry') else None,
-                        'subtraction' if form.cleaned_data.get('run_subtraction') else None,
-                    ])
+                    steps = ['inspect']
+                    if form.cleaned_data.get('run_photometry'):
+                        steps.append('photometry')
+                    if form.cleaned_data.get('run_subtraction'):
+                        steps.append('subtraction')
+                    celery_tasks.run_task_steps(task, steps)
+                    log_action('processing_start', task=task, request=request,
+                               details={'steps': steps, 'access': 'web'})
                     messages.success(request, "Started image inspection for task " + str(id))
                     if form.cleaned_data.get('run_photometry'):
                         messages.success(request, "Started image photometry for task " + str(id))
@@ -199,20 +211,26 @@ def tasks(request, id=None):
                         messages.success(request, "Started template subtraction for task " + str(id))
 
                 if action == 'photometry_image':
-                    celery_tasks.run_task_steps(task, [
-                        'photometry',
-                        'subtraction' if form.cleaned_data.get('run_subtraction') else None,
-                    ])
+                    steps = ['photometry']
+                    if form.cleaned_data.get('run_subtraction'):
+                        steps.append('subtraction')
+                    celery_tasks.run_task_steps(task, steps)
+                    log_action('processing_start', task=task, request=request,
+                               details={'steps': steps, 'access': 'web'})
                     messages.success(request, "Started image photometry for task " + str(id))
                     if form.cleaned_data.get('run_subtraction'):
                         messages.success(request, "Started template subtraction for task " + str(id))
 
                 if action == 'transients_simple_image':
                     celery_tasks.run_task_steps(task, ['simple_transients'])
+                    log_action('processing_start', task=task, request=request,
+                               details={'steps': ['simple_transients'], 'access': 'web'})
                     messages.success(request, "Started simple transient detection for task " + str(id))
 
                 if action == 'subtract_image':
                     celery_tasks.run_task_steps(task, ['subtraction'])
+                    log_action('processing_start', task=task, request=request,
+                               details={'steps': ['subtraction'], 'access': 'web'})
                     messages.success(request, "Started template subtraction for task " + str(id))
 
                 return HttpResponseRedirect(request.path_info)
@@ -339,6 +357,7 @@ def tasks_actions(request):
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
                     task.state = 'archive'
                     task.save()
+                    log_action('task_archive', task=task, request=request, details={'access': 'web'})
                     messages.success(request, "Started archiving for task " + str(id))
 
                 if action == 'cleanup':
@@ -346,10 +365,13 @@ def tasks_actions(request):
                     task.config = {} # should we reset the config on cleanup?..
                     task.state = 'cleanup'
                     task.save()
+                    log_action('task_cleanup', task=task, request=request, details={'access': 'web'})
                     messages.success(request, "Started cleanup for task " + str(id))
 
                 if action == 'delete':
                     if request.user.is_staff or request.user == task.user:
+                        log_action('task_delete', task=task, request=request,
+                                   details={'original_name': task.original_name, 'access': 'web'})
                         task.delete()
                         messages.success(request, "Task " + str(id ) + " is deleted")
                     else:

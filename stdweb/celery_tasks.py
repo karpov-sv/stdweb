@@ -12,6 +12,7 @@ from astropy.time import Time
 
 from . import models
 from . import processing
+from .action_logging import log_action
 
 
 # Process group management for killing external processes
@@ -104,6 +105,15 @@ def fix_config(config):
 @shared_task(bind=True)
 def task_finalize(self, id):
     task = models.Task.objects.get(id=id)
+
+    # Determine if processing succeeded or failed
+    if 'failed' in task.state:
+        log_action('processing_failed', user=None, task=task,
+                   details={'final_state': task.state})
+    else:
+        log_action('processing_complete', user=None, task=task,
+                   details={'final_state': task.state})
+
     task.celery_id = None
     task.celery_chain_ids = []
     task.complete()

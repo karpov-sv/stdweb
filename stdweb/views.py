@@ -28,6 +28,7 @@ from stdpipe import cutouts, plots
 
 from . import forms
 from . import models
+from .action_logging import log_action
 from . import celery_tasks
 
 
@@ -357,6 +358,7 @@ def upload_file(request, base=settings.DATA_PATH):
     if request.method == "POST":
         if form.is_valid():
             tasks = []
+            localpaths = {}
 
             if 'file' in request.FILES:
                 upload = request.FILES['file']
@@ -368,6 +370,8 @@ def upload_file(request, base=settings.DATA_PATH):
                 messages.success(request, "File uploaded as task " + str(task.id))
 
                 tasks.append(task)
+                source = 'upload'
+
             else:
                 files = form.cleaned_data['local_files']
                 if not files:
@@ -394,6 +398,7 @@ def upload_file(request, base=settings.DATA_PATH):
 
                     messages.success(request, f"Stacking {len(files)} images as task {task.id}")
                     tasks.append(task)
+                    source = 'stack'
 
                 else:
                     # Normal multi-image processing
@@ -424,9 +429,21 @@ def upload_file(request, base=settings.DATA_PATH):
                             fits.writeto(os.path.join(task.path(), 'image.fits'), image, header)
                             messages.success(request, f"Extension {ext} of {path} copied as task " + str(task.id))
 
+                        localpaths[task.id] = fullpath
+
                         tasks.append(task)
+                        source = 'local'
 
             for task in tasks:
+                log_details={
+                    'original_name': task.original_name,
+                    'access': 'web', 'source': source,
+                }
+                if source == 'local' and task.id in localpaths:
+                    log_details['original_path'] = localpaths.get(task.id)
+                if source == 'stack' and 'stack_filenames' in task.config:
+                    log_details['original_paths'] = task.config.get('stack_filenames')
+
                 # Apply config preset
                 if form.cleaned_data.get('preset'):
                     preset = models.Preset.objects.get(id=int(form.cleaned_data.get('preset')))
@@ -441,19 +458,29 @@ def upload_file(request, base=settings.DATA_PATH):
                             if len(tasks) == 1:
                                 messages.success(request, filename + " copied into the task")
 
+                    log_details['preset'] = preset.name
+
                 task.config['target'] = form.cleaned_data.get('target')
 
                 task.state = 'uploaded'
                 task.save()
 
+                # Log task creation
+                log_action('task_create', task=task, request=request, details=log_details)
+
                 # Initiate some processing steps
-                celery_tasks.run_task_steps(task, [
+                steps = [
                     'stack' if 'stack_filenames' in task.config else None,
                     'inspect' if form.cleaned_data.get('do_inspect') else None,
                     'photometry' if form.cleaned_data.get('do_photometry') else None,
                     'simple_transients' if form.cleaned_data.get('do_simple_transients') else None,
                     'subtraction' if form.cleaned_data.get('do_subtraction') else None,
-                ])
+                ]
+                steps = [s for s in steps if s]  # Filter out None values
+                celery_tasks.run_task_steps(task, steps)
+                if steps:
+                    log_action('processing_start', task=task, request=request,
+                               details={'steps': steps, 'access': 'web'})
 
             if len(tasks) > 1:
                 return HttpResponseRedirect(reverse('tasks'))
