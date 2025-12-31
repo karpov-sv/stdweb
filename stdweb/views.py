@@ -232,9 +232,24 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         else:
             width = figsize[0]
 
+    if zoom > 1:
+        x0,dx0 = data.shape[1]/2, data.shape[1]
+        y0,dy0 = data.shape[0]/2, data.shape[0]
+
+        x0 += float(request.GET.get('dx', 0)) * dx0/4
+        y0 += float(request.GET.get('dy', 0)) * dy0/4
+
+        xlim = [x0 - 0.5*dx0/zoom, x0 + 0.5*dx0/zoom]
+        ylim = [y0 - 0.5*dy0/zoom, y0 + 0.5*dy0/zoom]
+    else:
+        xlim = [0, data.shape[1]]
+        ylim = [0, data.shape[0]]
+
     if width is not None and figsize[0] != width:
         figsize[1] = width*figsize[1]/figsize[0]
         figsize[0] = width
+
+    print(figsize, width)
 
     fig = Figure(dpi=72, figsize=(figsize[0]/72, figsize[1]/72))
     if show_grid:
@@ -248,15 +263,18 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     fig.add_axes(ax)
 
-    plots.imshow(data, ax=ax, mask=mask,
-                 show_axis=True if show_grid else False,
-                 show_colorbar=True if show_grid else False,
-                 origin='lower',
-                 interpolation='nearest' if data.shape[1]/zoom < 0.5*width else 'bicubic',
-                 cmap=request.GET.get('cmap', 'Blues_r'),
-                 stretch=request.GET.get('stretch', 'linear'),
-                 qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))],
-                 r0=float(request.GET.get('r0', 0)))
+    plots.imshow(
+        data, ax=ax, mask=mask,
+        show_axis=True if show_grid else False,
+        show_colorbar=True if show_grid else False,
+        origin='lower',
+        interpolation='nearest' if data.shape[1]/zoom < 0.5*width else 'bicubic',
+        cmap=request.GET.get('cmap', 'Blues_r'),
+        stretch=request.GET.get('stretch', 'linear'),
+        qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))],
+        r0=float(request.GET.get('r0', 0)),
+        max_plot_size=1024, xlim=xlim, ylim=ylim, fast=True
+    )
 
     def get_wcs():
         # Special handling of external WCS solution in .wcs file alongside with image
@@ -312,18 +330,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
                 idx = (x > 0) & (x < data.shape[1]) & (y > 0) & (y < data.shape[0])
                 ax.plot(x[idx], y[idx], 'o', color='none', mec='brown', ms=10)
 
-    if zoom > 1:
-        x0,width = data.shape[1]/2, data.shape[1]
-        y0,height = data.shape[0]/2, data.shape[0]
-
-        x0 += float(request.GET.get('dx', 0)) * width/4
-        y0 += float(request.GET.get('dy', 0)) * height/4
-
-        ax.set_xlim(x0 - 0.5*width/zoom, x0 + 0.5*width/zoom)
-        ax.set_ylim(y0 - 0.5*height/zoom, y0 + 0.5*height/zoom)
-    else:
-        ax.set_xlim(0, data.shape[1])
-        ax.set_ylim(0, data.shape[0])
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
 
     buf = io.BytesIO()
     fig.savefig(buf, format=fmt, pil_kwargs={'quality':quality})
