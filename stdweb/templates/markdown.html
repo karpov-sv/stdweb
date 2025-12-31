@@ -1,0 +1,85 @@
+{% extends "template.html" %}
+
+{% block title %}{% endblock %}
+{% block ptitle %}{{ title }} - STDWeb{% endblock %}
+
+{% block head %}
+<style>
+  .markdown-body {
+   /* max-width: 900px; */
+  }
+  .markdown-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+  .markdown-body th, .markdown-body td {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+  }
+  .markdown-body th {
+    background-color: #f8f9fa;
+  }
+  .markdown-body code {
+    background-color: #f8f9fa;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 87.5%;
+  }
+  .markdown-body pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 5px;
+    overflow-x: auto;
+  }
+  .markdown-body pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+  .markdown-body h2, .markdown-body h3 {
+    margin-top: 1.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.3rem;
+  }
+  .markdown-body h1 {
+    margin-bottom: 1rem;
+  }
+  .markdown-body ul, .markdown-body ol {
+    padding-left: 2rem;
+  }
+  .markdown-body blockquote {
+    border-left: 4px solid #ddd;
+    padding-left: 1rem;
+    color: #666;
+    margin: 1rem 0;
+  }
+  /* Dark mode support */
+  @media (prefers-color-scheme: dark) {
+    .markdown-body th {
+      background-color: #2d3748;
+    }
+    .markdown-body th, .markdown-body td {
+      border-color: #4a5568;
+    }
+    .markdown-body code {
+      background-color: #2d3748;
+    }
+    .markdown-body pre {
+      background-color: #2d3748;
+    }
+    .markdown-body h2, .markdown-body h3 {
+      border-bottom-color: #4a5568;
+    }
+    .markdown-body blockquote {
+      border-left-color: #4a5568;
+      color: #a0aec0;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="markdown-body">
+  {{ content|safe }}
+</div>
+{% endblock %}

@@ -14,3 +14,13 @@ astropy
 reproject>0.17
 scikit-learn
 django-select2
+djangorestframework>=3.14
+django-filter>=23.0
+markdown>=3.4
+
+# Testing
+pytest>=7.0
+pytest-django>=4.5
+pytest-cov>=4.0
+pytest-mock>=3.10
+factory-boy>=3.3

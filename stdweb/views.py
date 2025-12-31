@@ -525,3 +525,55 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
     fig.savefig(buf, format=fmt, pil_kwargs={'quality':quality})
 
     return HttpResponse(buf.getvalue(), content_type='image/%s' % fmt)
+
+
+def view_markdown(request, path=''):
+    """Render a Markdown file as HTML."""
+    import markdown
+    from django.http import Http404
+
+    # Allowed root-level files (whitelist)
+    ALLOWED_FILES = ['README.md', 'REST_API.md', 'TASK_CONFIG.md', 'CLAUDE.md']
+
+    # Sanitize path
+    path = path.strip('/')
+
+    # Determine full path
+    base_path = settings.BASE_DIR
+
+    if path in ALLOWED_FILES:
+        fullpath = os.path.join(base_path, path)
+    elif path.startswith('doc/') and path.endswith('.md'):
+        # Allow any .md file in doc/ folder
+        fullpath = os.path.join(base_path, path)
+    elif path == '' or path == 'README.md':
+        # Default to README.md
+        path = 'README.md'
+        fullpath = os.path.join(base_path, path)
+    else:
+        raise Http404("File not found")
+
+    # Prevent path traversal
+    fullpath = os.path.normpath(fullpath)
+    if not fullpath.startswith(str(base_path)):
+        raise Http404("Invalid path")
+
+    if not os.path.exists(fullpath):
+        raise Http404("File not found")
+
+    # Read and convert markdown
+    with open(fullpath, 'r') as f:
+        content = f.read()
+
+    html_content = markdown.markdown(
+        content,
+        extensions=['tables', 'fenced_code', 'toc']
+    )
+
+    context = {
+        'content': html_content,
+        'title': os.path.splitext(os.path.basename(path))[0].replace('_', ' '),
+        'filename': path,
+    }
+
+    return TemplateResponse(request, 'markdown.html', context=context)

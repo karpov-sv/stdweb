@@ -28,6 +28,9 @@ from . import views_celery
 from . import views_skyportal
 
 urlpatterns = [
+    # REST API
+    path('api/', include('stdweb.api.urls')),
+
     # path('', views.index, name='index'),
     path('', views.upload_file, name='index'),
 
@@ -37,6 +40,10 @@ urlpatterns = [
     path('download/<path:path>', views.download, {'attachment': True}, name='download'),
     path('preview/<path:path>', views.preview, name='preview'),
     path('cutout/<path:path>', views.cutout, name='cutout'),
+
+    # Documentation
+    path('doc/', views.view_markdown, {'path': 'README.md'}, name='doc'),
+    path('doc/<path:path>', views.view_markdown, name='doc_file'),
 
     # Uploads
     path('upload/', views.upload_file, name='upload'),
