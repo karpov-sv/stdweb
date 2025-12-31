@@ -165,11 +165,11 @@ Queue processing steps for the task.
 ```
 
 **Available steps:**
+- `cleanup` - Remove intermediate files
 - `inspect` - Image inspection, WCS refinement, cosmic ray masking
 - `photometry` - Source extraction and photometric calibration
-- `transients` - Simple transient detection via catalog cross-matching
+- `simple_transients` - Simple transient detection via catalog cross-matching
 - `subtraction` - Template subtraction and candidate detection
-- `cleanup` - Remove intermediate files
 
 **Response:**
 ```json

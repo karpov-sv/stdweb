@@ -82,7 +82,7 @@ class TestTaskProcess:
         """Steps should be mapped to celery task names."""
         response = authenticated_client.post(
             f'/api/tasks/{task.id}/process/',
-            {'steps': ['transients']},
+            {'steps': ['simple_transients']},
             format='json'
         )
         assert response.status_code == status.HTTP_200_OK
