@@ -16,6 +16,34 @@ Features
 
 For details on the underlying routines, see the `STDPipe documentation <https://stdpipe.readthedocs.io/>`_ and `example notebooks <https://github.com/karpov-sv/stdpipe/tree/master/notebooks>`_.
 
+Supported Photometric Filters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- **Johnson-Cousins**: U, B, V, R, I
+- **Sloan/Pan-STARRS**: u, g, r, i, z, y
+- **Gaia**: G, BP, RP
+
+Reference Catalogs
+~~~~~~~~~~~~~~~~~~
+
+- Gaia DR3 synthetic photometry
+- Pan-STARRS DR1
+- SkyMapper DR4
+- SDSS DR16
+- ATLAS-REFCAT2
+- DES DR2
+
+Template Sources
+~~~~~~~~~~~~~~~~
+
+- Pan-STARRS DR2
+- Legacy Survey DR10
+- SkyMapper DR4
+- DES DR2
+- DECaPS DR2
+- ZTF DR7
+
+
 Citation
 --------
 
@@ -30,10 +58,11 @@ If you use STDWeb in your work, please cite:
    :caption: Contents:
 
    installation
-   workflow
    configuration
    architecture
    api
+   workflow
+   handbook
 
 Indices and tables
 ==================

@@ -92,33 +92,3 @@ Example Configuration
    STDPIPE_HOTPANTS = /usr/local/bin/hotpants
    STDPIPE_SOLVE_FIELD = /usr/local/astrometry/bin/solve-field
    STDPIPE_SOLVE_FIELD_CONFIG = /usr/local/astrometry/etc/astrometry.cfg
-
-Supported Systems
------------------
-
-Photometric Filters
-~~~~~~~~~~~~~~~~~~~
-
-- **Johnson-Cousins**: U, B, V, R, I
-- **Sloan/Pan-STARRS**: u, g, r, i, z, y
-- **Gaia**: G, BP, RP
-
-Reference Catalogs
-~~~~~~~~~~~~~~~~~~
-
-- Gaia DR3 synthetic photometry
-- Pan-STARRS DR1
-- SkyMapper DR4
-- SDSS DR16
-- ATLAS-REFCAT2
-- DES DR2
-
-Template Sources
-~~~~~~~~~~~~~~~~
-
-- Pan-STARRS DR2
-- Legacy Survey DR10
-- SkyMapper DR4
-- DES DR2
-- DECaPS DR2
-- ZTF DR7
