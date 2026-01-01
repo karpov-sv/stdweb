@@ -148,3 +148,9 @@
 .w-1 {
   width: 1em;
 }
+
+.toast-container > .toast {
+    max-width: 1200px;
+    min-width: 250px;
+    width: auto;
+}
