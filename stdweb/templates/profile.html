@@ -1,0 +1,145 @@
+{% extends "template.html" %}
+
+{% block title %}User Profile{% endblock %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-lg-8">
+
+      <!-- Account Information -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fa fa-user"></i> Account Information
+        </div>
+        <div class="card-body">
+          <table class="table table-borderless mb-0">
+            <tbody>
+              <tr>
+                <th scope="row" style="width: 200px;">Username</th>
+                <td>{{ user.username }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Email</th>
+                <td>{{ user.email|default:"Not set" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Date Joined</th>
+                <td>{{ user.date_joined|date:"F j, Y" }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Last Login</th>
+                <td>{{ user.last_login|date:"F j, Y, g:i a"|default:"Never" }}</td>
+              </tr>
+              {% if user.is_staff %}
+                <tr>
+                  <th scope="row">Staff Status</th>
+                  <td><span class="badge bg-primary">Staff</span></td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Password -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fa fa-lock"></i> Password
+        </div>
+        <div class="card-body">
+          <p class="mb-3">Change your account password.</p>
+          <a href="{% url 'password' %}" class="btn btn-outline-primary">
+            <i class="fa fa-key"></i> Change Password
+          </a>
+        </div>
+      </div>
+
+      <!-- API Token -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fa fa-code"></i> API Token
+        </div>
+        <div class="card-body">
+          <p class="text-muted mb-3">
+            Use this token to authenticate API requests. Include it in the <code>Authorization</code> header:
+          </p>
+          <pre class="bg-light p-2 rounded mb-3"><code>Authorization: Token {{ token.key }}</code></pre>
+
+          <div class="input-group mb-3">
+            <input type="text" class="form-control font-monospace" id="api-token" value="{{ token.key }}" readonly>
+            <button class="btn btn-outline-secondary" type="button" onclick="copyToken()" title="Copy to clipboard">
+              <i class="fa fa-copy"></i> Copy
+            </button>
+          </div>
+
+          <p class="text-muted small mb-3">
+            Token created: {{ token.created|date:"F j, Y, g:i a" }}
+          </p>
+
+          <form method="post" onsubmit="return confirm('Are you sure you want to regenerate your API token? This will invalidate your current token and any applications using it will need to be updated.');">
+            {% csrf_token %}
+            <button type="submit" name="regenerate_token" class="btn btn-warning">
+              <i class="fa fa-refresh"></i> Regenerate Token
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="col-lg-4">
+      <!-- Quick Links -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fa fa-link"></i> Quick Links
+        </div>
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item">
+            <a href="{% url 'tasks' %}"><i class="fa fa-tasks"></i> My Tasks</a>
+          </li>
+          <li class="list-group-item">
+            <a href="{% url 'doc_file' 'REST_API.md' %}"><i class="fa fa-book"></i> API Documentation</a>
+          </li>
+          {% if user.is_staff %}
+            <li class="list-group-item">
+              <a href="{% url 'admin:index' %}"><i class="fa fa-cog"></i> Admin Panel</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+
+      <!-- API Usage Example -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fa fa-terminal"></i> Quick Example
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">List your tasks:</p>
+          <pre class="bg-light p-2 rounded small"><code>curl -H "Authorization: Token {{ token.key }}" \
+            {{ request.scheme }}://{{ request.get_host }}/api/tasks/</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+   function copyToken() {
+     var tokenInput = document.getElementById('api-token');
+     tokenInput.select();
+     tokenInput.setSelectionRange(0, 99999);
+     navigator.clipboard.writeText(tokenInput.value);
+
+     // Show feedback
+     var btn = event.target.closest('button');
+     var originalHtml = btn.innerHTML;
+     btn.innerHTML = '<i class="fa fa-check"></i> Copied!';
+     btn.classList.remove('btn-outline-secondary');
+     btn.classList.add('btn-success');
+     setTimeout(function() {
+       btn.innerHTML = originalHtml;
+       btn.classList.remove('btn-success');
+       btn.classList.add('btn-outline-secondary');
+     }, 2000);
+   }
+  </script>
+{% endblock %}

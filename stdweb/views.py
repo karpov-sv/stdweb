@@ -26,6 +26,8 @@ from matplotlib.patches import Circle
 
 from stdpipe import cutouts, plots
 
+from rest_framework.authtoken.models import Token
+
 from . import forms
 from . import models
 from .action_logging import log_action
@@ -612,3 +614,22 @@ def view_markdown(request, path=''):
     }
 
     return TemplateResponse(request, 'markdown.html', context=context)
+
+
+@login_required
+def profile(request):
+    """User profile page with account info and API token management."""
+    token, created = Token.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        if 'regenerate_token' in request.POST:
+            token.delete()
+            token = Token.objects.create(user=request.user)
+            messages.success(request, 'API token regenerated successfully')
+            return HttpResponseRedirect(reverse('profile'))
+
+    context = {
+        'token': token,
+    }
+
+    return TemplateResponse(request, 'profile.html', context=context)
