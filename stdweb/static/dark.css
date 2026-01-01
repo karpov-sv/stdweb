@@ -29,6 +29,8 @@
     --bs-info-bg-subtle: #032830;
     --bs-warning-bg-subtle: #332701;
     --bs-danger-bg-subtle: #2c0b0e;
+    --bs-light: #2b3035;
+    --bs-light-rgb: 43,48,53;
     --bs-light-bg-subtle: #343a40;
     --bs-dark-bg-subtle: #1a1d20;
     --bs-primary-border-subtle: #084298;
