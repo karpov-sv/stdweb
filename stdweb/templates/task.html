@@ -649,9 +649,9 @@
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
                     {% if name in blink_list %}
-                      {% include "task_block_image.html" with image=name task=task cat=1 blink_group=blink_list files=files only %}
+                      {% include "task_block_image.html" with image=name task=task obj=1 cat=1 blink_group=blink_list files=files only %}
                     {% else %}
-                      {% include "task_block_image.html" with image=name task=task cat=1 only %}
+                      {% include "task_block_image.html" with image=name task=task obj=1 cat=1 only %}
                     {% endif %}
                   </div>
                 {% endif %}

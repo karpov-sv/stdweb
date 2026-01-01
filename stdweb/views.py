@@ -276,6 +276,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         stretch=request.GET.get('stretch', 'linear'),
         qq=[float(request.GET.get('qmin', 0.5)), float(request.GET.get('qmax', 99.5))],
         r0=float(request.GET.get('r0', 0)),
+        # Use fast (approximate) image display
         max_plot_size=1024, xlim=xlim, ylim=ylim, fast=True
     )
 
@@ -312,7 +313,12 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     if request.GET.get('obj'):
         # Overplot list of objects from the file
-        objname = os.path.join(os.path.dirname(fullpath), 'objects.vot')
+        if path.startswith('sub_'):
+             # Transient candidates
+            objname = 'candidates.vot'
+        else:
+            objname = 'objects.vot'
+        objname = os.path.join(os.path.dirname(fullpath), objname)
         if os.path.exists(objname):
             obj = Table.read(objname)
 
