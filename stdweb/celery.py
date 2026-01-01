@@ -19,8 +19,14 @@ app.conf.update(
     task_reject_on_worker_lost=True,
     # Store task state for chain tracking
     task_track_started=True,
+    #
+    worker_prefetch_multiplier=1,
+    broker_transport_options={
+        "visibility_timeout": 3600,
+    },
     # Use SIGTERM for graceful shutdown (allows cleanup handlers to run)
     worker_term_signal='SIGTERM',
+
 )
 
 # Load task modules from all registered Django apps.
