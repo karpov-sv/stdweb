@@ -182,6 +182,8 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
     cutout_names = []
 
+    hips = None
+
     for cand in candidates:
         cutout = cutouts.get_cutout(
             image.astype(np.double),
@@ -193,9 +195,13 @@ def transients_simple_image(filename, config, verbose=True, show=False):
             filtered=fimg if config.get('initial_r0') else None,
         )
 
+        if hips is None:
+            hips = guess_hips_survey(cand['ra'], cand['dec'], config['filter'])
+            log(f"Using {hips} for atlas images")
+
         # Cutout from relevant HiPS survey
         cutout['template'] = templates.get_hips_image(
-            guess_hips_survey(cand['ra'], cand['dec'], config['filter']),
+            hips,
             header=cutout['header'],
             get_header=False
         )

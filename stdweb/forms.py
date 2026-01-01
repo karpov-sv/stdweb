@@ -322,11 +322,11 @@ class TaskTransientsSimpleForm(forms.Form):
         self.helper.layout = Layout(
             'form_type',
             Row(
-                # Column('simple_vizier', css_class="col-md-4"),
-                Column('simple_others', css_class="col-md-5"),
                 Column('simple_center', css_class="col-md-4"),
                 Column('simple_sr0', css_class="col-md-1"),
                 Column('simple_mag_diff', css_class="col-md-2"),
+                # Column('simple_vizier', css_class="col-md-4"),
+                Column('simple_others', css_class="col-md-5"),
                 css_class='align-items-end'
             ),
             Row(
