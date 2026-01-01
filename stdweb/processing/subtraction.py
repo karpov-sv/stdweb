@@ -116,11 +116,30 @@ def subtract_image(filename, config, verbose=True, show=False):
 
     if subtraction_mode == 'detection':
         log('Transient detection mode activated')
+        # Restrict the splitting if center and radius are provided
+        if config.get('filter_center') and config.get('filter_sr0'):
+            # TODO: resolve the center only once
+            filter_center = resolve.resolve(config.get('filter_center'))
+            filter_sr0 = config.get('filter_sr0')
+            x0,y0 = wcs.all_world2pix(filter_center.ra.deg, filter_center.dec.deg, 0)
+            r0 = max(filter_sr0/pixscale, sub_size/2)
+            x1,x2 = max(0, x0 - r0), min(x0 + r0, image.shape[1])
+            y1,y2 = max(0, y0 - r0), min(y0 + r0, image.shape[0])
+            log(f"Will limit the search area to {x1:.0f} {y1:.0f} - {x2:.0f} {y2:.0f}")
+        else:
+            filter_center = None
+            filter_sr0 = None
+            x1,y1,x2,y2 = 0, 0, image.shape[1], image.shape[0]
+
         # We will split the image into nx x ny blocks
-        nx = max(1, int(np.round(image.shape[1] / sub_size)))
-        ny = max(1, int(np.round(image.shape[0] / sub_size)))
+        nx = max(1, int(np.round((x2 - x1) / sub_size)))
+        ny = max(1, int(np.round((y2 - y1) / sub_size)))
         log(f"Will split the image into {nx} x {ny} sub-images")
-        split_fn = partial(pipeline.split_image, get_index=True, overlap=sub_overlap, nx=nx, ny=ny)
+        split_fn = partial(
+            pipeline.split_image,
+            get_index=True, overlap=sub_overlap, nx=nx, ny=ny,
+            xmin=x1, xmax=x2, ymin=y1, ymax=y2
+        )
 
     elif config.get('target_ra') is not None:
         log('Forced photometry mode activated')
@@ -580,13 +599,10 @@ def subtract_image(filename, config, verbose=True, show=False):
             log(f"{len(sobj)} transient candidates found in difference image")
 
             # Restrict to the cone if center and radius are provided
-            if config.get('filter_center') and config.get('filter_sr0'):
-                # TODO: resolve the center only once
-                center = resolve.resolve(config.get('filter_center'))
-                sr0 = config.get('filter_sr0')
-                log(f"Restricting the search to {sr0:.3f} deg around RA={center.ra.deg:.4f} Dec={center.dec.deg:.4f}")
-                dist = astrometry.spherical_distance(sobj['ra'], sobj['dec'], center.ra.deg, center.dec.deg)
-                sobj = sobj[dist < sr0]
+            if filter_center is not None and filter_sr0 is not None:
+                log(f"Restricting the search to {filter_sr0:.3f} deg around RA={filter_center.ra.deg:.4f} Dec={filter_center.dec.deg:.4f}")
+                dist = astrometry.spherical_distance(sobj['ra'], sobj['dec'], filter_center.ra.deg, filter_center.dec.deg)
+                sobj = sobj[dist < filter_sr0]
                 log(f"{len(sobj)} candidates inside the region")
 
             # Pre-filter detections if requested
