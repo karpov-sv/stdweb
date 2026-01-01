@@ -124,17 +124,24 @@
       </div>
     </nav>
 
+    {% if messages %}
+      <!-- Toast container -->
+      <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;">
+        {% for message in messages %}
+          <div class="toast align-items-center border-0 {% if message.tags == 'error' %}text-bg-danger{% elif message.tags == 'warning' %}text-bg-warning{% elif message.tags == 'success' %}text-bg-success{% else %}text-bg-info{% endif %}" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-animation="true" data-bs-delay="{{ 5|add:forloop.counter }}000">
+            <div class="d-flex">
+              <div class="toast-body">
+                {{ message|safe }}
+              </div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
     <!-- Main content -->
     <div class="container">
-
-      {% if messages %}
-          {% for message in messages %}
-            <div class="alert alert-dismissible {% if message.tags %} alert-{{ message.tags }}{% endif %}" role="alert">
-              {{ message|safe }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          {% endfor %}
-      {% endif %}
 
       {% block title_div %}
         <h1 class="mb-4">{% block title %}{% endblock %}</h1>
@@ -144,5 +151,19 @@
 
     </div>
     <!-- /.container -->
+
+    {% if messages %}
+      <!-- Initialize and show toasts -->
+      <script>
+       document.addEventListener('DOMContentLoaded', function() {
+         var toastElList = [].slice.call(document.querySelectorAll('.toast'));
+         var toastList = toastElList.map(function(toastEl) {
+           var toast = new bootstrap.Toast(toastEl);
+           toast.show();
+           return toast;
+         });
+       });
+      </script>
+    {% endif %}
   </body>
 </html>
