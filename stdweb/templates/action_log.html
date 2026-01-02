@@ -1,0 +1,98 @@
+{% extends "template.html" %}
+
+{% block title %}Action Log{% endblock %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col">
+      <p class="text-muted">
+        Showing the 20 most recent user actions. For full log access and filtering, visit the
+        <a href="{% url 'admin:stdweb_actionlog_changelist' %}" class="alert-link">Admin Panel</a>.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <!-- <div class="card-header">
+    <i class="fa fa-history"></i> Recent Actions
+    </div> -->
+    <div class="card-body p-0">
+      {% if logs %}
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 200px;">Timestamp</th>
+                <th style="width: 120px;">User</th>
+                <th style="width: 180px;">Action</th>
+                <th style="width: 100px;">Task ID</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in logs %}
+                <tr>
+                  <td>
+                    <div>{{ log.timestamp }}</div>
+                    <small class="text-muted">{{ log.natural_time }}</small>
+                  </td>
+                  <td>{{ log.user|default:"—" }}</td>
+                  <td>
+                    <span class="badge
+                          {% if 'Created' in log.action %}bg-success
+                          {% elif 'Started' in log.action %}bg-info
+                          {% elif 'Deleted' in log.action or 'Failed' in log.action %}bg-danger
+                          {% elif 'Cancelled' in log.action %}bg-warning
+                          {% elif 'Completed' in log.action %}bg-success
+                          {% else %}bg-secondary
+                          {% endif %}">
+                          {{ log.action }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if log.task_id_ref %}
+                      <a href="{% url 'tasks' log.task_id_ref %}"
+                         title="{{ log.original_name }}">
+                        {{ log.task_id_ref }}
+                      </a>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if log.details %}
+                      <details>
+                        <summary class="text-muted" style="cursor: pointer;">
+                          <small>Show details</small>
+                        </summary>
+                        <pre class="bg-light p-2 rounded mt-2 mb-0" style="font-size: 0.85em;">{{ log.details }}</pre>
+                      </details>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-4 text-center text-muted">
+          <i class="fa fa-inbox fa-3x mb-3"></i>
+          <p>No action log entries found.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row mt-4">
+    <div class="col">
+      <p class="text-muted small">
+        <i class="fa fa-info-circle"></i>
+        This is a read-only view limited to recent entries.
+        For comprehensive log management, date filtering, and search capabilities,
+        please use the <a href="{% url 'admin:stdweb_actionlog_changelist' %}">Admin Panel</a>.
+      </p>
+    </div>
+  </div>
+{% endblock %}

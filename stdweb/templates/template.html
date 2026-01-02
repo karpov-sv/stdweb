@@ -95,6 +95,12 @@
 
                   {% if user.is_staff %}
                     <li>
+                      <a class="dropdown-item" href="{% url 'action_log' %}">Action Log</a>
+                    </li>
+                  {% endif %}
+
+                  {% if user.is_staff %}
+                    <li>
                       <a class="dropdown-item" href="{% url 'admin:index' %}">Admin Panel</a>
                     </li>
                   {% endif %}

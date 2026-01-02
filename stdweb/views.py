@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 
 import os, io
 import shutil
@@ -646,3 +647,36 @@ def profile(request):
     }
 
     return TemplateResponse(request, 'profile.html', context=context)
+
+
+@staff_member_required
+def action_log(request, length=20):
+    """Simple read-only view of recent action log entries (staff only)."""
+    import json
+    import humanize
+
+    # Get latest 20 entries
+    logs = models.ActionLog.objects.order_by('-timestamp')[:length]
+
+    # Format the logs for display
+    formatted_logs = []
+    for log in logs:
+        formatted_details = None
+        if log.details:
+            formatted_details = json.dumps(log.details, indent=2, ensure_ascii=False)
+
+        formatted_logs.append({
+            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'natural_time': humanize.naturaltime(log.timestamp),
+            'user': log.user,
+            'action': log.get_action_display(),
+            'task_id_ref': log.task_id_ref,
+            'original_name': log.task.original_name,
+            'details': formatted_details,
+        })
+
+    context = {
+        'logs': formatted_logs,
+    }
+
+    return TemplateResponse(request, 'action_log.html', context=context)

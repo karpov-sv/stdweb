@@ -77,6 +77,9 @@ urlpatterns = [
     path('password/done/', auth_views.PasswordChangeDoneView.as_view(), name='password_change_done'),
     path('profile/', views.profile, name='profile'),
 
+    # Action Log (staff only)
+    path('log/', views.action_log, name='action_log'),
+
     # robots.txt
     path('robots.txt', lambda _: HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")),
 
