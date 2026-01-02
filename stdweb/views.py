@@ -259,8 +259,6 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         figsize[1] = width*figsize[1]/figsize[0]
         figsize[0] = width
 
-    print(figsize, width)
-
     fig = Figure(dpi=72, figsize=(figsize[0]/72, figsize[1]/72))
     if show_grid:
         dx = 40/figsize[0]
