@@ -59,13 +59,15 @@
                       —
                     {% endif %}
                   </td>
-                  <td>
+                  <td style="max-width: 400px;">
                     {% if log.details %}
                       <details>
                         <summary class="text-muted" style="cursor: pointer;">
                           <small>Show details</small>
                         </summary>
-                        <pre class="bg-light p-2 rounded mt-2 mb-0" style="font-size: 0.85em;">{{ log.details }}</pre>
+                        <div style="max-width: 100%; overflow-x: auto;">
+                          <pre class="bg-light p-2 rounded mt-2 mb-0" style="font-size: 0.85em; margin: 0;">{{ log.details }}</pre>
+                        </div>
                       </details>
                     {% else %}
                       —
