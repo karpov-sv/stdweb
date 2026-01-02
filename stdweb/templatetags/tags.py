@@ -77,22 +77,7 @@ def task_file_table(task, filename):
     try:
         table = Table.read(path)
 
-        for col in table.itercols():
-            if col.info.dtype.kind == 'f':
-                if col.name in ['ra', 'dec', 'RAJ2000', 'DEJ2000']:
-                    col.info.format = '.5f'
-                elif col.name in ['x', 'y']:
-                    col.info.format = '.2f'
-                else:
-                    col.info.format = '.4g'
-            elif col.name in ['flags']:
-                col.info.format = '#x'
-
-        contents = "\n".join(table.pformat_all(
-            html=True,
-            tableclass="table table-sm table-bordered text-center",
-            tableid='table_targets',
-        ))
+        contents = filters.show_table(table)
     except:
         pass
 

@@ -136,6 +136,13 @@
         </div>
       </div>
 
+    {% elif mode == 'table' %}
+      <!-- Display table -->
+
+      <!-- <div class="overflow-auto mb-2"> -->
+        <pre style="white-space: pre-wrap;">{{ table|show_table }}</pre>
+        <!-- </div> -->
+
     {% elif mode == 'image' %}
       <!-- Display image inline -->
 

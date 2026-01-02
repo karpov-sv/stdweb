@@ -130,7 +130,6 @@ from astropy.table import Table
 
 @register.filter
 def show_table(table):
-    # FIXME: it repeats the code from tags.py, should be merged together!
     contents = ""
 
     # Ensure it is a Table

@@ -93,7 +93,14 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
         context['mode'] = 'download'
 
-        if 'text' in context['mime']:
+        if context['mime'] == 'text/xml' and '.vot' in path:
+            try:
+                context['table'] = Table.read(fullpath)
+                context['mode'] = 'table'
+            except:
+                pass
+
+        elif 'text' in context['mime']:
             try:
                 with open(fullpath, 'r') as f:
                     context['contents'] = f.read()
