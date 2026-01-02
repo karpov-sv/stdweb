@@ -376,13 +376,13 @@ class TaskSubtractionForm(forms.Form):
                 # Column('file'),
                 Column('sub_size', css_class="col-md-2"),
                 Column('sub_overlap', css_class="col-md-2"),
-                Column('subtraction_method', css_class="col-md-2"),
+                Column('subtraction_method', css_class="col-md-2 d-none"),
+                Column('template_fwhm_override'),
                 Column('hotpants_extra', id='hotpants_extra_col'),
                 css_class='align-items-end'
             ),
             Row(
                 Column('custom_template'),
-                Column('template_fwhm_override'),
                 Column('custom_template_gain'),
                 Column('custom_template_saturation'),
                 css_class='align-items-end',
