@@ -2,6 +2,7 @@ from django.contrib import admin
 from django import forms
 from django.utils.safestring import mark_safe
 import json
+import humanize
 
 from .models import Task
 from .models import Preset
@@ -43,8 +44,8 @@ class ActionLogAdmin(admin.ModelAdmin):
     list_display = ['admin_timestamp', 'user', 'action', 'task_id_ref']
     list_filter = ['action', 'user', 'timestamp']
     search_fields = ['user__username', 'task_id_ref']
-    readonly_fields = ['timestamp', 'user', 'action', 'task', 'task_id_ref', 'admin_details', 'ip_address']
-    exclude = ['details']
+    readonly_fields = ['admin_timestamp', 'user', 'action', 'task', 'task_id_ref', 'admin_details', 'ip_address']
+    exclude = ['timestamp', 'details']
     date_hierarchy = 'timestamp'
 
     def has_add_permission(self, request):
@@ -56,9 +57,9 @@ class ActionLogAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser  # Only superusers can delete logs
 
-    @admin.display(description='Timestamp')
+    @admin.display(description='Timestamp, UTC')
     def admin_timestamp(self, obj):
-        return obj.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        return obj.timestamp.strftime('%Y-%m-%d %H:%M:%S - ' + humanize.naturaltime(obj.timestamp))
 
     @admin.display(description='Details')
     def admin_details(self, obj):
