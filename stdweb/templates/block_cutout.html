@@ -1,15 +1,26 @@
 {% if not cutout %}
 
   <div class="text-center">
+    {% if is_task_browser %}
+    <img src="{% url 'task_cutout' id=task_id path=path %}" class="img-fluid stdview-image"
+         data-stretch
+         {% if ra or dec %}
+         data-mark-ra={{ ra }} data-mark-dec={{ dec }}
+         {% endif %}
+         alt="{{ path }}"/>
+    {% else %}
     <img src="{% url 'cutout' path=path %}" class="img-fluid stdview-image"
          data-stretch
          {% if ra or dec %}
          data-mark-ra={{ ra }} data-mark-dec={{ dec }}
          {% endif %}
          alt="{{ path }}"/>
+    {% endif %}
   </div>
 
 {% else %}
+
+  <h2>Cutout data</h2>
 
   <!-- Metadata -->
   <ul>
@@ -33,8 +44,8 @@
     <h5 class="card-header pt-2 pb-2" data-bs-toggle="collapse" data-bs-target="#collapseMeta"
         aria-expanded="false"
         aria-controls="collapseMeta">
+      <i class="fa fa-list"></i>
       Full Metadata
-      <span class="float-right"><i class="fa fa-list"></i> </span>
     </h5>
 
     <div class="collapse" id="collapseMeta">
@@ -61,10 +72,17 @@
             {{ hdu.name }}
           </h6>
 
+          {% if is_task_browser %}
+          <img src="{% url 'task_preview' id=task_id path=path %}?ext={{ forloop.counter0 }}"
+               class="card-img img-fluid stdview-image"
+               data-stretch data-mark-ra={{ cutout.meta.ra }} data-mark-dec={{ cutout.meta.dec }}
+               alt="{{ hdu.name }}"/>
+          {% else %}
           <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"
                class="card-img img-fluid stdview-image"
                data-stretch data-mark-ra={{ cutout.meta.ra }} data-mark-dec={{ cutout.meta.dec }}
                alt="{{ hdu.name }}"/>
+          {% endif %}
 
         </div>
       </div>

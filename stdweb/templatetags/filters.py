@@ -129,13 +129,16 @@ def list_extract(value, key):
 from astropy.table import Table
 
 @register.filter
-def show_table(table):
+def show_table(table, maxrows=100):
     contents = ""
 
     # Ensure it is a Table
     table = Table(table)
 
     try:
+        if len(table) > maxrows:
+            table = table[:maxrows]
+
         for col in table.itercols():
             if col.info.dtype.kind == 'f':
                 if col.name in ['ra', 'dec', 'RAJ2000', 'DEJ2000']:

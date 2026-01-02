@@ -161,13 +161,16 @@
     </div>
     {% endif %}
     <div>
+      <a href="{% url 'task_files' id=task.id %}" class="text-decoration-none text-body" title="Browse task files">
+        <i class="fa fa-folder-open"></i>
+      </a>
       Task {{ task.id }} created by <span class="text-primary fw-bold">{{ task.user|user }}</span> on {{ task.created|timestamp }} - {{ task.created|naturaltime }}
       {% if not user_may_submit %}
         <br>
         <span class="text-danger fw-bold">Task is read-only</span>
       {% endif %}
     </div>
-    <div class="mb-4 {% if task.celery_id %}sticky-top bg-body border-bottom pb-2{% endif %}">
+    <div class="mb-2 {% if task.celery_id %}sticky-top bg-body border-bottom pb-2{% endif %}">
       State:
       {% if task.celery_id %}
         <span class="spinner-border spinner-border-sm text-primary" role="status"></span>

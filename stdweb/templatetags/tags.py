@@ -21,7 +21,7 @@ register = template.Library()
 
 def task_file_link(m, task=None):
     name = m.group(2)
-    url = reverse('task_view', kwargs={'id':task.id, 'path':name})
+    url = reverse('task_files', kwargs={'id':task.id, 'path':name})
 
     return r"<a href='" + url + "'>" + name + r"</a>"
 

@@ -1,4 +1,4 @@
-from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse, HttpResponseForbidden
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.db.models import Q
@@ -409,6 +409,27 @@ def task_cutout(request, id=None, path='', **kwargs):
     task = get_object_or_404(models.Task, id=id)
 
     return views.cutout(request, path, base=task.path(), **kwargs)
+
+
+@login_required
+def task_files(request, id, path=''):
+    """Browse files within a task folder using the generic file browser."""
+    task = get_object_or_404(models.Task, id=id)
+
+    # Permission check: owner or user with view_all_tasks permission
+    if task.user != request.user and not request.user.has_perm('stdweb.view_all_tasks'):
+        return HttpResponseForbidden("You don't have permission to view this task")
+
+    # Call generic list_files with task base path
+    response = views.list_files(request, path=path, base=task.path())
+
+    # Customize context for task-specific rendering
+    context = response.context_data
+    context['task'] = task
+    context['task_id'] = id
+    context['is_task_browser'] = True
+
+    return response
 
 
 def handle_task_mask_creation(

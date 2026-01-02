@@ -53,10 +53,20 @@
     <!-- Display breadcrumb with clickable path elements -->
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb">
+        {% if is_task_browser %}
+          <li class="breadcrumb-item">
+            <a href="{% url 'tasks' id=task_id %}">Task {{ task_id }}</a>
+          </li>
+        {% endif %}
+
         {% for bread in breadcrumb %}
           <li class="breadcrumb-item">
             {% if bread.path %}
-              <a href="{% url 'files' path=bread.path %}">{{ bread.name }}</a>
+              {% if is_task_browser %}
+                <a href="{% url 'task_files' id=task_id path=bread.path %}">{{ bread.name }}</a>
+              {% else %}
+                <a href="{% url 'files' path=bread.path %}">{{ bread.name }}</a>
+              {% endif %}
             {% else %}
               {{ bread.name }}
             {% endif %}
@@ -76,19 +86,23 @@
       {{ files|length }} entries
       </p> -->
 
+      {% if not is_task_browser %}
       <form method='POST' action="{% url 'upload' %}">
+      {% endif %}
 
       <div class="list-group mb-4">
 
         <div class="list-group-item d-flex bg-light">
-          <input class="form-check-input" type="checkbox" name="select_all" title="Select all"/>
+          {% if not is_task_browser %}
+            <input class="form-check-input" type="checkbox" name="select_all" title="Select all"/>
+          {% endif %}
           <span class="ms-auto me-auto"><strong>Filename</strong></span>
           <span class="pull-right me-4"><strong>Size</strong></span>
         </div>
 
         {% for file in files %}
           <div class="list-group-item">
-            {% if file.type == 'fits' %}
+            {% if file.type == 'fits' and not is_task_browser %}
               <input class="form-check-input" type="checkbox" name="local_files" value="{{ file.path }}"/>
             {% else %}
               <span class="w-1 d-inline-block"></span>
@@ -96,9 +110,15 @@
 
             <i class="ms-2 me-2 fa fa-{% if file.type == 'dir' %}folder-open-o{% elif file.type == 'up' %}level-up{% elif file.type == 'text' %}file-text-o{% elif file.type == 'file' %}file-o{% else %}file-image-o{% endif %}"></i>
 
-            <a href='{% url 'files' path=file.path %}' class="text-decoration-none text-body">
-              {{ file.name }}
-            </a>
+            {% if is_task_browser %}
+              <a href='{% url 'task_files' id=task_id path=file.path %}' class="text-decoration-none text-body">
+                {{ file.name }}
+              </a>
+            {% else %}
+              <a href='{% url 'files' path=file.path %}' class="text-decoration-none text-body">
+                {{ file.name }}
+              </a>
+            {% endif %}
 
             {% if file.type != 'dir' and file.type != 'up' %}
               <span class="pull-right">{{ file.size|naturalsize }}</span>
@@ -109,19 +129,27 @@
 
       </div>
 
+      {% if not is_task_browser %}
       <div id='actions_menu'>
         <h3>Process selected files</h3>
         {% crispy form %}
       </div>
 
       </form>
+      {% endif %}
 
     {% endif %}
 
   {% else %}
     <!-- Display single file - starts with some metadata -->
     <ul>
-      <li>Path: <b><a href="{% url 'download' path=path %}"><i class="fa fa-download"></i> {{ path }}</a></b></li>
+      <li>Path: <b>
+        {% if is_task_browser %}
+          <a href="{% url 'task_download' id=task_id path=path %}"><i class="fa fa-download"></i> {{ path }}</a>
+        {% else %}
+          <a href="{% url 'download' path=path %}"><i class="fa fa-download"></i> {{ path }}</a>
+        {% endif %}
+      </b></li>
       <li>Size: <b>{{ stat.st_size }}</b> bytes / {{ stat.st_size|naturalsize }}</li>
       <li>Last modified: <b>{{ time.iso }}</b></li>
       <li><b>{{ mime }}</b> : {{ magic_info }}</li>
@@ -139,25 +167,41 @@
     {% elif mode == 'table' %}
       <!-- Display table -->
 
+      <h2>
+        Tabular data with {{ table|length }} row(s)
+      </h2>
+
+      {% if table|length > 100 %}
+        <p class="text-muted">
+          First 100 rows are shown below
+        </p>
+      {% endif %}
+
       <!-- <div class="overflow-auto mb-2"> -->
-        <pre style="white-space: pre-wrap;">{{ table|show_table }}</pre>
-        <!-- </div> -->
+      <pre style="white-space: pre-wrap;">{{ table|show_table:100 }}</pre>
+      <!-- </div> -->
 
     {% elif mode == 'image' %}
       <!-- Display image inline -->
 
       <div class="text-center mb-2">
-        <img src="{% url 'view' path=path %}" class="img-fluid img-thumbnail" alt="{{ path }}"/>
+        {% if is_task_browser %}
+          <img src="{% url 'task_view' id=task_id path=path %}" class="img-fluid img-thumbnail" alt="{{ path }}"/>
+        {% else %}
+          <img src="{% url 'view' path=path %}" class="img-fluid img-thumbnail" alt="{{ path }}"/>
+        {% endif %}
       </div>
 
     {% elif mode == 'fits' %}
       <!-- Display FITS inline -->
 
       <div class="mb-4">
-        <!-- File upload form -->
-        <form method='POST' action="{% url 'upload' %}">
+        {% if not is_task_browser %}
+          <!-- File upload form -->
+          <form method='POST' action="{% url 'upload' %}">
 
           {% crispy form %}
+        {% endif %}
 
           {% for hdu in fitsfile %}
             <div class="mt-4">
@@ -167,8 +211,8 @@
                     data-bs-toggle="collapse" data-bs-target="#collapseHeader{{ forloop.counter0 }}"
                     aria-expanded="false"
                     aria-controls="collapseHeader{{ forloop.counter0 }}">
+                  <i class="fa fa-list"></i>
                   {{ hdu.name }}
-                  <span class="float-right"><i class="fa fa-list"></i> </span>
                 </h5>
 
                 <div class="collapse {% if hdu.data is none %}show{% endif %}" id="collapseHeader{{ forloop.counter0 }}">
@@ -179,28 +223,39 @@
               </div>
 
               {% if hdu.data is not none %}
-                {% if fitsfile|length > 1 %}
+                {% if fitsfile|length > 1 and not is_task_browser %}
                   <button class="btn btn-warning mt-2 mb-2" type="submit" name="ext" value="{{ forloop.counter0 }}">Process this extension</button>
                 {% endif %}
                 <div class="text-center">
-                  <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"
-                       class="img-fluid img-thumbnail stdview-image"
-                       data-stretch
-                       data-grid
-                       data-zoom
-                       alt="{{ path }}"/>
+                  {% if is_task_browser %}
+                    <img src="{% url 'task_preview' id=task_id path=path %}?ext={{ forloop.counter0 }}"
+                         class="img-fluid img-thumbnail stdview-image"
+                         data-stretch
+                         data-grid
+                         data-zoom
+                         alt="{{ path }}"/>
+                  {% else %}
+                    <img src="{% url 'preview' path=path %}?ext={{ forloop.counter0 }}"
+                         class="img-fluid img-thumbnail stdview-image"
+                         data-stretch
+                         data-grid
+                         data-zoom
+                         alt="{{ path }}"/>
+                  {% endif %}
                 </div>
               {% endif %}
 
             </div>
           {% endfor %}
 
+        {% if not is_task_browser %}
         </form>
+        {% endif %}
       </div>
 
     {% elif mode == 'cutout' %}
 
-      {% include 'block_cutout.html' with path=path cutout=cutout fitsfile=fitsfile only %}
+      {% include 'block_cutout.html' with path=path cutout=cutout fitsfile=fitsfile %}
 
     {% else %}
       <p>

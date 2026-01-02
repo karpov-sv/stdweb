@@ -53,6 +53,9 @@ urlpatterns = [
     path('tasks/actions', views_tasks.tasks_actions, name='tasks_actions'),
     path('tasks/<int:id>', views_tasks.tasks, name='tasks'),
 
+    path('tasks/<int:id>/files/', views_tasks.task_files, {'path': ''}, name='task_files'),
+    path('tasks/<int:id>/files/<path:path>', views_tasks.task_files, name='task_files'),
+
     path('tasks/<int:id>/preview/<path:path>', views_tasks.task_preview, name='task_preview'),
     path('tasks/<int:id>/view/<path:path>', views_tasks.task_download, {'attachment': False}, name='task_view'),
     path('tasks/<int:id>/download/<path:path>', views_tasks.task_download, {'attachment': True}, name='task_download'),
