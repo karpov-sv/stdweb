@@ -211,6 +211,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     # Custom mask, if relevant
     if path in ['image.fits'] and os.path.exists(os.path.join(base, 'custom_mask.fits')):
         mask = fits.getdata(os.path.join(base, 'custom_mask.fits'), -1) > 0
+    if path in ['custom_template.fits'] and os.path.exists(os.path.join(base, 'custom_template_mask.fits')):
+        mask = fits.getdata(os.path.join(base, 'custom_template_mask.fits'), -1) > 0
     else:
         mask = None
 
