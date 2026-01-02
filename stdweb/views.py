@@ -101,14 +101,6 @@ def list_files(request, path='', base=settings.DATA_PATH):
             except:
                 pass
 
-        elif 'text' in context['mime']:
-            try:
-                with open(fullpath, 'r') as f:
-                    context['contents'] = f.read()
-                context['mode'] = 'text'
-            except:
-                pass
-
         elif 'fits' in context['mime'] or 'FITS' in context['magic_info'] or os.path.splitext(path)[1].lower().startswith('.fit') or path.endswith('.fits.gz'):
             context['mode'] = 'fits'
 
@@ -131,6 +123,14 @@ def list_files(request, path='', base=settings.DATA_PATH):
             except:
                 import traceback
                 traceback.print_exc()
+                pass
+
+        elif 'text' in context['mime']:
+            try:
+                with open(fullpath, 'r') as f:
+                    context['contents'] = f.read()
+                context['mode'] = 'text'
+            except:
                 pass
 
         elif 'image' in context['mime']:
