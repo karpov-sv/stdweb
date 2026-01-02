@@ -18,6 +18,11 @@
    // Build list of all image URLs
    var allUrls = [url].concat(extraImages);
 
+   // Extract base URLs (without parameters) for blinking
+   var baseUrls = allUrls.map(function(u) {
+     return u.split('?')[0];
+   });
+
    // Extract image names from URLs
    var allNames = allUrls.map(function(u) {
      var path = u.split('?')[0];
@@ -26,53 +31,37 @@
    var baseTitle = title;
    var currentIndex = 0;
 
-   // Create all images with same class and attributes
-   allUrls.forEach(function(imgUrl, index) {
-     var params = {
-       class: "img-fluid center-block popup-blink-image " + extraClass,
-       src: imgUrl,
-       'data-blink-index': index
-     };
+   // Create only ONE image (with the first URL including any initial parameters)
+   var params = {
+     class: "img-fluid center-block popup-blink-image " + extraClass,
+     src: allUrls[0]
+   };
 
-     if(extraKwargs){
-       params = Object.assign({}, params, extraKwargs);
-     }
+   if(extraKwargs){
+     params = Object.assign({}, params, extraKwargs);
+   }
 
-     var img = $("<img/>", params);
-
-     // Hide all except first
-     if(index > 0) {
-       img.hide();
-     }
-
-     img.appendTo(body);
-   });
+   var img = $("<img/>", params);
+   img.appendTo(body);
 
    // Navigation helper
    function showImage(index) {
-     var images = dialog.find('.popup-blink-image');
-     var currentImg = images.filter(':visible');
-     var nextImg = images.filter('[data-blink-index="' + index + '"]');
+     var img = dialog.find('.popup-blink-image');
+     var currentSrc = img.attr('src');
 
-     // Copy URL parameters from current to next image
-     if(currentImg.length > 0 && nextImg.length > 0) {
-       var currentSrc = currentImg.attr('src');
-       var nextSrc = nextImg.attr('src');
+     // Extract current URL parameters
+     var currentParams = currentSrc.split('?')[1] || '';
 
-       // Extract query string from current image
-       var currentParams = currentSrc.split('?')[1] || '';
-       // Get base path of next image
-       var nextBase = nextSrc.split('?')[0];
-
-       // Apply current params to next image
-       if(currentParams) {
-         nextImg.attr('src', nextBase + '?' + currentParams);
-       }
+     // Build new URL with new base + current parameters
+     var newSrc = baseUrls[index];
+     if(currentParams) {
+       newSrc = newSrc + '?' + currentParams;
      }
 
+     // Update image src (overlay controls remain bound to same element)
+     img.attr('src', newSrc);
+
      currentIndex = index;
-     images.hide();
-     nextImg.show();
 
      // Update title
      if(allUrls.length > 1) {

@@ -27,7 +27,7 @@ overlay_stdview_images = function() {
 
             /* Now scaling part */
             var scale = $('<select/>');
-            var scvals = [90, 95, 99, 99.5, 99.9, 99.995, 100];
+            var scvals = [90, 95, 99, 99.5, 99.9, 99.95, 99.995, 100];
 
             scale.append($('<option disabled selected>').html('Scale'));
 
