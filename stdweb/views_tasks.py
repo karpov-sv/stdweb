@@ -96,6 +96,10 @@ def tasks(request, id=None):
 
                     task.save()
 
+                # Special handling for in-form buttons
+                if request.POST.get('action_custom_mask'):
+                    return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id, 'mode': 'template'}))
+
                 # Handle actions
                 action = request.POST.get('action')
 
@@ -128,7 +132,12 @@ def tasks(request, id=None):
                     except OSError:
                         pass
 
-                    for name in ['image.fits', 'image.wcs', 'custom_mask.fits', 'custom_mask.json', 'custom_template.fits']:
+                    for name in [
+                            'image.fits', 'image.wcs',
+                            'custom_mask.fits', 'custom_mask.json',
+                            'custom_template.fits',
+                            'custom_template_mask.fits', 'custom_template_mask.json'
+                    ]:
                         if os.path.exists(os.path.join(old_path, name)):
                             shutil.copyfile(os.path.join(old_path, name), os.path.join(task.path(), name))
 
@@ -180,7 +189,7 @@ def tasks(request, id=None):
                         messages.success(request, f"Config for task {str(id)} unchanged")
 
                 if action == 'make_custom_mask':
-                    return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id}))
+                    return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id, 'mode': 'image'}))
 
                 if action in [
                         'cleanup_task', 'archive_task',
@@ -402,18 +411,42 @@ def task_cutout(request, id=None, path='', **kwargs):
     return views.cutout(request, path, base=task.path(), **kwargs)
 
 
-def handle_task_mask_creation(task, width, height, areas, inverted=False):
-    if not areas:
-        if os.path.exists(os.path.join(task.path(), 'custom_mask.fits')):
-            os.unlink(os.path.join(task.path(), 'custom_mask.fits'))
+def handle_task_mask_creation(
+        task, width, height, areas, inverted=False,
+        image_file='image.fits',
+        mask_file='custom_mask.fits',
+        json_file='custom_mask.json'
+):
+    """
+    Create binary FITS mask from rectangular areas.
 
-        if os.path.exists(os.path.join(task.path(), 'custom_mask.json')):
-            os.unlink(os.path.join(task.path(), 'custom_mask.json'))
+    Args:
+        task: Task object
+        width: Display width in pixels
+        height: Display height in pixels
+        areas: List of rectangular area dictionaries
+        inverted: If True, mask everything except selected areas
+        image_file: Source FITS file to get dimensions from
+        mask_file: Output FITS mask filename
+        json_file: Output JSON metadata filename
+
+    Returns:
+        True if mask created, False if no areas (mask deleted)
+    """
+    basepath = task.path()
+
+    if not areas:
+        # Delete existing mask files if no areas selected
+        if os.path.exists(os.path.join(basepath, mask_file)):
+            os.unlink(os.path.join(basepath, mask_file))
+
+        if os.path.exists(os.path.join(basepath, json_file)):
+            os.unlink(os.path.join(basepath, json_file))
 
         return False
 
-    if os.path.exists(os.path.join(task.path(), 'image.fits')):
-        header = fits.getheader(os.path.join(task.path(), 'image.fits'), -1)
+    if os.path.exists(os.path.join(basepath, image_file)):
+        header = fits.getheader(os.path.join(basepath, image_file), -1)
         scale = header['NAXIS1'] / width # FIXME: Should we assume it is the same for y?..
 
         mask = np.ones(shape=(header['NAXIS2'], header['NAXIS1']), dtype=bool)
@@ -431,11 +464,11 @@ def handle_task_mask_creation(task, width, height, areas, inverted=False):
         if inverted:
             mask = ~mask
 
-        processing.fits_write(os.path.join(task.path(), 'custom_mask.fits'), mask.astype(np.uint8), compress=True)
+        processing.fits_write(os.path.join(basepath, mask_file), mask.astype(np.uint8), compress=True)
 
         # Store masked areas for future re-use
         file_write(
-            os.path.join(task.path(), 'custom_mask.json'),
+            os.path.join(basepath, json_file),
             json.dumps(
                 {'areas': areas, 'inverted': True if inverted else False},
                 indent=4,
@@ -446,8 +479,31 @@ def handle_task_mask_creation(task, width, height, areas, inverted=False):
     return True
 
 
-def task_mask(request, id=None, path=''):
+def task_mask(request, id=None, mode='image'):
+    """
+    Interactive mask creation for images or templates.
+
+    Args:
+        id: Task ID
+        mode: 'image' for primary image mask, 'template' for template mask
+    """
     task = get_object_or_404(models.Task, id=id)
+    basepath = task.path()
+
+    # Determine which files to use based on mode
+    if mode == 'template':
+        image_file = 'custom_template.fits'
+        mask_file = 'custom_template_mask.fits'
+        json_file = 'custom_template_mask.json'
+
+        # Validate template exists
+        if not os.path.exists(os.path.join(basepath, image_file)):
+            messages.error(request, "Custom template not found. Upload a template first.")
+            return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
+    else:
+        image_file = 'image.fits'
+        mask_file = 'custom_mask.fits'
+        json_file = 'custom_mask.json'
 
     if request.method == 'POST':
         areas = json.loads(request.POST.get('areas'))
@@ -458,24 +514,31 @@ def task_mask(request, id=None, path=''):
                 int(request.POST.get('height')),
                 areas,
                 inverted=bool(request.POST.get('inverted', False)),
+                image_file=image_file,
+                mask_file=mask_file,
+                json_file=json_file,
         ):
-            messages.success(request, "Custom mask created for task " + str(id))
+            messages.success(request, f"{'Custom template' if mode == 'template' else 'Image'} mask created for task {id}")
         else:
-            messages.success(request, "Custom mask cleared for task " + str(id))
+            messages.success(request, f"{'Custom template' if mode == 'template' else 'Image'} mask cleared for task {id}")
 
-        # Now we need to run image inspection
-        task.celery_id = celery_tasks.task_inspect.delay(task.id).id
-        task.state = 'inspect'
-        task.save()
-        messages.success(request, "Started image inspection for task " + str(id))
+        # Only run inspection for image mask (not for template mask)
+        if mode == 'image':
+            task.celery_id = celery_tasks.task_inspect.delay(task.id).id
+            task.state = 'inspect'
+            task.save()
+            messages.success(request, "Started image inspection for task " + str(id))
 
         return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
 
-    context = {}
+    # GET: Load existing mask if present
+    context = {
+        'task': task,
+        'mode': mode,
+        'image_file': image_file,
+    }
 
-    context['task'] = task
-
-    areasname = os.path.join(task.path(), 'custom_mask.json')
+    areasname = os.path.join(basepath, json_file)
     if os.path.exists(areasname):
         data = json.loads(file_read(areasname))
         context['areas'] = data.get('areas')

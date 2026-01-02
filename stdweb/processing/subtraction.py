@@ -80,7 +80,7 @@ def subtract_image(filename, config, verbose=True, show=False):
     tconf = supported_templates.get(tname)
 
     if tname == 'custom':
-        log("Using custom template from custom_template.fits")
+        log("Using custom template from file:custom_template.fits")
 
         if not os.path.exists(os.path.join(basepath, 'custom_template.fits')):
             raise RuntimeError("Custom template not found")
@@ -95,6 +95,14 @@ def subtract_image(filename, config, verbose=True, show=False):
         custom_mask = np.isnan(custom_template)
         if template_saturation:
             custom_mask |= custom_template >= template_saturation
+
+        # Load custom template mask if exists
+        template_mask_file = os.path.join(basepath, 'custom_template_mask.fits')
+        if os.path.exists(template_mask_file):
+            custom_template_mask = fits.getdata(template_mask_file, -1) > 0
+            custom_mask |= custom_template_mask
+            log("Custom template mask loaded from file:custom_template_mask.fits")
+
     else:
         if tconf is None:
             raise RuntimeError(f"Unsupported template: {tname}")

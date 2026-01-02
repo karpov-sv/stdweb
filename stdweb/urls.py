@@ -60,7 +60,7 @@ urlpatterns = [
     path('tasks/<int:id>/candidates_simple', views_tasks.task_candidates, {'filename': 'candidates_simple.vot'}, name='task_candidates_simple'),
     path('tasks/<int:id>/candidates', views_tasks.task_candidates, name='task_candidates'),
 
-    path('tasks/<int:id>/mask', views_tasks.task_mask, name='task_mask'),
+    path('tasks/<int:id>/mask/<slug:mode>', views_tasks.task_mask, name='task_mask'),
     path('tasks/<int:id>/state', views_tasks.task_state, name='task_state'),
 
     path('skyportal/', views_skyportal.skyportal, name='skyportal'),

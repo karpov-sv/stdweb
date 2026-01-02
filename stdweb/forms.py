@@ -383,8 +383,12 @@ class TaskSubtractionForm(forms.Form):
             ),
             Row(
                 Column('custom_template'),
-                Column('custom_template_gain'),
-                Column('custom_template_saturation'),
+                Column('custom_template_gain', css_class="col-md-2"),
+                Column('custom_template_saturation', css_class="col-md-2"),
+                Column(
+                    Submit('action_custom_mask', 'Make template mask', css_class='btn-secondary mb-1'),
+                    css_class="col-md-auto"
+                ),
                 css_class='align-items-end',
                 id='custom_row',
             ),
