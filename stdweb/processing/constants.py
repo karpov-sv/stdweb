@@ -140,7 +140,7 @@ files_photometry = [
 
 files_transients_simple = [
     'transients_simple.log',
-    'candidates_simple', 'candidates_simple.vot'
+    'candidates_simple', 'candidates_simple.vot', 'candidates_simple.reg'
 ]
 
 files_subtraction = [
@@ -150,7 +150,7 @@ files_subtraction = [
     'sub_diff.fits', 'sub_sdiff.fits', 'sub_conv.fits', 'sub_ediff.fits',
     'sub_scorr.fits', 'sub_fpsf.fits', 'sub_fpsferr.fits',
     'sub_target.vot', 'sub_target.cutout',
-    'candidates', 'candidates.vot'
+    'candidates', 'candidates.vot', 'candidates.reg'
 ]
 
 cleanup_inspect = files_inspect + files_photometry + files_transients_simple + files_subtraction
