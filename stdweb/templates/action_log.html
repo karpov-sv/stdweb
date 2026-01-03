@@ -26,10 +26,10 @@
           <table class="table table-hover table-sm mb-0">
             <thead class="table-light">
               <tr>
-                <th style="width: 200px;">Timestamp</th>
-                <th style="width: 120px;">User</th>
-                <th style="width: 180px;">Action</th>
-                <th style="width: 100px;">Task ID</th>
+                <th style="width: 12em;">Timestamp, UT</th>
+                <th style="width: 10em;">User</th>
+                <th style="width: 15em;">Action</th>
+                <th style="width: 5em;">Task ID</th>
                 <th>Details</th>
               </tr>
             </thead>
@@ -37,18 +37,18 @@
               {% for log in logs %}
                 <tr>
                   <td>
-                    <div>{{ log.timestamp }}</div>
+                    <div class="text-nowrap">{{ log.timestamp }}</div>
                     <small class="text-muted">{{ log.natural_time }}</small>
                   </td>
-                  <td>{{ log.user|default:"—" }}</td>
+                  <td class="text-nowrap">{{ log.user|default:"—" }}</td>
                   <td>
-                    <span class="badge
-                          {% if 'Created' in log.action %}bg-success
-                          {% elif 'Started' in log.action %}bg-info
-                          {% elif 'Deleted' in log.action or 'Failed' in log.action %}bg-danger
-                          {% elif 'Cancelled' in log.action %}bg-warning
-                          {% elif 'Completed' in log.action %}bg-success
-                          {% else %}bg-secondary
+                    <span class="fw-bold text-nowrap
+                          {% if 'Created' in log.action %}text-success
+                          {% elif 'Started' in log.action %}text-info
+                          {% elif 'Deleted' in log.action or 'Failed' in log.action %}text-danger
+                          {% elif 'Cancelled' in log.action %}text-warning
+                          {% elif 'Completed' in log.action %}text-success
+                          {% else %}text-secondary
                           {% endif %}">
                           {{ log.action }}
                     </span>
