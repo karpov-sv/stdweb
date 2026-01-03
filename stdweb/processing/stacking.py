@@ -14,6 +14,8 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 
+from .inspect import mask_cosmics
+
 
 def stack_images(filenames, outname, config, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
@@ -38,19 +40,13 @@ def stack_images(filenames, outname, config, verbose=True):
 
         # Cosmics
         if config.get('stack_mask_cosmics', False):
-            # We will use custom noise model for astroscrappy as we do not know whether
-            # the image is background-subtracted already, or how it was flatfielded
-            bg = sep.Background(image.astype(np.double), mask=mask)
-            rms = bg.rms()
-            var = rms**2 + np.abs(image - bg.back())/config.get('gain', 1)
-            cmask, cimage = astroscrappy.detect_cosmics(
-                image, mask, verbose=False,
-                invar=var.astype(np.float32),
+            cmask, image = mask_cosmics(
+                image, mask,
                 gain=config.get('gain', 1),
                 satlevel=0.05*np.nanmedian(image) + 0.95*np.nanmax(image), # med + 0.95(max-med),
-                cleantype='medmask'
+                cleantype='medmask',
+                get_clean=True
             )
-            image = cimage / config.get('gain', 1) # Convert back to ADU
 
         if config.get('stack_subtract_bg', True):
             bg = sep.Background(image.astype(np.double), mask=mask)

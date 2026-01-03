@@ -9,14 +9,73 @@ import numpy as np
 from astropy.io import fits
 from astropy.time import Time
 
-import astroscrappy
-import sep
-
 from stdpipe import astrometry, cutouts, templates
 from stdpipe import resolve, utils
 
 from .constants import *
 from .utils import *
+
+
+import astroscrappy
+import sep
+
+def mask_cosmics(
+    image, mask,
+    gain=1, satlevel=np.inf,
+    negative_threshold=-10,
+    fwhm=None,
+    get_clean=False,
+    verbose=False,
+    **kwargs
+):
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    # We will use custom noise model for astroscrappy as we do not know whether
+    # the image is background-subtracted already, or how it was flatfielded
+    bg = sep.Background(image.astype(np.double), mask=mask)
+    rms = bg.rms()
+    diff = image - bg.back()
+    var = rms**2 + np.abs(diff) / gain
+
+    # Mask negative outliers that confuse lacosmic
+    mask_neg = diff < negative_threshold * rms
+
+    kwargs = {}
+
+    if fwhm is not None:
+        kwargs.update({
+            'psfmodel': 'gauss',
+            'psffwhm': fwhm,
+            'psfsize': 6 * (fwhm // 2) + 1,
+            'fsmode': 'convolve',
+        })
+
+        # Some heuristics?
+        # if fwhm < 2.3:
+        #     kwargs.update({'sigclip': 5.6, 'objlim': 11.0, 'sigfrac': 0.6, 'niter': 3})
+        # elif fwhm < 3.5:
+        #     kwargs.update({'sigclip': 5.0, 'objlim': 8.0, 'sigfrac': 0.45, 'niter': 4})
+        # else:
+        #     kwargs.update({'sigclip': 4.5, 'objlim': 5.0, 'sigfrac': 0.3, 'niter': 4})
+
+        log(f"Using convolve with gaussian kernel, fwhm {fwhm:.1f} pix")
+
+    cmask, cimage = astroscrappy.detect_cosmics(
+        image,
+        inmask=mask | mask_neg,
+        invar=var.astype(np.float32),
+        gain=gain,
+        satlevel=satlevel * gain,
+        cleantype=kwargs.pop('cleantype', 'meanmask'),
+        verbose=verbose,
+        **kwargs
+    )
+
+    if get_clean:
+        return cmask, cimage / gain
+    else:
+        return cmask
 
 
 def inspect_image(filename, config, verbose=True, show=False):
@@ -67,7 +126,10 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Guess some parameters from keywords
     if not config.get('gain'):
-        config['gain'] = float(header.get('GAIN', 1))
+        config['gain'] = float(header.get(
+            'GAIN',
+            header.get('CCD_GAIN', 1)
+        ))
         if config['gain'] == 0:
             log("Header gain is zero, setting it to 1")
             config['gain'] = 1
@@ -103,7 +165,7 @@ def inspect_image(filename, config, verbose=True, show=False):
     if not config.get('saturation'):
         satlevel = header.get(
             'SATURATE',
-            header.get('DATAMAX')
+            # header.get('DATAMAX')
         )
         if satlevel:
             log("Got saturation level from FITS header")
@@ -139,16 +201,13 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Cosmics
     if config.get('mask_cosmics', True):
-        # We will use custom noise model for astroscrappy as we do not know whether
-        # the image is background-subtracted already, or how it was flatfielded
-        bg = sep.Background(image, mask=mask)
-        rms = bg.rms()
-        var = rms**2 + np.abs(image - bg.back())/config.get('gain', 1)
-        cmask, cimage = astroscrappy.detect_cosmics(image, mask, verbose=False,
-                                                    invar=var.astype(np.float32),
-                                                    gain=config.get('gain', 1),
-                                                    satlevel=config.get('saturation'),
-                                                    cleantype='medmask')
+        cmask = mask_cosmics(
+            image, mask,
+            gain=config.get('gain', 1),
+            fwhm=config.get('fwhm', None),
+            satlevel=config.get('saturation'),
+            verbose=verbose,
+        )
         log(f"Done masking cosmics, {np.sum(cmask)} ({100*np.sum(cmask)/cmask.shape[0]/cmask.shape[1]:.1f}%) pixels masked")
         mask |= cmask
 
