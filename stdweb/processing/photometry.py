@@ -14,7 +14,7 @@ from astropy.table import Table
 from astropy.time import Time
 
 from stdpipe import astrometry, photometry, catalogs, cutouts
-from stdpipe import templates, plots, pipeline
+from stdpipe import templates, plots, pipeline, artefacts
 
 from .constants import *
 from .utils import *
@@ -70,7 +70,7 @@ def photometry_image(filename, config, verbose=True, show=False):
             'BACK_SIZE': config.get('bg_size', 256),
             'SATUR_LEVEL': config.get('saturation')
         },
-        extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
+        extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
         checkimages=['SEGMENTATION', 'FILTERED', 'BACKGROUND', 'BACKGROUND_RMS'],
         minarea=config.get('minarea', 3),
         r0=config.get('initial_r0', 0.0),
@@ -113,7 +113,7 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     if config.get('prefilter_detections', True):
         log("Pre-filtering SExtractor detections with simple shape classifier")
-        fidx = filter_sextractor_detections(obj, verbose=verbose)
+        fidx = artefacts.filter_sextractor_detections(obj, verbose=verbose)
         idx &= fidx
         # Also store it in the flags to exclude from photometric match later
         obj['flags'][~fidx] |= 0x800
@@ -166,89 +166,33 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     # Plot pre-filtering diagnostics
     if config.get('prefilter_detections', True):
-        with plots.figure_saver(os.path.join(basepath, 'prefilter.png'), figsize=(8, 8), show=show) as fig:
-            var1,label1 = obj['FLUX_RADIUS'], 'FLUX_RADIUS'
-            var2,label2 = obj['fwhm'], 'FWHM'
-            var3,label3 = obj['mag']-obj['MAG_AUTO'], 'MAG_APER - MAG_AUTO'
+        with plots.figure_saver(os.path.join(basepath, 'prefilter.png'), figsize=(8, 8), show=show, tight_layout=False) as fig:
+            features = artefacts.filter_sextractor_detections(obj, return_features=True)
 
-            if len(var1) > 1000:
-                alpha = 0.3
-            elif len(var1) > 100:
-                alpha = 0.5
-            else:
-                alpha = 1
+            plots.cornerplot(
+                features,
+                # TODO: de-hardcode?..
+                scales=['log', 'log', 'log'],
+                lines = [fwhm/2, fwhm, None],
+                subsets = [
+                    {'idx': (obj['flags'] & 0x04 > 0) & (obj['flags'] & 0x100 > 0), 'label':'Saturated', 'color': 'C1'},
+                    {'idx': (obj['flags'] & 0x04 == 0) & (obj['flags'] & 0x100 > 0), 'label': 'Cosmics', 'color': 'C3'},
+                    {'idx': (obj['flags'] & 0x02 > 0) & (obj['flags'] & 0x100 == 0), 'label': 'Deblended', 'color': 'C4'},
+                    {'idx': (obj['flags'] & (0x7fff - 0x800 - 0x100 - 0x04 - 0x02) > 0), 'label': 'Other flags', 'color': 'C5'},
+                ],
+                extra=lambda ax,col_x,col_y: plots.plot_outline(col_x[0][fidx], col_y[0][fidx], ax=ax, color='red'),
+                alpha=0.5,
+                fig=fig
+            )
 
-            # All flags except 0x800 that we just set for outliers
-            idx = (obj['flags'] & (0x7fff - 0x800)) > 0
-
-            # Subtypes
-            idx1 = idx & (obj['flags'] & 0x04 > 0) & (obj['flags'] & 0x100 > 0) # Saturated
-            idx2 = idx & (obj['flags'] & 0x04 == 0) & (obj['flags'] & 0x100 > 0) # Cosmics
-            idx3 = idx & (obj['flags'] & 0x02 > 0) & (obj['flags'] & 0x100 == 0) # Deblended
-            idx4 = idx & ~idx1 & ~idx2 & ~idx3 # Other flags
-            idx0 = ~idx1 & ~idx2 & ~idx3 # Unflagged
-
-            ax1 = fig.add_subplot(221)
-            ax1.plot(var1[idx0], var2[idx0], '.', alpha=alpha)
-            ax1.plot(var1[idx1], var2[idx1], '.', alpha=alpha, color='C1', label='Saturated')
-            ax1.plot(var1[idx2], var2[idx2], '.', alpha=alpha, color='C3', label='Cosmics')
-            ax1.plot(var1[idx3], var2[idx3], '.', alpha=alpha, color='C4', label='Deblended')
-            ax1.plot(var1[idx4], var2[idx4], '.', alpha=alpha, color='C5', label='Other flags')
-            plot_outline(var1[fidx], var2[fidx], 'r-', ax=ax1)#, label='Good')
-            leg = ax1.legend()
-            for lh in leg.legend_handles: lh.set_alpha(1)
-
-            ax1.set_xscale('log')
-            ax1.set_yscale('log')
-
-            ax2 = fig.add_subplot(222, sharey=ax1)
-            ax2.plot(var3[idx0], var2[idx0], '.', alpha=alpha)
-            ax2.plot(var3[idx1], var2[idx1], '.', alpha=alpha, color='C1', label='Saturated')
-            ax2.plot(var3[idx2], var2[idx2], '.', alpha=alpha, color='C3', label='Cosmics')
-            ax2.plot(var3[idx3], var2[idx3], '.', alpha=alpha, color='C4', label='Deblended')
-            ax2.plot(var3[idx4], var2[idx4], '.', alpha=alpha, color='C5', label='Other flags')
-            plot_outline(var3[fidx], var2[fidx], 'r-', ax=ax2)#, label='Good')
-            leg = ax2.legend()
-            for lh in leg.legend_handles: lh.set_alpha(1)
-
-            ax3 = fig.add_subplot(223, sharex=ax1)
-            ax3.plot(var1[idx0], var3[idx0], '.', alpha=alpha)
-            ax3.plot(var1[idx1], var3[idx1], '.', alpha=alpha, color='C1', label='Saturated')
-            ax3.plot(var1[idx2], var3[idx2], '.', alpha=alpha, color='C3', label='Cosmics')
-            ax3.plot(var1[idx3], var3[idx3], '.', alpha=alpha, color='C4', label='Deblended')
-            ax3.plot(var1[idx4], var3[idx4], '.', alpha=alpha, color='C5', label='Other flags')
-            plot_outline(var1[fidx], var3[fidx], 'r-', ax=ax3)#, label='Good')
-            leg = ax3.legend()
-            for lh in leg.legend_handles: lh.set_alpha(1)
-
-            ax1.grid(alpha=0.2)
-            ax2.grid(alpha=0.2)
-            ax3.grid(alpha=0.2)
-
-            ax1.set_xlabel(label1)
-            ax1.set_ylabel(label2)
-
-            ax2.set_xlabel(label3)
-            ax2.set_ylabel(label2)
-
-            ax3.set_xlabel(label1)
-            ax3.set_ylabel(label3)
-
-            ax1.axhline(fwhm, ls='--', color='gray')
-            ax2.axhline(fwhm, ls='--', color='gray')
-
-            ax1.axvline(fwhm/2, ls='--', color='gray')
-            ax3.axvline(fwhm/2, ls='--', color='gray')
-
-            ax4 = fig.add_subplot(224)
-            ax4.axis('off')
-            ax4.annotate(
+            fig.text(
+                0.55, 0.4,
                 f"Isolation forest outlier detection\n"
                 f"{len(obj)} objects\n"
                 f"{np.sum(idx)} flagged\n"
                 f"{np.sum(fidx)} good {np.sum(~fidx)} outliers\n"
                 f"FWHM {fwhm:.2f} pixels",
-                (0.0, 1.0), xycoords='axes fraction', va='top'
+                ha='left', va='top'
             )
 
         log("Pre-filtering diagnostic plot stored to file:prefilter.png")

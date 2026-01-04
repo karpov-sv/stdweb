@@ -282,22 +282,6 @@ def round_coords_to_grid(ra0, dec0, sr0, nside=None):
     return ra1, dec1, sr1
 
 
-def plot_outline(x, y, *args, ax=None, **kwargs):
-    import matplotlib.pyplot as plt
-    from scipy.spatial import ConvexHull
-
-    points = np.vstack((np.ma.filled(x), np.ma.filled(y))).T
-    hull = ConvexHull(points)
-
-    if ax is None:
-        ax = plt.gca()
-
-    for simplex in hull.simplices:
-        ax.plot(points[simplex, 0], points[simplex, 1], *args, **kwargs)
-        if 'label' in kwargs:
-            kwargs.pop('label')
-
-
 import regions
 from astropy.coordinates import SkyCoord
 from astropy import units as u

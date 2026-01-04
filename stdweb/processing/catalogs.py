@@ -153,38 +153,6 @@ def guess_catalogue_radec_columns(cat):
     return cat_col_ra, cat_col_dec
 
 
-def filter_sextractor_detections(obj, verbose=True, classifier=None, return_classifier=False):
-    # Simple wrapper around print for logging in verbose mode only
-    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
-
-    var1,label1 = obj['FLUX_RADIUS'], 'FLUX_RADIUS'
-    var2,label2 = obj['fwhm'], 'FWHM'
-    var3,label3 = obj['mag']-obj['MAG_AUTO'], 'MAG_APER - MAG_AUTO'
-
-    log("Using isolation forest outline detection over columns ({})".format(
-        ", ".join([label1, label2, label3])
-    ))
-
-    # Exclude blends etc from the fit, as well as broken measurements
-    idx = obj['flags'] == 0
-    idx &= np.isfinite(var1) & (var1 > 0)
-    idx &= np.isfinite(var2) & (var2 > 0)
-    idx &= np.isfinite(var3)
-
-    X = np.array([np.log10(var1), np.log10(var2), var3]).T
-    if classifier is None:
-        classifier = IsolationForest().fit(X[idx])
-    X[~np.isfinite(X)] = -1000 # Definitely outside of the good locus
-    res = classifier.predict(X)
-
-    log(f"{np.sum(res > 0)} good, {np.sum(res < 0)} outliers")
-
-    if return_classifier:
-        return classifier
-
-    return res > 0
-
-
 def filter_catalogue_blends(
         cat_in,
         sr,

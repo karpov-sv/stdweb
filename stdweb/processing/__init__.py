@@ -25,3 +25,10 @@ from .photometry import *
 from .transients import *
 from .subtraction import *
 from .stacking import *
+
+# Disable some annoying warnings from astropy
+import warnings
+from astropy.wcs import FITSFixedWarning
+from astropy.io.fits.verify import VerifyWarning
+warnings.simplefilter(action='ignore', category=FITSFixedWarning)
+warnings.simplefilter(action='ignore', category=VerifyWarning)
