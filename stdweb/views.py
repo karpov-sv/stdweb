@@ -331,9 +331,15 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
             obj = Table.read(objname)
 
             if obj is not None:
+                if path.startswith('sub_'):
+                    wcs = get_wcs()
+                    x,y = wcs.all_world2pix(obj['ra'], obj['dec'], 0)
+                else:
+                    x,y = obj['x'], obj['y']
+
                 idx = obj['flags'] == 0
-                ax.plot(obj['x'][idx], obj['y'][idx], '.', color='red')
-                ax.plot(obj['x'][~idx], obj['y'][~idx], '.', color='orange')
+                ax.plot(x[idx], y[idx], '.', color='red')
+                ax.plot(x[~idx], y[~idx], 'x', color='orange')
 
     if request.GET.get('cat'):
         # Overplot list of catalogue stars from the file
