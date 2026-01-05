@@ -19,7 +19,7 @@ from astropy.time import Time
 
 from stdpipe import astrometry, photometry, cutouts
 from stdpipe import templates, subtraction, plots, pipeline, psf
-from stdpipe import resolve, utils
+from stdpipe import resolve, utils, artefacts
 
 from .constants import *
 from .utils import *
@@ -58,10 +58,10 @@ def subtract_image(filename, config, verbose=True, show=False):
     m = pickle_from_file(os.path.join(basepath, 'photometry.pickle'))
 
     # Objects
-    obj = Table.read(os.path.join(basepath, 'objects.vot'))
+    obj = Table.read(os.path.join(basepath, 'objects.parquet'))
 
     # Catalogue
-    cat = Table.read(os.path.join(basepath, 'cat.vot'))
+    cat = Table.read(os.path.join(basepath, 'cat.parquet'))
 
     # WCS
     wcs = get_wcs(filename, header=header, verbose=verbose)
@@ -268,7 +268,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 'BACK_SIZE': config.get('bg_size', 256),
                 # 'SATUR_LEVEL': template_saturation,
             },
-            extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
+            extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
             checkimages=['SEGMENTATION'],
             _tmpdir=settings.STDPIPE_TMPDIR,
             _exe=settings.STDPIPE_SEXTRACTOR
@@ -283,7 +283,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
         tidx = tobj['flags'] == 0
         if len(tobj) > 20:
-            tidx &= filter_sextractor_detections(tobj, verbose=verbose)
+            tidx &= artefacts.filter_sextractor_detections(tobj, verbose=verbose)
         fwhm_values = 2.0*tobj['FLUX_RADIUS'] # obj['fwhm']
         template_fwhm = np.median(fwhm_values[tidx])
 
@@ -353,6 +353,10 @@ def subtract_image(filename, config, verbose=True, show=False):
             fwhm = config.get('fwhm', 3.0)
 
             log(f"Using template FWHM = {template_fwhm:.1f} pix and image FWHM = {fwhm:.1f} pix")
+
+            # Dilate image and template masks
+            mask1 = photometry.dilate(mask1, np.ones([int(np.ceil(fwhm))]*2))
+            tmask = photometry.dilate(tmask, np.ones([int(np.ceil(template_fwhm))]*2))
 
             bg = sep.Background(
                 image1.astype(np.double), mask=mask1,
@@ -529,7 +533,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                     thresh=config.get('sn', 5.0),
                     wcs=wcs1, edge=sub_overlap,
                     minarea=config.get('minarea', 1),
-                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
+                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
                     extra={
                         'ANALYSIS_THRESH': config.get('sn', 5.0),
                         'THRESH_TYPE': 'ABSOLUTE',
@@ -552,7 +556,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                     gain=config.get('gain', 1.0),
                     sn=config.get('sn', 5.0),
                     minarea=config.get('minarea', 3),
-                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE'],
+                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
                     extra={'BACK_SIZE': config.get('bg_size', 256)},
                     checkimages=['SEGMENTATION'],
                     verbose=sub_verbose,
@@ -617,9 +621,9 @@ def subtract_image(filename, config, verbose=True, show=False):
             if config.get('filter_prefilter') and len(sobj):
                 if classifier is None:
                     # Prepare the classifier based on SExtractor shape parameters
-                    classifier = filter_sextractor_detections(obj, verbose=False, return_classifier=True)
+                    classifier = artefacts.filter_sextractor_detections(obj, verbose=False, return_classifier=True)
 
-                fidx = filter_sextractor_detections(sobj, verbose=verbose, classifier=classifier)
+                fidx = classifier(sobj)
                 sobj = sobj[fidx]
                 log(f"{len(sobj)} candidates left after pre-filtering")
 

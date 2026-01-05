@@ -216,8 +216,8 @@ def photometry_image(filename, config, verbose=True, show=False):
     if np.sum(obj['flags'] == 0) < 0.5*len(obj):
         log("Warning: more than half of objects are flagged!")
 
-    obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
-    log("Measured objects stored to file:objects.vot")
+    obj.write(os.path.join(basepath, 'objects.parquet'), overwrite=True)
+    log("Measured objects stored to file:objects.parquet")
 
     # Plot detected objects
     with plots.figure_saver(os.path.join(basepath, 'objects.png'), figsize=(8, 6), show=show,) as fig:
@@ -318,15 +318,15 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"Got {len(cat)} catalogue stars from {config['cat_name']}")
 
-    cat.write(os.path.join(basepath, 'cat.vot'), format='votable', overwrite=True)
-    log("Catalogue written to file:cat.vot")
+    cat.write(os.path.join(basepath, 'cat.parquet'), overwrite=True)
+    log("Catalogue written to file:cat.parquet")
 
     if config.get('filter_blends', True):
         # TODO: merge blended stars, not remove them!
         cat_filtered = filter_catalogue_blends(cat, 2*fwhm*pixscale)
         log(f"{len(cat_filtered)} catalogue stars after blend filtering with {3600*fwhm*pixscale:.1f} arcsec radius")
-        # cat.write(os.path.join(basepath, 'cat_filtered.vot'), format='votable', overwrite=True)
-        # log("Filtered catalogue written to file:cat_filtered.vot")
+        # cat.write(os.path.join(basepath, 'cat_filtered.parquet'), overwrite=True)
+        # log("Filtered catalogue written to file:cat_filtered.parquet")
     else:
         cat_filtered = cat
 
@@ -505,8 +505,8 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     log(f"Mean zero point is {np.mean(zp):.3f}, estimated error {np.mean(zp_err):.2g}")
 
-    obj.write(os.path.join(basepath, 'objects.vot'), format='votable', overwrite=True)
-    log("Measured objects stored to file:objects.vot")
+    obj.write(os.path.join(basepath, 'objects.parquet'), overwrite=True)
+    log("Measured objects stored to file:objects.parquet")
 
     # Check the filter
     if (config.get('use_color', True) and np.any(np.abs(m['color_term']) > 0.5)) or config.get('diagnose_color'):

@@ -133,7 +133,7 @@ files_photometry = [
     'photometry_zeropoint.png', 'photometry_model.png',
     'photometry_residuals.png', 'astrometry_dist.png',
     'photometry.pickle',
-    'objects.vot', 'cat.vot',
+    'objects.parquet', 'cat.parquet',
     'limit_hist.png', 'limit_sn.png',
     'target.vot', 'target.cutout', 'targets'
 ]

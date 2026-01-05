@@ -36,7 +36,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     # Ensure all necessary files exist
     for _ in [
         'mask.fits', 'segmentation.fits', 'filtered.fits',
-        'objects.vot', 'cat.vot', 'photometry.pickle',
+        'objects.parquet', 'cat.parquet', 'photometry.pickle',
     ]:
         if not os.path.exists(os.path.join(basepath, _)):
             raise RuntimeError(f"{_} not found, please rerun photometric calibration")
@@ -51,11 +51,11 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     fimg = fits.getdata(os.path.join(basepath, 'filtered.fits'), -1)
 
     # Objects
-    obj = Table.read(os.path.join(basepath, 'objects.vot'))
-    log(f"{len(obj)} objects loaded from file:objects.vot")
+    obj = Table.read(os.path.join(basepath, 'objects.parquet'))
+    log(f"{len(obj)} objects loaded from file:objects.parquet")
 
     # Catalogue
-    # cat = Table.read(os.path.join(basepath, 'cat.vot'))
+    # cat = Table.read(os.path.join(basepath, 'cat.parquet'))
 
     # WCS
     wcs = get_wcs(filename, header=header, verbose=verbose)
@@ -92,7 +92,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         log("Cross-checking with the objects detected in other tasks")
         for other in config.get('simple_others', '').split():
             if other.isdigit():
-                otherpath = os.path.join(basepath, '..', other, 'objects.vot')
+                otherpath = os.path.join(basepath, '..', other, 'objects.parquet')
                 if not os.path.exists(otherpath):
                     log(f"Task {other} has no detected objects")
                 else:

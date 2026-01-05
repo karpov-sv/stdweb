@@ -17,6 +17,7 @@ django-select2
 djangorestframework>=3.14
 django-filter>=23.0
 markdown>=3.4
+pyarrow
 
 # Testing
 pytest>=7.0
