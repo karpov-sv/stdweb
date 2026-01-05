@@ -79,10 +79,14 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
     path = sanitize_path(path)
 
+    fullpath = os.path.join(base, path)
+
     context['path'] = path
     context['breadcrumb'] = make_breadcrumb(path, base="Files")
 
-    fullpath = os.path.join(base, path)
+    # HACK: silently fall back to .parquet for backward compatibility
+    if fullpath.endswith('.vot') and not os.path.exists(fullpath):
+        fullpath = os.path.splitext(fullpath)[0] + '.parquet'
 
     if os.path.isfile(fullpath):
         # Display a file
@@ -94,7 +98,7 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
         context['mode'] = 'download'
 
-        if context['mime'] == 'text/xml' and '.vot' in path:
+        if path.endswith('.vot') or path.endswith('.parquet'):
             try:
                 context['table'] = Table.read(fullpath)
                 context['mode'] = 'table'
@@ -191,6 +195,32 @@ def download(request, path, attachment=True, base=settings.DATA_PATH):
     path = sanitize_path(path)
 
     fullpath = os.path.join(base, path)
+
+    # Transparently convert Parquet to VOTable if requested
+    if fullpath.endswith('.vot') and not os.path.exists(fullpath):
+        parquet_path = os.path.splitext(fullpath)[0] + '.parquet'
+
+        if os.path.exists(parquet_path):
+            # Load Parquet and convert to VOTable in memory
+            try:
+                table = Table.read(parquet_path)
+
+                # Write to BytesIO for in-memory conversion
+                vot_buffer = io.BytesIO()
+                table.write(vot_buffer, format='votable')
+                vot_buffer.seek(0)
+
+                # Serve as VOTable with correct MIME type
+                response = FileResponse(vot_buffer, as_attachment=attachment)
+                response['Content-Type'] = 'application/x-votable+xml'
+                if attachment:
+                    # Extract filename from path for attachment
+                    filename = os.path.basename(path)
+                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+                return response
+            except Exception as e:
+                return HttpResponse(f'Error converting Parquet to VOTable: {str(e)}', status=500)
 
     if os.path.isfile(fullpath):
         return FileResponse(open(os.path.abspath(fullpath), 'rb'), as_attachment=attachment)
@@ -361,10 +391,10 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
             use_wcs = True
         elif 'sub_ra' in request.GET:
             # Detected objects on cropped image
-            objname = 'objects.vot'
+            objname = 'objects.parquet'
             use_wcs = True
         else:
-            objname = 'objects.vot'
+            objname = 'objects.parquet'
             use_wcs = False
         objname = os.path.join(os.path.dirname(fullpath), objname)
         if os.path.exists(objname):
@@ -384,7 +414,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     if request.GET.get('cat'):
         # Overplot list of catalogue stars from the file
-        catname = os.path.join(os.path.dirname(fullpath), 'cat.vot')
+        catname = os.path.join(os.path.dirname(fullpath), 'cat.parquet')
         if os.path.exists(catname):
             cat = Table.read(catname)
 

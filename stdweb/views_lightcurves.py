@@ -151,7 +151,7 @@ def lightcurves(request):
     return TemplateResponse(request, 'lightcurves.html', context=context)
 
 
-def _get_photometry_data(task, ra0, dec0, radius_arcsec, filename='objects.vot'):
+def _get_photometry_data(task, ra0, dec0, radius_arcsec, filename='objects.parquet'):
     """
     Load and filter photometric measurements for a task.
 
@@ -201,7 +201,7 @@ def task_photometry_html(request, id):
         ra (float): Center RA in degrees
         dec (float): Center Dec in degrees
         radius (float): Search radius in arcseconds
-        targets_only (bool): If true, return target.vot; else objects.vot
+        targets_only (bool): If true, return target photometry data only, ignoring detections
 
     Returns:
         HttpResponse: Pre-rendered HTML table
@@ -229,7 +229,7 @@ def task_photometry_html(request, id):
 
     files = ['target.vot', 'sub_target.vot']
     if not targets_only:
-        files = ['objects.vot'] + files
+        files = ['objects.parquet'] + files
 
     for filename in files:
         # Get filtered data
