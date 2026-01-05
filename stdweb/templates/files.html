@@ -2,6 +2,7 @@
 
 {% load filters %}
 {% load crispy_forms_tags %}
+{% load humanize %}
 
 {% block head %}
   <script language="javascript">
@@ -151,7 +152,7 @@
         {% endif %}
       </b></li>
       <li>Size: <b>{{ stat.st_size }}</b> bytes / {{ stat.st_size|naturalsize }}</li>
-      <li>Last modified: <b>{{ time.iso }}</b></li>
+      <li>Last modified: <b>{{ time.iso }}</b> - {{ time.datetime|naturaltime }}</li>
       <li><b>{{ mime }}</b> : {{ magic_info }}</li>
     </ul>
 
