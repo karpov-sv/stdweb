@@ -1,0 +1,149 @@
+{% extends "template.html" %}
+
+{% load el_pagination_tags %}
+{% load crispy_forms_tags %}
+{% load filters %}
+
+{% block ptitle %}Lightcurves : STDWeb{% endblock %}
+
+{% block head %}
+  {% include "popup_image.html" %}
+{% endblock %}
+
+{% block title %}Search around sky position{% endblock %}
+
+{% block content %}
+
+  <div class="mb-4">
+    {% crispy form %}
+  </div>
+
+  {% if tasks %}
+
+    <div class="mb-3">
+      <strong>Search position:</strong>
+      {{ search_ra|to_sexadecimal_hours }} {{ search_dec|to_sexadecimal_plus }}
+      ({{ search_ra|floatformat:4 }} {{ search_dec|numformat:'+.4f' }})
+      {% if search_sr0 %}
+        <strong>Radius:</strong> {{ search_sr0|numformat:'.1f' }} arcsec
+      {% endif %}
+    </div>
+
+    {% paginate 100 tasks %}
+
+    <div>
+
+      {% for item in tasks %}
+        {% with task=item.task %}
+
+          <div class="card mb-3" style="max-width: 100%;">
+            <div class="row g-0">
+              <div class="col-md">
+                <div class="card-body">
+
+                  <span class="badge bg-{% if 'failed' in task.state or 'cancelled' in task.state %}danger{% else %}primary{% endif %} rounded-pill card-badge-right border">
+                    {{ task.state }}
+                  </span>
+
+                  <a href="{% url 'tasks' id=task.id %}" class="text-decoration-none text-body">
+                    <span class="badge bg-light rounded-pill card-badge-left border text-dark">
+                      Task {{ task.id }}
+                    </span>
+
+                    <h5 class="card-title mb-1">
+                      {{ task.original_name|linebreaksimple }}
+                    </h5>
+                    {% if task.title %}
+                      <p class="card-text text-body-secondary fst-italic ps-2 border-start border-4 border-secondary"
+                         style="--bs-border-opacity: .3;">
+                        {{ task.title|linebreaksimple }}
+                      </p>
+                    {% endif %}
+                  </a>
+                  {% if task.config.field_ra or task.config.pixscale %}
+                    <p class="card-text mt-2 mb-1">
+                        Field center: <span class="fw-bold" title="{{ task.config.field_ra|to_sexadecimal_hours }} {{ task.config.field_dec|to_sexadecimal_plus }}">
+                        {{ task.config.field_ra|floatformat:4 }} {{ task.config.field_dec|numformat:'+.4f' }}
+                        </span>
+                        Radius: <span class="fw-bold" title="{{ task.config.field_sr|to_sexadecimal }}">{{ task.config.field_sr|floatformat:2 }}</span> deg
+                        Pixel scale: <span class="fw-bold">{{ task.config.pixscale|multiply:3600|floatformat:2 }}</span> arcsec/pix
+                    </p>
+                  {% endif %}
+
+                  <p class="card-text mb-1">
+                    {% if task.config.target_ra or task.config.target_dec %}
+                      Target: <span class="fw-bold">{{ task.config.target_ra|to_sexadecimal_hours }} {{ task.config.target_dec|to_sexadecimal_plus }}</span>
+                    {% endif %}
+
+                    {% if task.config.mag_limit %}
+                      Detection limit: <span class="fw-bold">{{ task.config.mag_limit|floatformat:2 }}</span>
+                    {% endif %}
+
+                    {% if task.config.filter %}
+                      Filter: <span class="fw-bold">{{ task.config.filter }}</span>
+                    {% endif %}
+
+                    {% if task.config.time %}
+                      Time: <span class="fw-bold">{{ task.config.time }}</span>
+                    {% endif %}
+
+                  </p>
+
+                  <p class="card-text">
+                    <small class="text-body-secondary">
+                      Created: <span class="fst-italic me-2">{{ task.created|timestamp }}</span>
+                      Modified: <span class="fst-italic me-2">{{ task.modified|timestamp }}</span>
+                    </small>
+                  </p>
+
+                  <p class="card-text">
+                    <div class="placeholder">
+                      photometric data
+                    </div>
+                  </p>
+
+                </div>
+              </div>
+
+              {% if show_images and task.config.field_ra and task.config.field_dec %}
+                <div class="col-md-auto ms-3">
+                  {# Cutout thumbnail #}
+                  <img
+                  src="{% url 'task_preview' id=task.id path='image.fits' %}?timestamp={{ task.modified|unix }}&sub_ra={{ search_ra }}&sub_dec={{ search_dec }}&sub_sr={{ sub_sr }}&width=300"
+                  alt="Cutout"
+                  class="img-fluid rounded-end"
+                  style="width: 300px; height: 300px; object-fit: cover; cursor: pointer;"
+                  title="Click to enlarge"
+                  onclick="popupImage(event,
+                  '{% url 'task_preview' id=task.id path='image.fits' %}?timestamp={{ task.modified|unix }}&sub_ra={{ search_ra }}&sub_dec={{ search_dec }}&sub_sr={{ sub_sr }}&width=1024',
+                  'Task {{ task.id }}: {{ task.original_name }}',
+                  true, 'stdview-image', {'data-stretch':1,
+                  'data-mark-ra':'{{ search_ra }}',
+                  'data-mark-dec':'{{ search_dec }}',
+                  'data-mark-radius': '{{ search_sr0|divide:task.config.pixscale }}',
+                  'data-grid':1, 'data-zoom':1})"
+                  onerror="this.style.display='none'"
+                  />
+                </div>
+              {% endif %}
+
+            </div>
+          </div>
+
+
+
+        {% endwith %}
+      {% endfor %}
+
+    </div>
+
+    {% show_pages %}
+
+  {% elif form.is_bound %}
+    <p class="text-muted">No tasks found covering this position. Try adjusting the search coordinates or check that tasks have been processed through the photometry stage.</p>
+  {% else %}
+    <p class="text-muted">Enter coordinates to search for observations covering a specific sky position.</p>
+  {% endif %}
+
+
+{% endblock %}

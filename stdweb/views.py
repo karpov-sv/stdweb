@@ -25,7 +25,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.patches import Circle
 
-from stdpipe import cutouts, plots
+from stdpipe import cutouts, plots, astrometry
 
 from rest_framework.authtoken.models import Token
 
@@ -209,6 +209,20 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
     if not os.path.exists(fullpath):
         return HttpResponse('not found')
 
+    def get_wcs(get_header=False):
+        # Special handling of external WCS solution in .wcs file alongside with image
+        wcsname = os.path.splitext(fullpath)[0] + '.wcs'
+        if os.path.exists(wcsname):
+            header = fits.getheader(wcsname)
+        else:
+            header = fits.getheader(fullpath, ext)
+        wcs = WCS(header)
+
+        if get_header:
+            return header
+        else:
+            return wcs
+
     # Custom mask, if relevant
     if path in ['image.fits'] and os.path.exists(os.path.join(base, 'custom_mask.fits')):
         mask = fits.getdata(os.path.join(base, 'custom_mask.fits'), -1) > 0
@@ -235,6 +249,36 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
 
     data = fits.getdata(fullpath, ext)
 
+    if 'sub_ra' in request.GET:
+        sub_ra = float(request.GET.get('sub_ra'))
+        sub_dec = float(request.GET.get('sub_dec'))
+        sub_size = int(request.GET.get('sub_size', 0))
+        sub_sr = float(request.GET.get('sub_sr', 0.01))
+
+        header = get_wcs(get_header=True)
+        wcs = WCS(header)
+        if wcs is None or not wcs.is_celestial:
+            return HttpResponse(status=400, content="Invalid image WCS")
+
+        # Convert RA/Dec to pixel coordinates
+        x0, y0 = wcs.all_world2pix(sub_ra, sub_dec, 0)
+
+        if not sub_size:
+            sub_size = 2 * sub_sr / astrometry.get_pixscale(wcs=wcs)
+
+        # Check if coordinates are within image bounds
+        if x0 < 0 or y0 < 0 or x0 >= data.shape[1] or y0 >= data.shape[0]:
+            return HttpResponse(status=400, content="Coordinates outside image bounds")
+
+        data,header = cutouts.crop_image_centered(
+            data, x0, y0, sub_size/2,
+            header=header
+        )
+        # New, cropped WCS
+        wcs = WCS(header)
+    else:
+        wcs = None
+
     figsize = [data.shape[1]*zoom, data.shape[0]*zoom]
 
     if width is None:
@@ -255,8 +299,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         xlim = [x0 - 0.5*dx0/zoom, x0 + 0.5*dx0/zoom]
         ylim = [y0 - 0.5*dy0/zoom, y0 + 0.5*dy0/zoom]
     else:
-        xlim = [0, data.shape[1]]
-        ylim = [0, data.shape[0]]
+        xlim = [0, data.shape[1]-1]
+        ylim = [0, data.shape[0]-1]
 
     if width is not None and figsize[0] != width:
         figsize[1] = width*figsize[1]/figsize[0]
@@ -288,24 +332,14 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         max_plot_size=1024, xlim=xlim, ylim=ylim, fast=True
     )
 
-    def get_wcs():
-        # Special handling of external WCS solution in .wcs file alongside with image
-        wcsname = os.path.splitext(fullpath)[0] + '.wcs'
-        if os.path.exists(wcsname):
-            header = fits.getheader(wcsname)
-        else:
-            header = fits.getheader(fullpath, ext)
-        wcs = WCS(header)
-
-        return wcs
-
     if request.GET.get('ra', None) is not None and request.GET.get('dec', None) is not None:
         # Show the position of the object
         ra = [float(_) for _ in request.GET.get('ra').split(',')]
         dec = [float(_) for _ in request.GET.get('dec').split(',')]
         radius = float(request.GET.get('radius', 5.0))
 
-        wcs = get_wcs()
+        if wcs is None:
+            wcs = get_wcs()
 
         if wcs is not None and wcs.is_celestial:
             x,y = wcs.all_world2pix(ra, dec, 0)

@@ -457,3 +457,37 @@ class SkyPortalUploadForm(forms.Form):
 
         if instruments is not None:
             self.fields['instrument'].choices = instruments
+
+
+class LightcurveSearchForm(forms.Form):
+    coordinates = forms.CharField(
+        max_length=200,
+        required=True,
+        label="Sky Position",
+        widget=forms.TextInput(attrs={'placeholder': 'Name or coordinates'}),
+    )
+    radius = forms.FloatField(min_value=0, required=False, label="Search radius, arcsec")
+    show_images = forms.BooleanField(initial=True, required=False, label="Show images")
+    targets_only = forms.BooleanField(initial=True, required=False, label="Target photometry only")
+    show_all = forms.BooleanField(initial=True, required=False, label="Tasks from all users")
+
+    def __init__(self, *args, show_all=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_method = 'GET'
+        self.helper.form_action = 'lightcurves'
+        self.helper.field_template = 'crispy_field.html'
+        self.helper.layout = Layout(
+            Row(
+                Column('coordinates', css_class="col-md"),
+                Column('radius', css_class="col-md-auto"),
+                Column(Submit('search', 'Search', css_class='btn-primary mb-1'), css_class="col-md-auto"),
+                css_class='align-items-end',
+            ),
+            Row(
+                Column('show_images', css_class="col-md-auto"),
+                Column('targets_only', css_class="col-md-auto"),
+                Column('show_all', css_class="col-md-auto") if show_all else None,
+                css_class='align-items-end',
+            )
+        )

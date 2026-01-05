@@ -154,3 +154,22 @@
     min-width: 250px;
     width: auto;
 }
+
+/* Hide required field asterisk in Crispy forms */
+span.asteriskField {
+  display: none;
+}
+
+.card-badge-right {
+  position: absolute;
+  top: 0;
+  right: 1em;
+  transform: translate(0%, -50%);
+}
+
+.card-badge-left {
+  position: absolute;
+  top: 0;
+  left: 1em;
+  transform: translate(0%, -50%);
+}

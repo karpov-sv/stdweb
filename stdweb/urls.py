@@ -26,6 +26,7 @@ from . import views
 from . import views_tasks
 from . import views_celery
 from . import views_skyportal
+from . import views_lightcurves
 
 urlpatterns = [
     # REST API
@@ -67,6 +68,9 @@ urlpatterns = [
     path('tasks/<int:id>/state', views_tasks.task_state, name='task_state'),
 
     path('skyportal/', views_skyportal.skyportal, name='skyportal'),
+
+    # Lightcurves
+    path('lightcurves/', views_lightcurves.lightcurves, name='lightcurves'),
 
     # Celery queue
     path('queue/', views_celery.view_queue, {'id': None}, name='queue'),
