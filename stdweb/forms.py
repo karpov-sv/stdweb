@@ -464,9 +464,15 @@ class LightcurveSearchForm(forms.Form):
         max_length=200,
         required=True,
         label="Sky Position",
-        widget=forms.TextInput(attrs={'placeholder': 'Name or coordinates'}),
+        widget=forms.TextInput(attrs={'placeholder': 'Object name or coordinates'}),
     )
-    radius = forms.FloatField(min_value=0, required=False, label="Search radius, arcsec")
+    extra = forms.CharField(
+        max_length=200,
+        required=False,
+        label="Additional criteria",
+        widget=forms.TextInput(attrs={'placeholder': 'Filter by filename or title or username'}),
+    )
+    radius = forms.FloatField(min_value=0, initial=5, required=True, label="Search radius, arcsec")
     show_images = forms.BooleanField(initial=True, required=False, label="Show images")
     targets_only = forms.BooleanField(initial=True, required=False, label="Target photometry only")
     show_all = forms.BooleanField(initial=True, required=False, label="Tasks from all users")
@@ -480,7 +486,8 @@ class LightcurveSearchForm(forms.Form):
         self.helper.layout = Layout(
             Row(
                 Column('coordinates', css_class="col-md"),
-                Column('radius', css_class="col-md-auto"),
+                Column('extra', css_class="col-md-4"),
+                Column('radius', css_class="col-md-2"),
                 Column(Submit('search', 'Search', css_class='btn-primary mb-1'), css_class="col-md-auto"),
                 css_class='align-items-end',
             ),

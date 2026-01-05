@@ -358,15 +358,22 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         if path.startswith('sub_'):
              # Transient candidates
             objname = 'candidates.vot'
+            use_wcs = True
+        elif 'sub_ra' in request.GET:
+            # Detected objects on cropped image
+            objname = 'objects.vot'
+            use_wcs = True
         else:
             objname = 'objects.vot'
+            use_wcs = False
         objname = os.path.join(os.path.dirname(fullpath), objname)
         if os.path.exists(objname):
             obj = Table.read(objname)
 
             if obj is not None:
-                if path.startswith('sub_'):
-                    wcs = get_wcs()
+                if use_wcs:
+                    if wcs is None:
+                        wcs = get_wcs()
                     x,y = wcs.all_world2pix(obj['ra'], obj['dec'], 0)
                 else:
                     x,y = obj['x'], obj['y']

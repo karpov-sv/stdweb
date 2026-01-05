@@ -1,0 +1,63 @@
+{# Template fragment for photometry table #}
+{% load filters %}
+
+<div class="card-text">
+  Detections in <strong>{{ metadata.filename }}</strong>:
+  <strong>{{ metadata.count }}</strong>
+</div>
+
+{% if metadata.count %}
+  <div class="table-responsive mt-2 mb-0 overflow-auto" style="max-height: 300px">
+    <table class="table table-sm table-hover" >
+      <thead class="table-light" style="position: sticky; top: 0">
+        <tr>
+          <th>Dist</th>
+          <th>RA</th>
+          <th>Dec</th>
+          <th>Magnitude</th>
+          <th>Band</th>
+          <th>Flags</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in measurements %}
+          <tr>
+            <td>{{ obj.distance_arcsec|floatformat:2 }}"</td>
+            <td>{{ obj.ra|floatformat:5 }}</td>
+            <td>{{ obj.dec|floatformat:5 }}</td>
+            <td>
+              {% if obj.mag_calib %}
+                {{ obj.mag_calib|floatformat:3 }} ± {{ obj.mag_calib_err|floatformat:3 }}
+              {% else %}
+                {# nothing? #}--
+              {% endif %}
+            </td>
+            <td>
+              {% if obj.band %}
+                {{ obj.band }}
+              {% else %}
+                {# nothing? #}--
+              {% endif %}
+            </td>
+            <td>
+              {% if obj.flags is not None %}
+                <span class="text-body-tertiary">0x</span>{{ obj.flags|numformat:"04x" }}
+              {% else %}
+                {#  #}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!--
+    <div class="text-muted small">
+    <strong>Filter:</strong> {{ metadata.filter|default:'?' }} |
+    <strong>Time:</strong> {{ metadata.time|default:'?' }} |
+    <strong>Count:</strong> {{ metadata.count }} objects
+    </div>
+    -->
+
+  </div>
+{% endif %}

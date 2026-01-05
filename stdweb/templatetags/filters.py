@@ -186,6 +186,7 @@ def divide(value, arg):
     except (ValueError, TypeError):
         return ''
 
+
 from ..views_skyportal import skyportal_get_instruments
 # TODO: more optimal caching?..
 skyportal_instruments = None
@@ -217,4 +218,7 @@ def numformat(value, arg):
     try:
         return format(float(value), arg)
     except (ValueError, TypeError):
-        return ''
+        try:
+            return format(int(value), arg)
+        except (ValueError, TypeError):
+            return ''

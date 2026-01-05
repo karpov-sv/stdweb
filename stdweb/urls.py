@@ -71,6 +71,7 @@ urlpatterns = [
 
     # Lightcurves
     path('lightcurves/', views_lightcurves.lightcurves, name='lightcurves'),
+    path('lightcurves/photometry/<int:id>/html', views_lightcurves.task_photometry_html, name='lightcurve_photometry_html'),
 
     # Celery queue
     path('queue/', views_celery.view_queue, {'id': None}, name='queue'),
