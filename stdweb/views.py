@@ -389,7 +389,7 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
              # Transient candidates
             objname = 'candidates.vot'
             use_wcs = True
-        elif 'sub_ra' in request.GET:
+        elif 'sub_ra' in request.GET or path == 'image_target.fits':
             # Detected objects on cropped image
             objname = 'objects.parquet'
             use_wcs = True
