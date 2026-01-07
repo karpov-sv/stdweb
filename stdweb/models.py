@@ -26,6 +26,12 @@ class Task(models.Model):
     modified = models.DateTimeField(auto_now=True) # Updated on every .save()
     completed = models.DateTimeField(default=now, editable=False) # Manually updated on finishing the processing
 
+    # For positional searches
+    ra = models.FloatField(blank=True, null=True)
+    dec = models.FloatField(blank=True, null=True)
+    radius = models.FloatField(blank=True, null=True)
+    moc = models.TextField(blank=True, null=True)
+
     config = models.JSONField(default=dict, blank=True) #
 
     def path(self):

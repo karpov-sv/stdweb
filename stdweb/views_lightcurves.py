@@ -5,23 +5,21 @@ from django.contrib import messages
 from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.cache import cache_page
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q, F
 
 import os
-import io
 import numpy as np
 
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
-from astropy.io import fits
-from astropy.wcs import WCS
 from astropy.table import Table
+from astropy.coordinates import SkyCoord
+
+from mocpy import MOC
 
 from stdpipe import astrometry, resolve, photometry
 
 from . import models
 from . import forms
-from . import utils
+
 
 def lightcurves(request):
     """
@@ -92,6 +90,11 @@ def lightcurves(request):
                         Q(user__last_name__icontains = token)
                     )
 
+            # Approximate position search - dec only
+            tasks = tasks.filter(
+                dec__gte=dec0 - F('radius'),
+                dec__lte=dec0 + F('radius')
+            )
 
             # Store search coordinates for template display
             context['search_ra'] = ra0
@@ -106,26 +109,37 @@ def lightcurves(request):
 
             for task in tasks:
                 # TODO: MOC-based filtering
-                # Extract field center and radius from task config
-                ra, dec, sr = [task.config.get(_) for _ in ['field_ra', 'field_dec', 'field_sr']]
 
-                if ra is not None and dec is not None and sr is not None:
+                if task.ra is not None and task.dec is not None and task.radius is not None and task.moc is not None:
+                    is_good = True
+
                     # Calculate angular distance between search position and field center
-                    dist = astrometry.spherical_distance(ra, dec, ra0, dec0)
+                    dist = astrometry.spherical_distance(task.ra, task.dec, ra0, dec0)
+                    if dist > task.radius:
+                        is_good = False
 
                     # Check target info if targets_only is set
-                    if targets_only and  dist < sr:
+                    if targets_only and is_good:
                         targets = task.config.get('targets', [])
                         if not len(targets):
-                            dist = np.inf
+                            is_good = False
                         else:
                             for target in targets:
-                                if astrometry.spherical_distance(target['ra'], target['dec'], ra0, dec0) > sr:
-                                    dist = np.inf
+                                if astrometry.spherical_distance(
+                                        target['ra'], target['dec'],
+                                        ra0, dec0
+                                ) > radius_arcsec/3600:
+                                    is_good = False
                                     break
 
-                    # Check if search position falls within task's field
-                    if dist < sr:
+                    # Final check based on MOC
+                    if is_good:
+                        moc = MOC.from_string(task.moc)
+
+                        if not moc.contains_skycoords(SkyCoord(ra0, dec0, unit='deg', frame='icrs')):
+                            is_good = False
+
+                    if is_good:
                         # Store task with distance information
                         task_data.append({
                             'task': task,

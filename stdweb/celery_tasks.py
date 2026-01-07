@@ -9,6 +9,9 @@ from functools import partial
 
 import numpy as np
 from astropy.time import Time
+from astropy.io import fits
+
+from stdpipe import astrometry
 
 from . import models
 from . import processing
@@ -102,6 +105,27 @@ def fix_config(config):
             config[key] = float(config[key])
 
 
+def task_update_moc(task):
+    """Update frame center and MOC coverage in the task fields"""
+    filename = os.path.join(task.path(), 'image.fits')
+    header = fits.getheader(filename, -1)
+
+    processing.fix_header(header)
+    wcs = processing.get_wcs(filename, header=header, verbose=False)
+
+    if not wcs or not wcs.is_celestial:
+        return
+
+    w,h = header['NAXIS1'], header['NAXIS2']
+    ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, shape=(h, w))
+
+    task.ra = ra0
+    task.dec = dec0
+    task.radius = sr0
+
+    task.moc = processing.get_moc_for_wcs(wcs, (h, w))
+
+
 @shared_task(bind=True)
 def task_finalize(self, id):
     task = models.Task.objects.get(id=id)
@@ -137,6 +161,7 @@ def task_break_if_failed(self, id):
         self.request.chain = None
         raise RuntimeError("Task chain cancelled")
 
+
 @shared_task(bind=True)
 def task_cleanup(self, id, finalize=True):
     task = models.Task.objects.get(id=id)
@@ -149,10 +174,17 @@ def task_cleanup(self, id, finalize=True):
             else:
                 os.unlink(path)
 
+    # TODO: should we reset task' ra, dec, radius and moc fields here?..
+    task.ra = None
+    task.dec = None
+    task.radius = None
+    task.moc = None
+
     if finalize:
         # End processing
         task.state = 'cleanup_done'
         task.celery_id = None
+        task.celery_chain_ids = []
         task.complete()
 
     task.save()
@@ -178,6 +210,7 @@ def task_inspect(self, id, finalize=True):
         # Start processing
         try:
             processing.inspect_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+            task_update_moc(task)
             task.state = 'inspect_done'
         except:
             import traceback
@@ -189,6 +222,7 @@ def task_inspect(self, id, finalize=True):
         if finalize:
             # End processing
             task.celery_id = None
+            task.celery_chain_ids = []
             task.complete()
 
         fix_config(config)
@@ -215,6 +249,7 @@ def task_photometry(self, id, finalize=True):
         # Start processing
         try:
             processing.photometry_image(os.path.join(basepath, 'image.fits'), config, verbose=log)
+            task_update_moc(task)
             task.state = 'photometry_done'
         except:
             import traceback
@@ -226,6 +261,7 @@ def task_photometry(self, id, finalize=True):
         if finalize:
             # End processing
             task.celery_id = None
+            task.celery_chain_ids = []
             task.complete()
 
         fix_config(config)
@@ -263,6 +299,7 @@ def task_transients_simple(self, id, finalize=True):
         if finalize:
             # End processing
             task.celery_id = None
+            task.celery_chain_ids = []
             task.complete()
 
         fix_config(config)
@@ -300,6 +337,7 @@ def task_subtraction(self, id, finalize=True):
         if finalize:
             # End processing
             task.celery_id = None
+            task.celery_chain_ids = []
             task.complete()
 
         fix_config(config)
@@ -337,6 +375,7 @@ def task_stacking(self, id, finalize=True):
         if finalize:
             # End processing
             task.celery_id = None
+            task.celery_chain_ids = []
             task.complete()
 
         fix_config(config)

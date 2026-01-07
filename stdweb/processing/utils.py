@@ -298,3 +298,41 @@ def write_ds9_regions(filename, objs, radius=None):
     regs = regions.Regions(regs)
 
     regs.write(filename, format='ds9', overwrite=True)
+
+
+from mocpy import MOC
+
+def _get_moc_order(shape, pixscale, frac=1/100):
+    area_sky = 4*np.pi*(180/np.pi)**2
+    area = shape[0] * shape[1] * pixscale**2
+
+    for order in range(3, 12):
+        cell_area = area_sky / MOC.n_cells(order)
+        if cell_area < area * frac:
+            break
+
+    return order
+
+
+def get_moc_for_wcs(wcs, shape, get_moc=False):
+    """
+    Get MOC representation for a given wcs and image shape
+    """
+    ra,dec = wcs.all_pix2world(
+        [0, 0, shape[1], shape[1], 0],
+        [0, shape[0], shape[0], 0, 0],
+        0
+    )
+
+    order = _get_moc_order(shape, astrometry.get_pixscale(wcs=wcs))
+
+    moc = MOC.from_polygon_skycoord(
+        SkyCoord(ra, dec, unit='deg', frame='icrs'),
+        complement=False,
+        max_depth=order
+    )
+
+    if get_moc:
+        return moc
+    else:
+        return moc.to_string()

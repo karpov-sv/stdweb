@@ -91,12 +91,12 @@
                   </div>
                 {% endif %}
 
-                {% if task.config.field_ra or task.config.pixscale %}
+                {% if task.ra or task.config.pixscale %}
                   <div>
-                    Field center: <span class="fw-bold" title="{{ task.config.field_ra|to_sexadecimal_hours }} {{ task.config.field_dec|to_sexadecimal_plus }}">
-                    {{ task.config.field_ra|floatformat:4 }} {{ task.config.field_dec|numformat:'+.4f' }}
+                    Field center: <span class="fw-bold" title="{{ task.ra|to_sexadecimal_hours }} {{ task.dec|to_sexadecimal_plus }}">
+                    {{ task.ra|floatformat:4 }} {{ task.dec|numformat:'+.4f' }}
                     </span>
-                    Radius: <span class="fw-bold" title="{{ task.config.field_sr|to_sexadecimal }}">{{ task.config.field_sr|floatformat:2 }}</span> deg
+                    Radius: <span class="fw-bold" title="{{ task.radius|to_sexadecimal }}">{{ task.radius|floatformat:2 }}</span> deg
                     Pixel scale: <span class="fw-bold">{{ task.config.pixscale|multiply:3600|floatformat:2 }}</span> arcsec/pix
                   </div>
                 {% endif %}

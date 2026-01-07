@@ -320,9 +320,8 @@ def tasks(request, id=None):
 
                         pks = []
                         for task in tasks:
-                            ra,dec,sr = [task.config.get(_) for _ in ['field_ra', 'field_dec', 'field_sr']]
-                            if ra is not None and dec is not None and sr is not None:
-                                dist = astrometry.spherical_distance(ra, dec, ra0, dec0)
+                            if task.ra is not None and task.dec is not None and task.radius is not None:
+                                dist = astrometry.spherical_distance(task.ra, task.dec, ra0, dec0)
 
                                 if sr0 is not None and dist < sr0:
                                     # Only consider image center if the search radius is defined

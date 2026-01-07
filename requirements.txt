@@ -18,6 +18,7 @@ djangorestframework>=3.14
 django-filter>=23.0
 markdown>=3.4
 pyarrow
+mocpy
 
 # Testing
 pytest>=7.0
