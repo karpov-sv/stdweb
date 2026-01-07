@@ -34,11 +34,12 @@ def kill_task_processes(task):
 class TaskProcessContext:
     """
     Context manager for task execution with process group management.
-    Handles: cancellation check, process group setup, signal handlers, cleanup.
+    Handles: cancellation check, process group setup, signal handlers, cleanup, finalization.
     """
-    def __init__(self, celery_task, task_id):
+    def __init__(self, celery_task, task_id, finalize=True):
         self.celery_task = celery_task
         self.task_id = task_id
+        self.finalize = finalize
         self.task = None
         self.basepath = None
         self.cancelled = False
@@ -90,9 +91,27 @@ class TaskProcessContext:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._cleanup_pid()
+
+        # Handle finalization based on task state
+        if self.task:
+            # Check if task failed (state ends with '_failed')
+            if self.task.state and self.task.state.endswith('_failed'):
+                # Always break chain on error
+                self.task.celery_id = None
+            elif self.finalize:
+                # Success with finalize=True: mark complete
+                self.task.celery_id = None
+                self.task.celery_chain_ids = []
+                self.task.complete()
+            # else: Success with finalize=False: leave celery_id (continue chain)
+
+            # Save task (always)
+            self.task.save()
+
         # Restore old signal handler
         if self._old_sigterm is not None:
             signal.signal(signal.SIGTERM, self._old_sigterm)
+
         return False  # Don't suppress exceptions
 
 
@@ -192,7 +211,7 @@ def task_cleanup(self, id, finalize=True):
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
 def task_inspect(self, id, finalize=True):
-    with TaskProcessContext(self, id) as ctx:
+    with TaskProcessContext(self, id, finalize=finalize) as ctx:
         if ctx.cancelled:
             return
 
@@ -215,23 +234,15 @@ def task_inspect(self, id, finalize=True):
         except:
             import traceback
             log("\nError!\n", traceback.format_exc())
-
             task.state = 'inspect_failed'
-            task.celery_id = None
-
-        if finalize:
-            # End processing
-            task.celery_id = None
-            task.celery_chain_ids = []
-            task.complete()
 
         fix_config(config)
-        task.save()
+        # Context manager handles finalize and save
 
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
 def task_photometry(self, id, finalize=True):
-    with TaskProcessContext(self, id) as ctx:
+    with TaskProcessContext(self, id, finalize=finalize) as ctx:
         if ctx.cancelled:
             return
 
@@ -254,23 +265,15 @@ def task_photometry(self, id, finalize=True):
         except:
             import traceback
             log("\nError!\n", traceback.format_exc())
-
             task.state = 'photometry_failed'
-            task.celery_id = None
-
-        if finalize:
-            # End processing
-            task.celery_id = None
-            task.celery_chain_ids = []
-            task.complete()
 
         fix_config(config)
-        task.save()
+        # Context manager handles finalize and save
 
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
 def task_transients_simple(self, id, finalize=True):
-    with TaskProcessContext(self, id) as ctx:
+    with TaskProcessContext(self, id, finalize=finalize) as ctx:
         if ctx.cancelled:
             return
 
@@ -292,23 +295,15 @@ def task_transients_simple(self, id, finalize=True):
         except:
             import traceback
             log("\nError!\n", traceback.format_exc())
-
             task.state = 'transients_simple_failed'
-            task.celery_id = None
-
-        if finalize:
-            # End processing
-            task.celery_id = None
-            task.celery_chain_ids = []
-            task.complete()
 
         fix_config(config)
-        task.save()
+        # Context manager handles finalize and save
 
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
 def task_subtraction(self, id, finalize=True):
-    with TaskProcessContext(self, id) as ctx:
+    with TaskProcessContext(self, id, finalize=finalize) as ctx:
         if ctx.cancelled:
             return
 
@@ -330,23 +325,15 @@ def task_subtraction(self, id, finalize=True):
         except:
             import traceback
             log("\nError!\n", traceback.format_exc())
-
             task.state = 'subtraction_failed'
-            task.celery_id = None
-
-        if finalize:
-            # End processing
-            task.celery_id = None
-            task.celery_chain_ids = []
-            task.complete()
 
         fix_config(config)
-        task.save()
+        # Context manager handles finalize and save
 
 
 @shared_task(bind=True, acks_late=True, reject_on_worker_lost=True)
 def task_stacking(self, id, finalize=True):
-    with TaskProcessContext(self, id) as ctx:
+    with TaskProcessContext(self, id, finalize=finalize) as ctx:
         if ctx.cancelled:
             return
 
@@ -368,18 +355,10 @@ def task_stacking(self, id, finalize=True):
         except:
             import traceback
             log("\nError!\n", traceback.format_exc())
-
             task.state = 'stacking_failed'
-            task.celery_id = None
-
-        if finalize:
-            # End processing
-            task.celery_id = None
-            task.celery_chain_ids = []
-            task.complete()
 
         fix_config(config)
-        task.save()
+        # Context manager handles finalize and save
 
 
 # Higher-level interface for running (multiple) processing steps for the task
