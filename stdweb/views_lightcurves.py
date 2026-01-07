@@ -257,7 +257,7 @@ def task_photometry_html(request, id):
             obj['distance_arcsec'] = dist * 3600
 
             # Color term
-            if 'mag_color_term' in obj.colnames:
+            if 'mag_color_term' in obj.colnames and obj['mag_color_term'][0] and obj['mag_color_term'][0] != 'None':
                 obj['band'] = [photometry.format_color_term(
                     _['mag_color_term'],
                     name=_['mag_filter_name'],
