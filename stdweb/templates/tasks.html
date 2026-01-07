@@ -91,7 +91,7 @@
                   </div>
                 {% endif %}
 
-                {% if task.ra or task.config.pixscale %}
+                {% if task.ra is not None and task.dec is not None and task.radius is not None and task.config.pixscale %}
                   <div>
                     Field center: <span class="fw-bold" title="{{ task.ra|to_sexadecimal_hours }} {{ task.dec|to_sexadecimal_plus }}">
                     {{ task.ra|floatformat:4 }} {{ task.dec|numformat:'+.4f' }}
@@ -102,7 +102,7 @@
                 {% endif %}
 
                 <div>
-                  {% if task.config.target_ra or task.config.target_dec %}
+                  {% if task.config.target_ra is not None and task.config.target_dec is not None %}
                     Target: <span class="fw-bold">{{ task.config.target_ra|to_sexadecimal_hours }} {{ task.config.target_dec|to_sexadecimal_plus }}</span>
                   {% endif %}
 

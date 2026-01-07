@@ -75,7 +75,7 @@
                       </p>
                     {% endif %}
                   </a>
-                  {% if task.ra or task.config.pixscale %}
+                  {% if task.ra is not None and task.dec is not None and task.radius is not None and task.config.pixscale %}
                     <p class="card-text mt-2 mb-1">
                       Center: <span class="fw-bold" title="{{ task.ra|to_sexadecimal_hours }} {{ task.dec|to_sexadecimal_plus }}">
                       {{ task.ra|floatformat:4 }} {{ task.dec|numformat:'+.4f' }}
@@ -86,7 +86,7 @@
                   {% endif %}
 
                   <p class="card-text mb-1">
-                    {% if task.config.target_ra or task.config.target_dec %}
+                    {% if task.config.target_ra is not None and task.config.target_dec is not None %}
                       Target: <span class="fw-bold">{{ task.config.target_ra|to_sexadecimal_hours }} {{ task.config.target_dec|to_sexadecimal_plus }}</span>
                     {% endif %}
 
@@ -125,7 +125,7 @@
                 </div>
               </div>
 
-              {% if show_images and task.ra and task.dec %}
+              {% if show_images and task.ra is not None and task.dec is not None %}
                 <div class="col-md-auto ms-3">
                   {# Cutout thumbnail #}
                   <img

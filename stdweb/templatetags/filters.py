@@ -96,6 +96,9 @@ def naturalsize(size):
 
 @register.filter
 def to_sexadecimal(value, plus=False):
+    if value is None:
+        return ''
+
     avalue = np.abs(value)
     deg = int(np.floor(avalue))
     min = int(np.floor(60.0*(avalue - deg)))
