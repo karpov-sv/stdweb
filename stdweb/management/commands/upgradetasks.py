@@ -58,9 +58,9 @@ class Command(BaseCommand):
                     if task.config:
                         task.config['pixscale'] = pixscale
 
-                        task.config.pop('field_ra')
-                        task.config.pop('field_dec')
-                        task.config.pop('field_sr')
+                        task.config.pop('field_ra', None)
+                        task.config.pop('field_dec', None)
+                        task.config.pop('field_sr', None)
 
                     task.moc = processing.get_moc_for_wcs(wcs, (h, w))
 
