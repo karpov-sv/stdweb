@@ -4,14 +4,14 @@
     {% if is_task_browser %}
     <img src="{% url 'task_cutout' id=task_id path=path %}" class="img-fluid stdview-image"
          data-stretch
-         {% if ra or dec %}
+         {% if ra is not None and dec is not None %}
          data-mark-ra={{ ra }} data-mark-dec={{ dec }}
          {% endif %}
          alt="{{ path }}"/>
     {% else %}
     <img src="{% url 'cutout' path=path %}" class="img-fluid stdview-image"
          data-stretch
-         {% if ra or dec %}
+         {% if ra is not None and dec is not None %}
          data-mark-ra={{ ra }} data-mark-dec={{ dec }}
          {% endif %}
          alt="{{ path }}"/>

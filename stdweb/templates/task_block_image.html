@@ -36,7 +36,10 @@
     <!-- Cutout -->
     <img src="{% url 'task_cutout' task.id image %}?timestamp={{ task.completed|unix }}&format=png"
          class="figure-img img-fluid rounded mb-0 stdview-image"
-         data-stretch=1 data-smooth=1 data-mark-ra={{ ra }} data-mark-dec={{ dec }}
+         data-stretch=1 data-smooth=1
+         {% if ra is not None and dec is not None %}
+         data-mark-ra={{ ra }} data-mark-dec={{ dec }}
+         {% endif %}
          {% if task.config.fwhm and task.config.rel_aper %}
          data-mark-radius={{ task.config.fwhm|multiply:task.config.rel_aper }}
          {% endif %}
