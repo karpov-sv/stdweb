@@ -319,7 +319,8 @@ def preview(request, path, width=None, minwidth=256, maxwidth=1024, base=setting
         else:
             width = figsize[0]
 
-    if zoom > 1:
+    # Only crop when zoom > 1 AND the zoomed width exceeds maxwidth
+    if zoom > 1 and figsize[0] > maxwidth:
         x0,dx0 = data.shape[1]/2, data.shape[1]
         y0,dy0 = data.shape[0]/2, data.shape[0]
 
