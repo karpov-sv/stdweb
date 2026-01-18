@@ -56,6 +56,7 @@
       <ol class="breadcrumb">
         {% if is_task_browser %}
           <li class="breadcrumb-item">
+            <a href="{% url 'tasks' id=task_id %}"><span class="fa fa-angle-left text-body"/></a>
             <a href="{% url 'tasks' id=task_id %}">Task {{ task_id }}</a>
           </li>
         {% endif %}

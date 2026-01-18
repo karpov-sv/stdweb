@@ -187,7 +187,7 @@ def task_cleanup(self, id, finalize=True):
     basepath = task.path()
 
     for path in glob.glob(os.path.join(basepath, '*')):
-        if os.path.split(path)[-1] != 'image.fits':
+        if os.path.split(path)[-1] not in ['image.fits', 'image.orig.fits']:
             if os.path.isdir(path):
                 shutil.rmtree(path)
             else:

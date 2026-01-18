@@ -1,0 +1,136 @@
+{% extends "template.html" %}
+
+{% load tags %}
+{% load filters %}
+{% load static %}
+
+{% block title_div %}{% endblock %}
+
+{% block content %}
+
+  {% if not task %}
+    <p>Task not found</p>
+  {% else %}
+
+    <h2>
+      <a href="{% url 'tasks' id=task.id %}" class="text-decoration-none text-body me-2"
+         title="Return to task page">
+        <span class="fa fa-angle-left"/>
+      </a>
+
+      Image pre-processing for Task {{ task.id }}</h2>
+
+    <p class="text-muted">
+      Apply preprocessing operations to remove artifacts from the image or crop the image to the desired region.
+    </p>
+
+    <!-- Display image -->
+    <div class="mb-2 text-center">
+      <img src="{% url 'task_preview' id=task.id path='image.fits' %}?width=1024&timestamp={{ task.completed|unix }}"
+           class="img-thumbnail img-fluid stdview-image" alt="image.fits" id="image"
+           data-stretch data-zoom data-grid />
+    </div>
+
+    <!-- Preprocessing controls -->
+    <div class="mb-4">
+      <form action="" method="POST" id="form">
+        {% csrf_token %}
+
+        <h5>Remove stripes from image</h5>
+        <button type="submit" name="action" value="destripe_vertical"
+                class="btn btn-primary"
+                title="Remove vertical lines from the image">
+          Destripe vertical
+        </button>
+
+        <button type="submit" name="action" value="destripe_horizontal"
+                class="btn btn-primary"
+                title="Remove horizontal lines from the image">
+          Destripe horizontal
+        </button>
+
+      </form>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="mb-4">
+      <form action="" method="POST" id="form">
+        {% csrf_token %}
+
+        <h5>Crop image</h5>
+        <p class="text-muted small">
+          Crop the image using pixel coordinates or offsets. Use negative values for offsets from the right/top edges.
+        </p>
+        <div class="row align-items-end mb-2">
+          <div class="col">
+            <label for="crop_x1" class="form-label">Min X</label>
+            <input type="number" class="form-control" name="crop_x1" id="crop_x1"
+                   title="Use negative values for offsets from the right"/>
+          </div>
+          <div class="col">
+            <label for="crop_y1" class="form-label">Min Y</label>
+            <input type="number" class="form-control" name="crop_y1" id="crop_y1"
+                   title="Use negative values for offsets from the top"/>
+          </div>
+          <div class="col">
+            <label for="crop_x2" class="form-label">Max X</label>
+            <input type="number" class="form-control" name="crop_x2" id="crop_x2"
+                   title="Use negative values for offsets from the right"/>
+          </div>
+          <div class="col">
+            <label for="crop_y2" class="form-label">Max Y</label>
+            <input type="number" class="form-control" name="crop_y2" id="crop_y2"
+                   title="Use negative values for offsets from the top"/>
+          </div>
+          <div class="col">
+            <button type="submit" name="action" value="crop_image" class="btn btn-primary"
+                    title="Crop the image">
+              Crop
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="mb-4">
+      <form action="" method="POST" id="form">
+        {% csrf_token %}
+
+        <h5>Reset</h5>
+          {% if has_backup %}
+            <p class="text-success small">
+              A backup of the original image exists and can be restored.
+            </p>
+          {% else %}
+            <p class="text-muted small">
+              The original image will be backed up automatically before any modifications.
+            </p>
+          {% endif %}
+        </p>
+        <button type="submit" name="action" value="reset"
+                class="btn btn-warning"
+                {% if not has_backup %}disabled title="No backup available"{% else %}title="Restore original image from backup"{% endif %}>
+          Reset to original
+        </button>
+
+      </form>
+    </div>
+
+    <!--
+    <hr class="my-3">
+
+    <div class="mb-4">
+      <a href="{% url 'tasks' id=task.id %}" class="btn btn-secondary"
+         title="Return to task page">
+        Back to task
+      </a>
+    </div>
+    -->
+
+  {% endif %}
+
+{% endblock %}

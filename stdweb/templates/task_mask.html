@@ -82,6 +82,11 @@
   {% else %}
 
     <h2>
+      <a href="{% url 'tasks' id=task.id %}" class="text-decoration-none text-body me-2"
+         title="Return to task page">
+        <span class="fa fa-angle-left"/>
+      </a>
+
       {% if mode == 'template' %}
         Create Custom Template Mask for Task {{ task.id }}
       {% else %}

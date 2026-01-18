@@ -157,29 +157,6 @@ def tasks(request, id=None):
                     processing.fix_image(os.path.join(task.path(), 'image.fits'), task.config)
                     messages.success(request, "Fixed the image header for task " + str(id))
 
-                if action == 'crop_image':
-                    # TODO: move to async celery task?..
-                    processing.crop_image(
-                        os.path.join(task.path(), 'image.fits'), task.config,
-                        x1=request.POST.get('crop_x1'),
-                        y1=request.POST.get('crop_y1'),
-                        x2=request.POST.get('crop_x2'),
-                        y2=request.POST.get('crop_y2')
-                    )
-
-                    messages.success(request, "Cropped the image for task " + str(id))
-                    # Now we have to cleanup, which will be handled below
-
-                if action == 'destripe_vertical' or action == 'destripe_horizontal':
-                    processing.preprocess_image(
-                        os.path.join(task.path(), 'image.fits'), task.config,
-                        destripe_vertical=True if action == 'destripe_vertical' else False,
-                        destripe_horizontal=True if action == 'destripe_horizontal' else False,
-                    )
-
-                    messages.success(request, "Removed the lines from the image for task " + str(id))
-                    # Now we have to cleanup, which will be handled below
-
                 if action == 'update_config':
                     if 'raw_config' in form.changed_data:
                         task.config = form.cleaned_data.get('raw_config')
@@ -191,11 +168,10 @@ def tasks(request, id=None):
                 if action == 'make_custom_mask':
                     return HttpResponseRedirect(reverse('task_mask', kwargs={'id': task.id, 'mode': 'image'}))
 
-                if action in [
-                        'cleanup_task', 'archive_task',
-                        'crop_image',
-                        'destripe_horizontal', 'destripe_vertical'
-                ]:
+                if action == 'preprocess':
+                    return HttpResponseRedirect(reverse('task_preprocess', kwargs={'id': task.id}))
+
+                if action in ['cleanup_task', 'archive_task']:
                     if action in ['cleanup_task']:
                         task.config = {} # We reset the config on cleanup but keep on archiving
                         log_action('task_cleanup', task=task, request=request, details={'access': 'web'})
@@ -565,6 +541,111 @@ def task_mask(request, id=None, mode='image'):
         context['inverted'] = data.get('inverted', False)
 
     return TemplateResponse(request, 'task_mask.html', context=context)
+
+
+def task_preprocess(request, id=None):
+    """
+    Interactive preprocessing for images (destripe, crop operations with backup/restore).
+
+    Args:
+        id: Task ID
+    """
+    task = get_object_or_404(models.Task, id=id)
+    basepath = task.path()
+
+    image_path = os.path.join(basepath, 'image.fits')
+    orig_path = os.path.join(basepath, 'image.orig.fits')
+
+    # Validate image exists
+    if not os.path.exists(image_path):
+        messages.error(request, "Image file not found for task " + str(id))
+        return HttpResponseRedirect(reverse('tasks', kwargs={'id': task.id}))
+
+    # Helper for backing up image before processing
+    def _backup_image():
+        if not os.path.exists(orig_path):
+            shutil.copy2(image_path, orig_path)
+
+    # Helper for actions after actual processing
+    def _post_action():
+        # Update the timestamp so that the image preview is instantly updated
+        task.complete()
+        task.save()
+
+        # Trigger cleanup
+        celery_tasks.run_task_steps(task, ['cleanup'])
+
+    # Actual processing
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action in ['destripe_vertical', 'destripe_horizontal']:
+            # Create backup before first modification
+            _backup_image()
+
+            # Apply preprocessing
+            processing.preprocess_image(
+                image_path, task.config,
+                destripe_vertical=(action == 'destripe_vertical'),
+                destripe_horizontal=(action == 'destripe_horizontal'),
+            )
+
+            messages.success(request, "Removed lines from the image for task " + str(id))
+
+            # Run necessary post-activity actions
+            _post_action()
+
+        elif action == 'crop_image':
+            x1 = request.POST.get('crop_x1')
+            y1 = request.POST.get('crop_y1')
+            x2 = request.POST.get('crop_x2')
+            y2 = request.POST.get('crop_y2')
+
+            # Validate that at least some coordinates are provided
+            if not any([x1, y1, x2, y2]):
+                messages.error(request, "Please provide at least one crop coordinate")
+                return HttpResponseRedirect(request.path_info)
+
+            # Create backup before first modification
+            _backup_image()
+
+            # Apply cropping
+            processing.crop_image(
+                image_path, task.config,
+                x1=x1, y1=y1, x2=x2, y2=y2
+            )
+
+            messages.success(request, "Cropped the image for task " + str(id))
+
+            # Run necessary post-activity actions
+            _post_action()
+
+        elif action == 'reset':
+            # Restore from backup
+            if not os.path.exists(orig_path):
+                messages.error(request, "No backup image available to restore for task " + str(id))
+                return HttpResponseRedirect(request.path_info)
+
+            shutil.copy2(orig_path, image_path)
+            messages.success(request, "Reset image to original for task " + str(id))
+
+            # Remove the backup to preserve space
+            # FIXME: is it easier to just move the file above?..
+            os.remove(orig_path)
+
+            # Run necessary post-activity actions
+            _post_action()
+
+        # Redirect back to preprocessing page for multiple operations
+        return HttpResponseRedirect(request.path_info)
+
+    # GET: Display preprocessing interface
+    context = {
+        'task': task,
+        'has_backup': os.path.exists(orig_path),
+    }
+
+    return TemplateResponse(request, 'task_preprocess.html', context=context)
 
 
 def task_candidates(request, id, filename='candidates.vot'):

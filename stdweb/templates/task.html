@@ -268,24 +268,13 @@
           </button>
 
           <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
+            <!-- Preprocess -->
+            <button type="submit" name="action" value="preprocess" class="btn btn-secondary"
+                    title="Preprocess image (destripe, crop) to remove artifacts">Preprocess</button>
+
+            <!-- Fix header -->
             <button type="submit" name="action" value="fix_image" class="btn btn-warning {% if 'image.wcs' not in files %}disabled{% endif %}"
                     title="Update the image header with refined WCS">Fix header</button>
-
-            <!-- Crop control hide/show -->
-            <button type="button" class="btn btn-light collapse-chevron collapsed"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#cropControls"
-                    aria-expanded="false"
-                    aria-controls="cropControls"
-                    title="Crop the image">Crop&nbsp;</button>
-
-            <!-- Preprocess control hide/show -->
-            <button type="button" class="btn btn-light collapse-chevron collapsed"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#preprocessControls"
-                    aria-expanded="false"
-                    aria-controls="preprocessControls"
-                    title="Preprocess the image">Preprocess&nbsp;</button>
 
             <!-- Raw config hide/show -->
             <button type="button" class="btn btn-light collapse-chevron collapsed"
@@ -301,49 +290,6 @@
             <button type="submit" name="action" value="delete_task" class="btn btn-danger"
                     title="Permanently delete this task">Delete</button>
           </span>
-
-          <!-- Crop controls -->
-          <div id="cropControls" class="collapse collapsed mt-1">
-            <div class="row align-items-end">
-              <div class="col">
-                <label for="crop_x1" class="form-label">Min X</label>
-                <input type="number" class="form-control" name="crop_x1" id="crop_x1"
-                       title="Use negative values for offsets from the right"/>
-              </div>
-              <div class="col">
-                <label for="crop_x1" class="form-label">Min Y</label>
-                <input type="number" class="form-control" name="crop_y1" id="crop_y1"
-                       title="Use negative values for offsets from the top"/>
-              </div>
-              <div class="col">
-                <label for="crop_x2" class="form-label">Max X</label>
-                <input type="number" class="form-control" name="crop_x2" id="crop_x2"
-                       title="Use negative values for offsets from the right"/>
-              </div>
-              <div class="col">
-                <label for="crop_x2" class="form-label">Max Y</label>
-                <input type="number" class="form-control" name="crop_y2" id="crop_y2"
-                       title="Use negative values for offsets from the top"/>
-              </div>
-              <div class="col">
-                <button type="submit" name="action" value="crop_image" class="btn btn-warning"
-                        title="Crop the image">Crop!</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Preprocess controls -->
-          <div id="preprocessControls" class="collapse collapsed mt-1">
-            <div class="row align-items-end">
-              <div class="col-md-auto">
-                <button type="submit" name="action" value="destripe_vertical" class="btn btn-warning"
-                        title="Remove vertical lines from the image">Destripe vertical</button>
-
-                <button type="submit" name="action" value="destripe_horizontal" class="btn btn-warning"
-                        title="Remove horizontal lines from the image">Destripe horizontal</button>
-              </div>
-            </div>
-          </div>
 
           <!-- Raw JSON config -->
           <div id="rawConfig" class="collapse collapsed mt-1">
