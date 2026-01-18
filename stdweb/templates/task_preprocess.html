@@ -21,7 +21,7 @@
       Image pre-processing for Task {{ task.id }}</h2>
 
     <p class="text-muted">
-      Apply preprocessing operations to remove artifacts from the image or crop the image to the desired region.
+      Apply preprocessing operations to remove artifacts, estimate and remove background, or crop the image to the desired region.
     </p>
 
     <!-- Display image -->
@@ -63,30 +63,76 @@
           Crop the image using pixel coordinates or offsets. Use negative values for offsets from the right/top edges.
         </p>
         <div class="row align-items-end mb-2">
-          <div class="col">
+          <div class="col-md">
             <label for="crop_x1" class="form-label">Min X</label>
             <input type="number" class="form-control" name="crop_x1" id="crop_x1"
                    title="Use negative values for offsets from the right"/>
           </div>
-          <div class="col">
+          <div class="col-md">
             <label for="crop_y1" class="form-label">Min Y</label>
             <input type="number" class="form-control" name="crop_y1" id="crop_y1"
                    title="Use negative values for offsets from the top"/>
           </div>
-          <div class="col">
+          <div class="col-md">
             <label for="crop_x2" class="form-label">Max X</label>
             <input type="number" class="form-control" name="crop_x2" id="crop_x2"
                    title="Use negative values for offsets from the right"/>
           </div>
-          <div class="col">
+          <div class="col-md">
             <label for="crop_y2" class="form-label">Max Y</label>
             <input type="number" class="form-control" name="crop_y2" id="crop_y2"
                    title="Use negative values for offsets from the top"/>
           </div>
-          <div class="col">
+          <div class="col-md-auto">
             <button type="submit" name="action" value="crop_image" class="btn btn-primary"
                     title="Crop the image">
               Crop
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="mb-4">
+      <form action="" method="POST" id="form">
+        {% csrf_token %}
+
+        <h5>Background removal</h5>
+        <p class="text-muted small">
+          Estimate and remove background from the image using various methods.
+        </p>
+        <div class="row align-items-end mb-2">
+          <div class="col-md">
+            <label for="bg_size" class="form-label">Background size (pixels)</label>
+            <input type="number" class="form-control" name="bg_size" id="bg_size"
+                   value="256" min="1"
+                   title="Size of the background estimation box"/>
+          </div>
+          <div class="col-md">
+            <label for="bg_method" class="form-label">Method</label>
+            <select class="form-select" name="bg_method" id="bg_method"
+                    title="Background estimation method">
+              <option value="sep" selected>SEP</option>
+              <option value="photutils">Photutils</option>
+              <option value="morphology">Morphology</option>
+            </select>
+          </div>
+          <div class="col-md-auto">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="bg_divide" id="bg_divide"
+                     title="Divide by background instead of subtracting"/>
+              <label class="form-check-label" for="bg_divide">
+                Divide instead of subtract
+              </label>
+            </div>
+          </div>
+          <div class="col-md-auto">
+            <button type="submit" name="action" value="remove_background" class="btn btn-primary"
+                    title="Remove background from the image">
+              Remove background
             </button>
           </div>
         </div>

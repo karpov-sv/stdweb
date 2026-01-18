@@ -545,7 +545,7 @@ def task_mask(request, id=None, mode='image'):
 
 def task_preprocess(request, id=None):
     """
-    Interactive preprocessing for images (destripe, crop operations with backup/restore).
+    Interactive preprocessing for images (destripe, crop, background removal with backup/restore).
 
     Args:
         id: Task ID
@@ -616,6 +616,41 @@ def task_preprocess(request, id=None):
             )
 
             messages.success(request, "Cropped the image for task " + str(id))
+
+            # Run necessary post-activity actions
+            _post_action()
+
+        elif action == 'remove_background':
+            bg_size = request.POST.get('bg_size')
+            bg_method = request.POST.get('bg_method', 'sep')
+            bg_divide = request.POST.get('bg_divide') == 'on'
+
+            # Validate background size
+            if not bg_size:
+                messages.error(request, "Please provide background size")
+                return HttpResponseRedirect(request.path_info)
+
+            try:
+                bg_size = int(bg_size)
+                if bg_size <= 0:
+                    raise ValueError("Background size must be positive")
+            except ValueError as e:
+                messages.error(request, f"Invalid background size: {e}")
+                return HttpResponseRedirect(request.path_info)
+
+            # Create backup before first modification
+            _backup_image()
+
+            # Apply background removal
+            processing.remove_background_image(
+                image_path, task.config,
+                bg_size=bg_size,
+                bg_method=bg_method,
+                divide=bg_divide
+            )
+
+            operation = "divided by" if bg_divide else "subtracted"
+            messages.success(request, f"Background {operation} for task {id} using method '{bg_method}'")
 
             # Run necessary post-activity actions
             _post_action()

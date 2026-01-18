@@ -262,6 +262,60 @@ def preprocess_image(filename, config, destripe_horizontal=False, destripe_verti
     fits.writeto(filename, image, header, overwrite=True)
 
 
+def remove_background_image(filename, config, bg_size=256, bg_method='sep', divide=False, verbose=True):
+    """
+    Remove background from image using various methods.
+
+    Args:
+        filename: Path to FITS file
+        config: Configuration dictionary
+        bg_size: Background estimation box size in pixels
+        bg_method: Method to use ('sep', 'photutils', or 'morphology')
+        divide: If True, divide by background instead of subtracting
+        verbose: Enable verbose output
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    from stdpipe import photometry
+
+    basepath = os.path.dirname(filename)
+
+    image, header = fits.getdata(filename, -1).astype(np.double), fits.getheader(filename, -1)
+
+    mask = ~np.isfinite(image)
+    if os.path.split(filename)[1] in ['image.fits'] and os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
+        mask |= fits.getdata(os.path.join(basepath, 'custom_mask.fits'), -1) > 0
+
+    log(f"Estimating background using method: {bg_method}, size: {bg_size}")
+
+    # Estimate background using specified method
+    bg = photometry.get_background(
+        image,
+        mask=mask,
+        method=bg_method,
+        size=bg_size,
+        get_rms=False
+    )
+
+    log(f"Background estimated, median value: {np.nanmedian(bg):.2f}")
+
+    # Apply background removal
+    if divide:
+        # Avoid division by zero
+        bg_safe = bg.copy()
+        bg_safe[bg_safe == 0] = np.nan
+        image_processed = image / bg_safe * np.nanmedian(bg_safe)
+        log("Divided image by background")
+    else:
+        image_processed = image - bg
+        log("Subtracted background from image")
+
+    # Write the processed image back
+    fits.writeto(filename, image_processed, header, overwrite=True)
+    log(f"Background-removed image written to {filename}")
+
+
 from astropy_healpix import healpy
 
 def round_coords_to_grid(ra0, dec0, sr0, nside=None):
