@@ -749,7 +749,7 @@ def action_log(request, length=20):
             'user': log.user,
             'action': log.get_action_display(),
             'task_id_ref': log.task_id_ref,
-            'original_name': log.task.original_name,
+            'original_name': log.task.original_name if log.task is not None else None,
             'details': formatted_details,
         })
 
