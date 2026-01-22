@@ -9,6 +9,8 @@
 {% block head %}
   {% include "popup_image.html" %}
 
+  <script src="{% static 'inline_edit.js' %}"></script>
+
   <script language="javascript">
    {% if task.celery_id %}
 
@@ -155,11 +157,70 @@
       {{ task.original_name }}
     </h2>
 
-    {% if task.title %}
-    <div class="fst-italic mb-2 ps-2 border-start border-4 border-secondary" style="--bs-border-opacity: .3;">
-      {{ task.title|linebreaksimple }}
+    <div class="mb-2">
+      <div id="title-container">
+        <!-- Display mode -->
+        <div id="title-display"
+             class="fst-italic ps-2 border-start border-4 border-secondary position-relative"
+             style="--bs-border-opacity: .3; {% if not task.title %}display: none;{% endif %}
+                    {% if user_may_submit and not task.celery_id %}cursor: pointer;{% endif %}"
+             title="{% if user_may_submit and not task.celery_id %}Click to edit{% endif %}">
+          <span id="title-text">{{ task.title|linebreaksimple }}</span>
+          {% if user_may_submit and not task.celery_id %}
+          <i class="fa fa-pencil position-absolute end-0 top-0 text-muted"
+             style="font-size: 0.8em; opacity: 0; transition: opacity 0.2s;"></i>
+          {% endif %}
+        </div>
+
+        {% if not task.title and user_may_submit and not task.celery_id %}
+        <button id="title-add-btn" class="btn btn-sm btn-link text-muted p-0" style="text-decoration: none;">
+          <i class="fa fa-plus-circle"></i> Add title or description
+        </button>
+        {% endif %}
+
+        <!-- Edit mode -->
+        <div id="title-edit-container" style="display: none;">
+          <textarea id="title-input"
+                    class="form-control form-control-sm mb-1"
+                    rows="2"
+                    maxlength="250"
+                    placeholder="Add title or description..."
+                    style="resize: none; overflow: hidden; min-height: 50px;">{{ task.title }}</textarea>
+          <div>
+            <button id="title-save-btn" class="btn btn-sm btn-success">
+              <i class="fa fa-check"></i> Save
+            </button>
+            <button id="title-cancel-btn" class="btn btn-sm btn-secondary">
+              <i class="fa fa-times"></i> Cancel
+            </button>
+            <span class="text-muted small ms-2">
+              <kbd>Ctrl+Enter</kbd> to save, <kbd>Esc</kbd> to cancel
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
-    {% endif %}
+
+    <script>
+    $(function(){
+      {% if user_may_submit and not task.celery_id %}
+      // Initialize inline title editor
+      InlineEdit.init({
+        containerSelector: '#title-container',
+        displaySelector: '#title-display',
+        textSelector: '#title-text',
+        addButtonSelector: '#title-add-btn',
+        editContainerSelector: '#title-edit-container',
+        inputSelector: '#title-input',
+        saveButtonSelector: '#title-save-btn',
+        cancelButtonSelector: '#title-cancel-btn',
+        updateUrl: "{% url 'task_update_title' id=task.id %}",
+        csrfToken: '{{ csrf_token }}',
+        fieldName: 'title'
+      });
+      {% endif %}
+    });
+    </script>
     <div>
       <a href="{% url 'task_files' id=task.id %}" class="text-decoration-none text-body" title="Browse task files">
         <i class="fa fa-folder-open"></i>

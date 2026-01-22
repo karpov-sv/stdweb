@@ -67,6 +67,7 @@ urlpatterns = [
     path('tasks/<int:id>/mask/<slug:mode>', views_tasks.task_mask, name='task_mask'),
     path('tasks/<int:id>/preprocess', views_tasks.task_preprocess, name='task_preprocess'),
     path('tasks/<int:id>/state', views_tasks.task_state, name='task_state'),
+    path('tasks/<int:id>/update_title', views_tasks.task_update_title, name='task_update_title'),
 
     path('skyportal/', views_skyportal.skyportal, name='skyportal'),
 

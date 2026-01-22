@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.cache import cache_page
+from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 
@@ -707,3 +708,25 @@ def task_state(request, id):
     task = get_object_or_404(models.Task, id=id)
 
     return JsonResponse({'state': task.state, 'id': task.id, 'celery_id': task.celery_id})
+
+
+@require_POST
+def task_update_title(request, id):
+    """AJAX endpoint to update task title."""
+    task = get_object_or_404(models.Task, id=id)
+
+    # Permission check
+    if not request.user.is_authenticated or not (
+        request.user.is_staff or request.user == task.user or request.user.has_perm('stdweb.edit_all_tasks')
+    ):
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    # Don't allow updates while task is running
+    if task.celery_id is not None:
+        return JsonResponse({'success': False, 'error': 'Task is running'}, status=400)
+
+    title = request.POST.get('title', '').strip()[:250]  # Max 250 chars
+    task.title = title
+    task.save(update_fields=['title', 'modified'])
+
+    return JsonResponse({'success': True, 'title': title})
