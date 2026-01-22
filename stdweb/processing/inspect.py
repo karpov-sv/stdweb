@@ -145,7 +145,7 @@ def inspect_image(filename, config, verbose=True, show=False):
         config['filter'] = 'unknown'
         for kw in ['FILTER', 'FILTERS', 'CAMFILT']:
             if kw in header:
-                config['filter'] = header.get(kw).strip()
+                config['filter'] = str(header.get(kw)).strip()
                 break
     log(f"Filter is {config['filter']}")
 
@@ -167,15 +167,22 @@ def inspect_image(filename, config, verbose=True, show=False):
             'SATURATE',
             # header.get('DATAMAX')
         )
-        if satlevel:
-            log("Got saturation level from FITS header")
+        if satlevel is not None:
+            # Convert to float to handle numpy scalars and strings
+            satlevel = float(satlevel)
 
-            if satlevel < 0.5*np.nanmax(image):
-                log(f"Warning: header saturation level ({satlevel}) is significantly smaller than image max value!")
-            elif satlevel > np.nanmax(image):
-                log(f"Warning: header saturation level ({satlevel}) is larger than image max value!")
+            if satlevel > 0:
+                log("Got saturation level from FITS header")
 
-        else:
+                if satlevel < 0.5*np.nanmax(image):
+                    log(f"Warning: header saturation level ({satlevel}) is significantly smaller than image max value!")
+                elif satlevel > np.nanmax(image):
+                    log(f"Warning: header saturation level ({satlevel}) is larger than image max value!")
+            else:
+                # Treat zero or negative as missing
+                satlevel = None
+
+        if satlevel is None:
             satlevel = 0.05*np.nanmedian(image) + 0.95*np.nanmax(image) # med + 0.95(max-med)
             log("Estimating saturation level from the image max value")
 
