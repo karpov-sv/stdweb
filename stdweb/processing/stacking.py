@@ -80,17 +80,17 @@ def stack_images(filenames, outname, config, verbose=True):
         log(f"Computing the stack as a plain sum of {len(images)} images")
         coadd = np.sum(images, axis=0)
 
-        for _ in ['SATURATE', 'DATAMAX']:
-            if _ in header0:
-                log(f"Adjusting {_} header keyword")
-                header0[_] *= len(images)
+        for key in ['SATURATE', 'DATAMAX']:
+            if key in header0:
+                log(f"Adjusting {key} header keyword")
+                header0[key] = float(header0[key]) * len(images)
     elif stack_method == 'clipped_mean':
         log(f"Computing the stack as a sigma clipped mean of {len(images)} images")
-        coadd = np.nanmedian(images, axis=0)
+        coadd = sigma_clipped_stats(images, axis=0)[0]
 
     elif stack_method == 'median':
         log(f"Computing the stack as a median of {len(images)} images")
-        coadd = sigma_clipped_stats(images, axis=0)[0]
+        coadd = np.nanmedian(images, axis=0)
 
     else:
         raise RuntimeError('Unsupported stacking method: ' + stack_method)
