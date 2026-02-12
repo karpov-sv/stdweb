@@ -30,6 +30,52 @@ from . import utils
 from .action_logging import log_action
 
 
+def _get_filtered_tasks(request):
+    """Extract shared task filtering logic. Returns (queryset, form)."""
+    tasks = models.Task.objects.all()
+    tasks = tasks.order_by('-created')
+
+    form = forms.TasksFilterForm(
+        request.GET,
+        show_all=request.user.is_staff or request.user.has_perm('stdweb.view_all_tasks'),
+    )
+
+    if form.is_valid():
+        show_all = form.cleaned_data.get('show_all')
+        if not show_all:
+            tasks = tasks.filter(user=request.user)
+
+        query = form.cleaned_data.get('query')
+        if query:
+            # Coordinate query?..
+            ra0, dec0, sr0 = utils.resolve_coordinates(query)
+
+            if ra0 is not None and dec0 is not None:
+                pks = []
+                for task in tasks:
+                    if task.ra is not None and task.dec is not None and task.radius is not None:
+                        dist = astrometry.spherical_distance(task.ra, task.dec, ra0, dec0)
+
+                        if sr0 is not None and dist < sr0:
+                            pks.append(task.pk)
+                        elif sr0 is None and dist < sr:
+                            pks.append(task.pk)
+
+                tasks = tasks.filter(pk__in=pks)
+            else:
+                # Otherwise plain text search
+                for token in query.split():
+                    tasks = tasks.filter(
+                        Q(original_name__icontains=token) |
+                        Q(title__icontains=token) |
+                        Q(user__username__icontains=token) |
+                        Q(user__first_name__icontains=token) |
+                        Q(user__last_name__icontains=token)
+                    )
+
+    return tasks, form
+
+
 def tasks(request, id=None):
     context = {}
 
@@ -269,62 +315,59 @@ def tasks(request, id=None):
             return redirect_to_login(request.path)
 
         # List all tasks
-        tasks = models.Task.objects.all()
-        tasks = tasks.order_by('-created')
+        tasks, form = _get_filtered_tasks(request)
 
-        form = forms.TasksFilterForm(
-            request.GET,
-            show_all=request.user.is_staff or request.user.has_perm('stdweb.view_all_tasks'),
-        )
         context['form'] = form
 
-        if request.method == 'GET':
-            if form.is_valid():
-                show_all = form.cleaned_data.get('show_all')
-                if not show_all:
-                    tasks = tasks.filter(user = request.user)
-
-                query = form.cleaned_data.get('query')
-                if query:
-                    # Coordinate query?..
-                    ra0,dec0,sr0 = utils.resolve_coordinates(query)
-
-                    if ra0 is not None and dec0 is not None:
-                        if sr0 is not None:
-                            messages.info(request, f"Looking for tasks inside {sr0:.2f} deg around {ra0:.4f} {dec0:+.4f}")
-                        else:
-                            messages.info(request, f"Looking for tasks covering {ra0:.4f} {dec0:+.4f}")
-
-                        pks = []
-                        for task in tasks:
-                            if task.ra is not None and task.dec is not None and task.radius is not None:
-                                dist = astrometry.spherical_distance(task.ra, task.dec, ra0, dec0)
-
-                                if sr0 is not None and dist < sr0:
-                                    # Only consider image center if the search radius is defined
-                                    pks.append(task.pk)
-                                elif sr0 is None and dist < sr:
-                                    # Point is in the image
-                                    # TODO: recheck whether the point is actually covered.
-                                    pks.append(task.pk)
-
-                        tasks = tasks.filter(pk__in = pks)
-
+        if request.method == 'GET' and form.is_valid():
+            query = form.cleaned_data.get('query')
+            if query:
+                ra0, dec0, sr0 = utils.resolve_coordinates(query)
+                if ra0 is not None and dec0 is not None:
+                    if sr0 is not None:
+                        messages.info(request, f"Looking for tasks inside {sr0:.2f} deg around {ra0:.4f} {dec0:+.4f}")
                     else:
-                        # Otherwise plain text search
-                        for token in query.split():
-                            tasks = tasks.filter(
-                                Q(original_name__icontains = token) |
-                                Q(title__icontains = token) |
-                                Q(user__username__icontains = token) |
-                                Q(user__first_name__icontains = token) |
-                                Q(user__last_name__icontains = token)
-                            )
+                        messages.info(request, f"Looking for tasks covering {ra0:.4f} {dec0:+.4f}")
 
         context['tasks'] = tasks
         context['referer'] = request.path + '?' + request.GET.urlencode();
 
     return TemplateResponse(request, 'tasks.html', context=context)
+
+
+@login_required
+def tasks_skymap_data(request):
+    """Return JSON with spatial data for tasks matching the current filter."""
+    tasks, form = _get_filtered_tasks(request)
+
+    # Only include tasks with spatial data
+    tasks = tasks.filter(ra__isnull=False, dec__isnull=False, radius__isnull=False)[:500]
+
+    result = []
+    for task in tasks:
+        entry = {
+            'id': task.id,
+            'original_name': task.original_name,
+            'title': task.title or '',
+            'state': task.state,
+            'user': task.user.username,
+            'created': task.created.strftime('%Y-%m-%d %H:%M'),
+            'ra': task.ra,
+            'dec': task.dec,
+            'radius': task.radius,
+        }
+
+        if task.moc:
+            try:
+                from mocpy import MOC
+                moc = MOC.from_string(task.moc)
+                entry['moc_json'] = moc.serialize("json")
+            except Exception:
+                pass
+
+        result.append(entry)
+
+    return JsonResponse({'tasks': result})
 
 
 def tasks_actions(request):

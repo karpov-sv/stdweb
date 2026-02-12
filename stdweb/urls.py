@@ -52,6 +52,7 @@ urlpatterns = [
     # Tasks
     path('tasks/', views_tasks.tasks, {'id':None}, name='tasks'),
     path('tasks/actions', views_tasks.tasks_actions, name='tasks_actions'),
+    path('tasks/skymap_data', views_tasks.tasks_skymap_data, name='tasks_skymap_data'),
     path('tasks/<int:id>', views_tasks.tasks, name='tasks'),
 
     path('tasks/<int:id>/files/', views_tasks.task_files, {'path': ''}, name='task_files'),
