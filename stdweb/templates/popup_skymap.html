@@ -55,15 +55,19 @@
    mocBtn.on('click', function() {
      if (!aladin || !loadData) return;
 
+     mocBtn.prop('disabled', true).text('Loading...');
+
      if (!mocLoaded) {
        var separator = dataUrl.indexOf('?') >= 0 ? '&' : '?';
-       loadData(dataUrl + separator + 'include_moc=1', true);
-       mocLoaded = true;
-       mocBtn.text('Clear MOC').removeClass('btn-outline-secondary').addClass('btn-warning');
+       loadData(dataUrl + separator + 'include_moc=1', true, function() {
+         mocLoaded = true;
+         mocBtn.text('Clear MOC').prop('disabled', false).removeClass('btn-outline-secondary').addClass('btn-warning');
+       });
      } else {
-       loadData(dataUrl, true);
-       mocLoaded = false;
-       mocBtn.text('Request MOC').removeClass('btn-warning').addClass('btn-outline-secondary');
+       loadData(dataUrl, true, function() {
+         mocLoaded = false;
+         mocBtn.text('Request MOC').prop('disabled', false).removeClass('btn-warning').addClass('btn-outline-secondary');
+       });
      }
    });
 
@@ -78,7 +82,7 @@
        showSettingsControl: true,
      });
 
-     loadData = function(url, skipFit) {
+     loadData = function(url, skipFit, onDone) {
        // Remove all previously added layers
        currentLayers.forEach(function(layer) {
          try { aladin.removeLayer(layer); } catch(e) {}
@@ -246,11 +250,14 @@
                aladin.setFoV(fov);
              }
            }
+
+           if (onDone) onDone();
          },
          error: function(xhr, status, error) {
            $('#aladin-lite-div').append(
              '<div class="alert alert-danger position-absolute top-50 start-50 translate-middle" style="z-index: 100;">Failed to load sky map data</div>'
            );
+           if (onDone) onDone();
          }
        });
      };
