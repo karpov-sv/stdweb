@@ -74,6 +74,7 @@ urlpatterns = [
 
     # Lightcurves
     path('lightcurves/', views_lightcurves.lightcurves, name='lightcurves'),
+    path('lightcurves/download/votable', views_lightcurves.download_votable, name='lightcurve_download_votable'),
     path('lightcurves/photometry/<int:id>/html', views_lightcurves.task_photometry_html, name='lightcurve_photometry_html'),
 
     # Celery queue

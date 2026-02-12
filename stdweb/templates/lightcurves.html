@@ -33,6 +33,10 @@
         {% endif %}
       </div>
       <div>
+        <a class="btn btn-sm btn-outline-success"
+           href="{% url 'lightcurve_download_votable' %}?{{ request.GET.urlencode }}">
+          <i class="fa fa-file-download"></i> Download VOTable
+        </a>
         <button id="load-all-photometry" class="btn btn-sm btn-outline-secondary">
           <i class="fa fa-download"></i> Load All Photometry
         </button>
