@@ -357,7 +357,7 @@ def tasks_skymap_data(request):
             'radius': task.radius,
         }
 
-        if task.moc:
+        if task.moc and request.GET.get('include_moc'):
             try:
                 from mocpy import MOC
                 moc = MOC.from_string(task.moc)

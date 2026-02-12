@@ -30,6 +30,12 @@
    body.append('<div id="aladin-lite-div" style="height: 70vh; width: 100%;"></div>');
    body.append('<div id="skymap-info" style="display: none; position: absolute; bottom: 10px; left: 10px; right: 10px; max-height: 30%; overflow-y: auto; z-index: 100;"></div>');
 
+   var mocLoaded = false;
+   var aladin = null;
+   var loadData = null;
+   var currentLayers = [];
+   var mocBtn = $('<button type="button" class="btn btn-outline-secondary me-auto">Request MOC</button>');
+
    var dialog = bootbox.dialog({
      title: "Sky Map",
      message: body,
@@ -43,10 +49,28 @@
      }
    });
 
+   // Insert custom MOC button at the start of the footer
+   dialog.find('.modal-footer').prepend(mocBtn);
+
+   mocBtn.on('click', function() {
+     if (!aladin || !loadData) return;
+
+     if (!mocLoaded) {
+       var separator = dataUrl.indexOf('?') >= 0 ? '&' : '?';
+       loadData(dataUrl + separator + 'include_moc=1', true);
+       mocLoaded = true;
+       mocBtn.text('Clear MOC').removeClass('btn-outline-secondary').addClass('btn-warning');
+     } else {
+       loadData(dataUrl, true);
+       mocLoaded = false;
+       mocBtn.text('Request MOC').removeClass('btn-warning').addClass('btn-outline-secondary');
+     }
+   });
+
    dialog.attr('id', 'skymap-modal');
 
    dialog.on('shown.bs.modal', function() {
-     let aladin = A.aladin('#aladin-lite-div', {
+     aladin = A.aladin('#aladin-lite-div', {
        projection: 'SIN',
        survey: 'P/DSS2/color',
        fov: 180,
@@ -54,169 +78,185 @@
        showSettingsControl: true,
      });
 
-     $.ajax({
-       url: dataUrl,
-       dataType: 'json',
-       success: function(data) {
-         var tasks = data.tasks;
-         if (!tasks || tasks.length === 0) {
-           $('#aladin-lite-div').append(
-             '<div class="alert alert-info position-absolute top-50 start-50 translate-middle" style="z-index: 100;">No tasks with spatial data found</div>'
-           );
-           return;
-         }
+     loadData = function(url, skipFit) {
+       // Remove all previously added layers
+       currentLayers.forEach(function(layer) {
+         try { aladin.removeLayer(layer); } catch(e) {}
+       });
+       currentLayers = [];
 
-         // Create overlay for markers
-         var markerLayer = A.catalog({name: 'Tasks'});
-         aladin.addCatalog(markerLayer);
-
-         // Circle overlay for field coverage (tasks without MOC)
-         var circleOverlay = A.graphicOverlay({name: 'Coverage', color: 'orange', lineWidth: 2});
-         aladin.addOverlay(circleOverlay);
-
-         var ras = [];
-         var decs = [];
-
-         tasks.forEach(function(task) {
-           var popupTitle = '<strong>' + $('<span/>').text(task.original_name).html() + '</strong>';
-           var popupContent = '<div style="min-width: 250px;">';
-           if (task.title) {
-             popupContent += '<div class="fst-italic mb-1">' + $('<span/>').text(task.title).html() + '</div>';
+       $.ajax({
+         url: url,
+         dataType: 'json',
+         success: function(data) {
+           var tasks = data.tasks;
+           if (!tasks || tasks.length === 0) {
+             $('#aladin-lite-div').append(
+               '<div class="alert alert-info position-absolute top-50 start-50 translate-middle" style="z-index: 100;">No tasks with spatial data found</div>'
+             );
+             return;
            }
-           popupContent += '<div>State: <strong>' + task.state + '</strong></div>';
-           popupContent += '<div>User: <strong>' + $('<span/>').text(task.user).html() + '</strong></div>';
-           popupContent += '<div>RA: ' + task.ra.toFixed(4) + ' Dec: ' + (task.dec >= 0 ? '+' : '') + task.dec.toFixed(4) + '</div>';
-           popupContent += '<div>Radius: ' + task.radius.toFixed(2) + ' deg</div>';
-           popupContent += '<div>Created: ' + task.created + '</div>';
-           popupContent += '<div class="mt-1"><a href="/tasks/' + task.id + '" target="_blank">Open task ' + task.id + '</a></div>';
-           popupContent += '</div>';
 
-           var marker = A.marker(task.ra, task.dec, {
-             popupTitle: popupTitle,
-             popupDesc: popupContent,
-           });
-           markerLayer.addSources([marker]);
+           // Create overlay for markers
+           var markerLayer = A.catalog({name: 'Tasks'});
+           aladin.addCatalog(markerLayer);
+           currentLayers.push(markerLayer);
 
-           ras.push(task.ra);
-           decs.push(task.dec);
+           // Circle overlay for field coverage (tasks without MOC)
+           var circleOverlay = A.graphicOverlay({name: 'Coverage', color: 'orange', lineWidth: 2});
+           aladin.addOverlay(circleOverlay);
+           currentLayers.push(circleOverlay);
 
-           // Add MOC overlay if available, otherwise draw circle from radius
-           if (task.moc_json) {
-             try {
-               var moc = A.MOCFromJSON(task.moc_json, {color: 'orange', opacity: 0.3, fill: true, edge: false, perimeter: true, lineWidth: 2});
-               aladin.addMOC(moc);
-             } catch(e) {
-               console.log('Failed to add MOC for task ' + task.id + ': ' + e);
+           var ras = [];
+           var decs = [];
+
+           tasks.forEach(function(task) {
+             var popupTitle = '<strong>' + $('<span/>').text(task.original_name).html() + '</strong>';
+             var popupContent = '<div style="min-width: 250px;">';
+             if (task.title) {
+               popupContent += '<div class="fst-italic mb-1">' + $('<span/>').text(task.title).html() + '</div>';
+             }
+             popupContent += '<div>State: <strong>' + task.state + '</strong></div>';
+             popupContent += '<div>User: <strong>' + $('<span/>').text(task.user).html() + '</strong></div>';
+             popupContent += '<div>RA: ' + task.ra.toFixed(4) + ' Dec: ' + (task.dec >= 0 ? '+' : '') + task.dec.toFixed(4) + '</div>';
+             popupContent += '<div>Radius: ' + task.radius.toFixed(2) + ' deg</div>';
+             popupContent += '<div>Created: ' + task.created + '</div>';
+             popupContent += '<div class="mt-1"><a href="/tasks/' + task.id + '" target="_blank">Open task ' + task.id + '</a></div>';
+             popupContent += '</div>';
+
+             var marker = A.marker(task.ra, task.dec, {
+               popupTitle: popupTitle,
+               popupDesc: popupContent,
+             });
+             markerLayer.addSources([marker]);
+
+             ras.push(task.ra);
+             decs.push(task.dec);
+
+             // Add MOC overlay if available, otherwise draw circle from radius
+             if (task.moc_json) {
+               try {
+                 var moc = A.MOCFromJSON(task.moc_json, {color: 'orange', opacity: 0.3, fill: true, edge: false, perimeter: true, lineWidth: 2});
+                 aladin.addMOC(moc);
+                 currentLayers.push(moc);
+               } catch(e) {
+                 console.log('Failed to add MOC for task ' + task.id + ': ' + e);
+                 circleOverlay.addFootprints([A.circle(task.ra, task.dec, task.radius)]);
+               }
+             } else {
                circleOverlay.addFootprints([A.circle(task.ra, task.dec, task.radius)]);
              }
-           } else {
-             circleOverlay.addFootprints([A.circle(task.ra, task.dec, task.radius)]);
-           }
-         });
-
-         // Click on sky: find all tasks covering that position
-         var aladinDiv = document.getElementById('aladin-lite-div');
-         aladinDiv.addEventListener('click', function(e) {
-           var infoDiv = $('#skymap-info');
-
-           // Get click position relative to the Aladin div
-           var rect = aladinDiv.getBoundingClientRect();
-           var x = e.clientX - rect.left;
-           var y = e.clientY - rect.top;
-
-           var radec = aladin.pix2world(x, y);
-           if (!radec) {
-             infoDiv.hide();
-             return;
-           }
-
-           var clickRa = radec[0], clickDec = radec[1];
-           var covering = [];
-           tasks.forEach(function(task) {
-             var dist = sphericalDistance(clickRa, clickDec, task.ra, task.dec);
-             if (dist <= task.radius) {
-               covering.push(task);
-             }
            });
 
-           if (covering.length === 0) {
-             infoDiv.hide();
-             return;
-           }
+           // Click on sky: find all tasks covering that position
+           var aladinDiv = document.getElementById('aladin-lite-div');
+           aladinDiv.addEventListener('click', function(e) {
+             var infoDiv = $('#skymap-info');
 
-           var html = '<div class="card shadow-sm"><div class="card-body p-2">';
-           html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-           html += '<strong>' + covering.length + ' task(s) covering this position</strong>';
-           html += '<small class="text-muted">RA: ' + clickRa.toFixed(4) + ' Dec: ' + (clickDec >= 0 ? '+' : '') + clickDec.toFixed(4) + '</small>';
-           html += '</div>';
-           html += '<div class="list-group list-group-flush">';
-           covering.forEach(function(task) {
-             html += '<a href="/tasks/' + task.id + '" target="_blank" class="list-group-item list-group-item-action p-1 ps-2">';
-             html += '<strong>' + $('<span/>').text(task.original_name).html() + '</strong>';
-             html += ' <span class="badge bg-' + ('failed cancelled'.indexOf(task.state) >= 0 ? 'danger' : 'primary') + ' rounded-pill ms-1">' + task.state + '</span>';
-             html += ' <small class="text-muted ms-1">' + $('<span/>').text(task.user).html() + '</small>';
-             html += ' <small class="text-muted ms-1">' + task.created + '</small>';
-             html += '</a>';
+             // Get click position relative to the Aladin div
+             var rect = aladinDiv.getBoundingClientRect();
+             var x = e.clientX - rect.left;
+             var y = e.clientY - rect.top;
+
+             var radec = aladin.pix2world(x, y);
+             if (!radec) {
+               infoDiv.hide();
+               return;
+             }
+
+             var clickRa = radec[0], clickDec = radec[1];
+             var covering = [];
+             tasks.forEach(function(task) {
+               var dist = sphericalDistance(clickRa, clickDec, task.ra, task.dec);
+               if (dist <= task.radius) {
+                 covering.push(task);
+               }
+             });
+
+             if (covering.length === 0) {
+               infoDiv.hide();
+               return;
+             }
+
+             var html = '<div class="card shadow-sm"><div class="card-body p-2">';
+             html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+             html += '<strong>' + covering.length + ' task(s) covering this position</strong>';
+             html += '<small class="text-muted">RA: ' + clickRa.toFixed(4) + ' Dec: ' + (clickDec >= 0 ? '+' : '') + clickDec.toFixed(4) + '</small>';
+             html += '</div>';
+             html += '<div class="list-group list-group-flush">';
+             covering.forEach(function(task) {
+               html += '<a href="/tasks/' + task.id + '" target="_blank" class="list-group-item list-group-item-action p-1 ps-2">';
+               html += '<strong>' + $('<span/>').text(task.original_name).html() + '</strong>';
+               html += ' <span class="badge bg-' + ('failed cancelled'.indexOf(task.state) >= 0 ? 'danger' : 'primary') + ' rounded-pill ms-1">' + task.state + '</span>';
+               html += ' <small class="text-muted ms-1">' + $('<span/>').text(task.user).html() + '</small>';
+               html += ' <small class="text-muted ms-1">' + task.created + '</small>';
+               html += '</a>';
+             });
+             html += '</div></div></div>';
+
+             infoDiv.html(html).show();
            });
-           html += '</div></div></div>';
 
-           infoDiv.html(html).show();
-         });
+           // Auto-fit view to show all markers
+           if (!skipFit) {
+             if (ras.length === 1) {
+               aladin.gotoRaDec(ras[0], decs[0]);
+               aladin.setFoV(Math.max(tasks[0].radius * 4, 1));
+             } else if (ras.length > 1) {
+               // Handle RA wraparound
+               var rasSorted = ras.slice().sort(function(a, b) { return a - b; });
+               var maxGap = 0;
+               var gapStart = 0;
+               for (var i = 1; i < rasSorted.length; i++) {
+                 var gap = rasSorted[i] - rasSorted[i-1];
+                 if (gap > maxGap) {
+                   maxGap = gap;
+                   gapStart = i;
+                 }
+               }
+               // Check wraparound gap
+               var wrapGap = (360 - rasSorted[rasSorted.length-1]) + rasSorted[0];
+               var wrapsAround = wrapGap < maxGap;
 
-         // Auto-fit view to show all markers
-         if (ras.length === 1) {
-           aladin.gotoRaDec(ras[0], decs[0]);
-           aladin.setFoV(Math.max(tasks[0].radius * 4, 1));
-         } else if (ras.length > 1) {
-           // Handle RA wraparound
-           var rasSorted = ras.slice().sort(function(a, b) { return a - b; });
-           var maxGap = 0;
-           var gapStart = 0;
-           for (var i = 1; i < rasSorted.length; i++) {
-             var gap = rasSorted[i] - rasSorted[i-1];
-             if (gap > maxGap) {
-               maxGap = gap;
-               gapStart = i;
+               var centerRa, centerDec, span;
+               if (wrapsAround) {
+                 // Shift RAs to handle wraparound
+                 var shifted = ras.map(function(r) { return r < 180 ? r + 360 : r; });
+                 var minRa = Math.min.apply(null, shifted);
+                 var maxRa = Math.max.apply(null, shifted);
+                 centerRa = ((minRa + maxRa) / 2) % 360;
+                 span = maxRa - minRa;
+               } else {
+                 var minRa = Math.min.apply(null, ras);
+                 var maxRa = Math.max.apply(null, ras);
+                 centerRa = (minRa + maxRa) / 2;
+                 span = maxRa - minRa;
+               }
+
+               var minDec = Math.min.apply(null, decs);
+               var maxDec = Math.max.apply(null, decs);
+               centerDec = (minDec + maxDec) / 2;
+               var decSpan = maxDec - minDec;
+
+               var fov = Math.max(span, decSpan) * 1.5;
+               fov = Math.max(fov, 1);
+               fov = Math.min(fov, 180);
+
+               aladin.gotoRaDec(centerRa, centerDec);
+               aladin.setFoV(fov);
              }
            }
-           // Check wraparound gap
-           var wrapGap = (360 - rasSorted[rasSorted.length-1]) + rasSorted[0];
-           var wrapsAround = wrapGap < maxGap;
-
-           var centerRa, centerDec, span;
-           if (wrapsAround) {
-             // Shift RAs to handle wraparound
-             var shifted = ras.map(function(r) { return r < 180 ? r + 360 : r; });
-             var minRa = Math.min.apply(null, shifted);
-             var maxRa = Math.max.apply(null, shifted);
-             centerRa = ((minRa + maxRa) / 2) % 360;
-             span = maxRa - minRa;
-           } else {
-             var minRa = Math.min.apply(null, ras);
-             var maxRa = Math.max.apply(null, ras);
-             centerRa = (minRa + maxRa) / 2;
-             span = maxRa - minRa;
-           }
-
-           var minDec = Math.min.apply(null, decs);
-           var maxDec = Math.max.apply(null, decs);
-           centerDec = (minDec + maxDec) / 2;
-           var decSpan = maxDec - minDec;
-
-           var fov = Math.max(span, decSpan) * 1.5;
-           fov = Math.max(fov, 1);
-           fov = Math.min(fov, 180);
-
-           aladin.gotoRaDec(centerRa, centerDec);
-           aladin.setFoV(fov);
+         },
+         error: function(xhr, status, error) {
+           $('#aladin-lite-div').append(
+             '<div class="alert alert-danger position-absolute top-50 start-50 translate-middle" style="z-index: 100;">Failed to load sky map data</div>'
+           );
          }
-       },
-       error: function(xhr, status, error) {
-         $('#aladin-lite-div').append(
-           '<div class="alert alert-danger position-absolute top-50 start-50 translate-middle" style="z-index: 100;">Failed to load sky map data</div>'
-         );
-       }
-     });
+       });
+     };
+
+     // Initial load without MOC
+     loadData(dataUrl);
    });
  }
 
