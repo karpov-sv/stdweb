@@ -417,6 +417,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 fwhm=config.get('fwhm'),
                 aper=config.get('rel_aper', 1.0),
                 bkgann=rel_bkgann,
+                optimal=config.get('optimal_extraction', False),
                 sn=0,
                 # We assume no background
                 bg=None,
@@ -529,6 +530,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 fwhm=config.get('fwhm'),
                 aper=config.get('rel_aper', 1.0),
                 bkgann=rel_bkgann,
+                optimal=config.get('optimal_extraction', False),
                 sn=config.get('sn', 5.0),
                 # We assume no background
                 bg=None,
