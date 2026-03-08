@@ -103,12 +103,15 @@
 
    check_sub_method_visibility = function(){
      var selected = $('#id_subtraction_method').find(":selected").val();
-     var row = $('#hotpants_extra_col');
+     var hotpants_col = $('#hotpants_extra_col');
+     var sfft_cols = $('#sfft_kernel_poly_col, #sfft_bg_poly_col, #sfft_flux_poly_col');
 
-     if (selected == 'hotpants' && row.is(':hidden')){
-       row.show();
-     } else if (selected != 'hotpants' && row.is(':visible')){
-       row.hide();
+     if (selected == 'hotpants') {
+       hotpants_col.show();
+       sfft_cols.hide();
+     } else {
+       hotpants_col.hide();
+       sfft_cols.show();
      }
    }
 

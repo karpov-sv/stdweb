@@ -353,8 +353,12 @@ class TaskSubtractionForm(forms.Form):
     subtraction_mode = forms.ChoiceField(choices=[('target', 'Target photometry'), ('detection', 'Transient detection')],
                                          initial='detection', required=True, label="", widget=forms.RadioSelect)
 
-    subtraction_method = forms.ChoiceField(choices=[('zogy', 'ZOGY'), ('hotpants', 'HOTPANTS')],
+    subtraction_method = forms.ChoiceField(choices=[('hotpants', 'HOTPANTS'), ('sfft', 'SFFT')],
                                          initial='hotpants', required=False, label="Method")
+
+    sfft_kernel_poly_order = forms.IntegerField(min_value=0, max_value=4, initial=0, required=False, label="Kernel poly order")
+    sfft_bg_poly_order = forms.IntegerField(min_value=0, max_value=4, initial=0, required=False, label="Background poly order")
+    sfft_flux_poly_order = forms.IntegerField(min_value=0, max_value=4, initial=0, required=False, label="Flux poly order")
 
     filter_vizier = forms.BooleanField(initial=False, required=False, label="Filter Vizier catalogues")
     filter_skybot = forms.BooleanField(initial=False, required=False, label="Filter SkyBoT")
@@ -372,13 +376,16 @@ class TaskSubtractionForm(forms.Form):
         self.helper.layout = Layout(
             'form_type',
             Row(
-                Column('template'),
+                Column('template', css_class="col-md-auto"),
                 # Column('file'),
-                Column('sub_size', css_class="col-md-2"),
-                Column('sub_overlap', css_class="col-md-2"),
-                Column('subtraction_method', css_class="col-md-2 d-none"),
-                Column('template_fwhm_override'),
+                Column('sub_size', css_class="col-md"),
+                Column('sub_overlap', css_class="col-md"),
+                Column('subtraction_method', css_class="col-md"),
+                Column('template_fwhm_override', css_class="col-md"),
                 Column('hotpants_extra', id='hotpants_extra_col'),
+                Column('sfft_kernel_poly_order', css_class="col-md", id='sfft_kernel_poly_col'),
+                Column('sfft_bg_poly_order', css_class="col-md", id='sfft_bg_poly_col'),
+                Column('sfft_flux_poly_order', css_class="col-md", id='sfft_flux_poly_col'),
                 css_class='align-items-end'
             ),
             Row(

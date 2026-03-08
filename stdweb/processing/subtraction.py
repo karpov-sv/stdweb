@@ -18,7 +18,7 @@ from astropy.table import Table, vstack
 from astropy.time import Time
 
 from stdpipe import astrometry, photometry, cutouts
-from stdpipe import templates, subtraction, plots, pipeline, psf
+from stdpipe import templates, subtraction, plots, pipeline
 from stdpipe import resolve, utils, artefacts
 
 from .constants import *
@@ -164,34 +164,11 @@ def subtract_image(filename, config, verbose=True, show=False):
         log('No target provided and transient detection is disabled, nothing to do')
         return
 
-    if subtraction_method == 'zogy':
-        log(f"\n---- Science image PSF ----\n")
-        # Get global PSF model and object list with large aperture for flux normalization
-        image_psf, image_psf_obj = psf.run_psfex(
-            image, mask=mask,
-            # Use spatially varying PSF if we have enough stars
-            order=0 if len(obj[obj['flags'] == 0]) < 100 else 2,
-            aper=2.0*config.get('fwhm', 3.0),
-            gain=config.get('gain', 1.0),
-            minarea=config.get('minarea', 3),
-            r0=config.get('initial_r0', 0.0),
-            sex_extra={'BACK_SIZE': config.get('bg_size', 256)},
-            verbose=verbose,
-            get_obj=True,
-            _tmpdir=settings.STDPIPE_TMPDIR,
-            _sex_exe=settings.STDPIPE_SEXTRACTOR,
-            _exe=settings.STDPIPE_PSFEX)
-
-        image_psf_obj = image_psf_obj[image_psf_obj['flags'] == 0]
-
-    else:
-        image_psf, image_psf_obj = None, None
-
     all_candidates = []
     cutout_names = []
 
-    for i, x0, y0, image1, mask1, header1, wcs1, obj1, cat1, image_psf1, image_psf_obj1 in split_fn(
-            image, mask, header, wcs, obj, cat, image_psf, image_psf_obj,
+    for i, x0, y0, image1, mask1, header1, wcs1, obj1, cat1 in split_fn(
+            image, mask, header, wcs, obj, cat,
             get_origin=True, verbose=False):
 
         log(f"\n---- Sub-image {i}: {x0} {y0} - {x0 + image1.shape[1]} {y0 + image1.shape[0]} ----\n")
@@ -206,7 +183,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 tfilter, survey=tname, wcs=wcs1, shape=image1.shape,
                 _cachedir=_cachedir, _cache_downscale = 1 if pixscale*3600 < 0.6 else 2,
                 _tmpdir=settings.STDPIPE_TMPDIR,
-                _exe=settings.STDPIPE_SWARP,
+                # _exe=settings.STDPIPE_SWARP,
                 verbose=sub_verbose)
             if tmask is not None and tmpl is not None:
                 if tname == 'ps1':
@@ -305,49 +282,53 @@ def subtract_image(filename, config, verbose=True, show=False):
             ax.set_ylabel('Instrumental magnitude')
             ax.set_xlim(0, np.percentile(fwhm_values, 98))
 
-        if subtraction_method == 'zogy':
-            # ZOGY
+        if subtraction_method == 'sfft':
+            # SFFT
 
-            # Estimate template PSF
-            template_psf, template_psf_obj = psf.run_psfex(
-                tmpl, mask=tmask,
-                # Use spatially varying PSF?..
-                order=0,
-                aper=2.0*template_fwhm,
-                gain=template_gain,
-                minarea=config.get('minarea', 3),
-                r0=config.get('initial_r0', 0.0),
-                sex_extra={'BACK_SIZE': config.get('bg_size', 256)},
-                verbose=sub_verbose,
-                get_obj=True,
-                _tmpdir=settings.STDPIPE_TMPDIR,
-                _sex_exe=settings.STDPIPE_SEXTRACTOR,
-                _exe=settings.STDPIPE_PSFEX)
+            fwhm = config.get('fwhm', 3.0)
 
-            # Do the subtraction
-            diff, S_corr, Fpsf, Fpsf_err = subtraction.run_zogy(
+            log(f"Using template FWHM = {template_fwhm:.1f} pix and image FWHM = {fwhm:.1f} pix")
+
+            # Kernel size based on larger FWHM
+            kernel_hw = int(np.ceil(max(fwhm, template_fwhm)))
+            # Ensure odd
+            kernel_size = 2 * kernel_hw + 1
+            kernel_shape = (kernel_size, kernel_size)
+
+            res = subtraction.run_sfft(
                 image1, tmpl,
-                mask=mask1, template_mask=tmask,
+                mask=mask1,
+                template_mask=tmask,
                 image_gain=config.get('gain', 1.0),
                 template_gain=template_gain,
-                image_psf=image_psf1, template_psf=template_psf,
-                image_obj=image_psf_obj1,
-                template_obj=template_psf_obj,
-                fit_scale=True, fit_shift=True,
-                get_Fpsf=True,
-                verbose=verbose
+                kernel_shape=kernel_shape,
+                kernel_poly_order=config.get('sfft_kernel_poly_order', 0),
+                bg_poly_order=config.get('sfft_bg_poly_order', 0),
+                flux_poly_order=config.get('sfft_flux_poly_order', 0),
+                err=True,
+                get_convolved=True,
+                get_scaled=True,
+                get_noise=True,
+                verbose=verbose,
             )
 
-            fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff, header1, overwrite=True)
-            fits.writeto(os.path.join(basepath, 'sub_scorr.fits'), S_corr, header1, overwrite=True)
-            fits.writeto(os.path.join(basepath, 'sub_fpsf.fits'), Fpsf, header1, overwrite=True)
-            fits.writeto(os.path.join(basepath, 'sub_fpsferr.fits'), Fpsf_err, header1, overwrite=True)
+            if res is not None:
+                diff, conv, ediff, sdiff = res
+            else:
+                log("Warning: SFFT subtraction failed")
+                continue
 
             # Combined mask on the sub-image
             fullmask1 = mask1 | tmask
 
-            conv = S_corr
-            ediff = None
+            diff1 = diff.copy()
+            diff1[fullmask1] = 0.0
+
+            fits.writeto(os.path.join(basepath, 'sub_diff.fits'), diff1, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_sdiff.fits'), sdiff, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_conv.fits'), conv, header1, overwrite=True)
+            fits.writeto(os.path.join(basepath, 'sub_ediff.fits'), ediff, header1, overwrite=True)
+
         else:
             # HOTPANTS
             fwhm = config.get('fwhm', 3.0)
@@ -525,44 +506,22 @@ def subtract_image(filename, config, verbose=True, show=False):
             # Transient detection mode
             log(f"Starting transient detection using edge size {sub_overlap}")
 
-            if subtraction_method == 'zogy':
-                # ZOGY
-                sobj,segm = photometry.get_objects_sextractor(
-                    S_corr,
-                    mask=fullmask1,
-                    thresh=config.get('sn', 5.0),
-                    wcs=wcs1, edge=sub_overlap,
-                    minarea=config.get('minarea', 1),
-                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
-                    extra={
-                        'ANALYSIS_THRESH': config.get('sn', 5.0),
-                        'THRESH_TYPE': 'ABSOLUTE',
-                        'BACK_TYPE': 'MANUAL',
-                        'BACK_VALUE': 0,
-                    },
-                    checkimages=['SEGMENTATION'],
-                    verbose=sub_verbose,
-                    _tmpdir=settings.STDPIPE_TMPDIR,
-                    _exe=settings.STDPIPE_SEXTRACTOR
-                )
-            else:
-                # HOTPANTS
-                sobj,segm = photometry.get_objects_sextractor(
-                    diff,
-                    mask=fullmask1,
-                    err=ediff,
-                    wcs=wcs1, edge=sub_overlap,
-                    aper=config.get('initial_aper', 3.0),
-                    gain=config.get('gain', 1.0),
-                    sn=config.get('sn', 5.0),
-                    minarea=config.get('minarea', 3),
-                    extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
-                    extra={'BACK_SIZE': config.get('bg_size', 256)},
-                    checkimages=['SEGMENTATION'],
-                    verbose=sub_verbose,
-                    _tmpdir=settings.STDPIPE_TMPDIR,
-                    _exe=settings.STDPIPE_SEXTRACTOR
-                )
+            sobj,segm = photometry.get_objects_sextractor(
+                diff,
+                mask=fullmask1,
+                err=ediff,
+                wcs=wcs1, edge=sub_overlap,
+                aper=config.get('initial_aper', 3.0),
+                gain=config.get('gain', 1.0),
+                sn=config.get('sn', 5.0),
+                minarea=config.get('minarea', 3),
+                extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
+                extra={'BACK_SIZE': config.get('bg_size', 256)},
+                checkimages=['SEGMENTATION'],
+                verbose=sub_verbose,
+                _tmpdir=settings.STDPIPE_TMPDIR,
+                _exe=settings.STDPIPE_SEXTRACTOR
+            )
 
             sobj = photometry.measure_objects(
                 sobj, diff, mask=fullmask1,
