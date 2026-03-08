@@ -60,15 +60,16 @@
      check_blindmatch_visibility();
    });
 
-   // Disable submitting the form on image cropping text fields
+   // Make Enter in input fields submit the form using its primary button
+   // (not the first submit button, which may be a secondary action)
    $(function(){
-     for(var id of ['crop_x1', 'crop_y1', 'crop_x2', 'crop_y2']){
-       $('#' + id).on('keypress keydown keyup', function (e) {
-         if (e.keyCode == 13) {
-           e.preventDefault();
-         }
-       });
-     }
+     $('fieldset').on('keypress', 'input[type="text"], input[type="number"]', function (e) {
+       if (e.keyCode == 13) {
+         e.preventDefault();
+         var btn = $(this).closest('form').find('button.btn-primary[type="submit"]');
+         if (btn.length) btn.click();
+       }
+     });
    });
 
    check_custom_template_visibility = function(){
