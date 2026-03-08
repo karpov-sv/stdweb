@@ -604,10 +604,15 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             # diff[fullmask1] = np.nan # For better visuals
 
-            Ngood = 0
-            for cand in candidates:
+            os.makedirs(os.path.join(basepath, 'candidates'), exist_ok=True)
+
+            cutout_size = config.get('cutout_size', 30)
+            do_adjust = config.get('filter_adjust')
+            adjust_inner = int(np.ceil(2.0*config.get('fwhm'))) if do_adjust else None
+
+            def process_sub_candidate(cand):
                 cutout = cutouts.get_cutout(
-                    image1, cand, config.get('cutout_size', 30),
+                    image1, cand, cutout_size,
                     mask=fullmask1,
                     diff=diff,
                     template=tmpl,
@@ -618,35 +623,32 @@ def subtract_image(filename, config, verbose=True, show=False):
                     header=header1
                 )
 
-                if config.get('filter_adjust'):
-                    # Try to apply some sub-pixel adjustments to fix dipoles etc
+                if do_adjust:
                     if cutouts.adjust_cutout(
                             cutout, max_shift=1, max_scale=1.3,
-                            inner=int(np.ceil(2.0*config.get('fwhm'))),
+                            inner=adjust_inner,
                             normalize=False, verbose=False
                     ):
                         if cutout['meta']['adjust_pval'] > 0.01:
-                            continue
+                            return None
                         if cutout['meta']['adjust_chi2'] < 0.33*cutout['meta']['adjust_chi2_0']:
-                            continue
+                            return None
 
                 jname = utils.make_jname(cand['ra'], cand['dec'])
-                cutout_name = os.path.join(basepath, 'candidates', jname + '.cutout')
+                cutout_name = os.path.join('candidates', jname + '.cutout')
 
-                try:
-                    os.makedirs(os.path.join(basepath, 'candidates'))
-                except OSError:
-                    pass
+                cutouts.write_cutout(cutout, os.path.join(basepath, cutout_name))
 
-                cutouts.write_cutout(cutout, cutout_name)
+                return (cand, cutout_name)
 
+            results = parallel_map(process_sub_candidate, candidates, verbose=verbose)
+
+            for cand, cutout_name in results:
                 all_candidates.append(cand)
-                cutout_names.append(os.path.join('candidates', jname + '.cutout'))
+                cutout_names.append(cutout_name)
 
-                Ngood += 1
-
-            if config.get('filter_adjust'):
-                log(f"{Ngood} candidates remaining after sub-pixel adjustment routine")
+            if do_adjust:
+                log(f"{len(results)} candidates remaining after sub-pixel adjustment routine")
 
     if subtraction_mode == 'detection':
         log("\n---- Final list of candidates ----\n")

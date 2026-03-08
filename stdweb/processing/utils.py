@@ -14,7 +14,33 @@ from astropy.time import Time
 
 import dill as pickle
 
+from concurrent.futures import ThreadPoolExecutor
+
 from stdpipe import astrometry, cutouts, templates
+
+
+def parallel_map(fn, items, max_workers=8, verbose=None):
+    """Apply fn to each item in parallel using threads.
+
+    Useful for I/O-bound work (network fetches, disk writes).
+    Returns list of non-None results in original order.
+    """
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args, **kwargs: None
+
+    results = [None] * len(items)
+
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(items))) as pool:
+        futures = {pool.submit(fn, item): i for i, item in enumerate(items)}
+        n_done = 0
+        for future in futures:
+            idx = futures[future]
+            try:
+                results[idx] = future.result()
+                n_done += 1
+            except Exception as e:
+                log(f"Warning: parallel task {idx} failed: {e}")
+
+    return [r for r in results if r is not None]
 
 
 def cleanup_paths(paths, basepath=None):

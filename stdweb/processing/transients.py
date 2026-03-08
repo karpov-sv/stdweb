@@ -180,26 +180,27 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         candidates = candidates[:100]
         log(f"Warning: too many candidates, limiting to first {len(candidates)}")
 
-    cutout_names = []
+    if len(candidates):
+        hips = guess_hips_survey(candidates['ra'][0], candidates['dec'][0], config['filter'])
+        log(f"Using {hips} for atlas images")
+    else:
+        hips = None
 
-    hips = None
+    os.makedirs(os.path.join(basepath, 'candidates_simple'), exist_ok=True)
 
-    for cand in candidates:
+    image_double = image.astype(np.double)
+    cutout_size = config.get('cutout_size', 30)
+    filtered = fimg if config.get('initial_r0') else None
+
+    def process_candidate(cand):
         cutout = cutouts.get_cutout(
-            image.astype(np.double),
-            cand,
-            config.get('cutout_size', 30),
+            image_double, cand, cutout_size,
             header=header,
             mask=mask,
             footprint=(segm==cand['NUMBER']) if segm is not None else None,
-            filtered=fimg if config.get('initial_r0') else None,
+            filtered=filtered,
         )
 
-        if hips is None:
-            hips = guess_hips_survey(cand['ra'], cand['dec'], config['filter'])
-            log(f"Using {hips} for atlas images")
-
-        # Cutout from relevant HiPS survey
         cutout['template'] = templates.get_hips_image(
             hips,
             header=cutout['header'],
@@ -208,14 +209,12 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
         jname = utils.make_jname(cand['ra'], cand['dec'])
         cutout_name = os.path.join('candidates_simple', jname + '.cutout')
-        cutout_names.append(cutout_name)
-
-        try:
-            os.makedirs(os.path.join(basepath, 'candidates_simple'))
-        except OSError:
-            pass
 
         cutouts.write_cutout(cutout, os.path.join(basepath, cutout_name))
+
+        return cutout_name
+
+    cutout_names = parallel_map(process_candidate, candidates, verbose=verbose)
 
     log("\n---- Final list of candidates ----\n")
 
