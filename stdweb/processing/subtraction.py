@@ -183,7 +183,6 @@ def subtract_image(filename, config, verbose=True, show=False):
                 tfilter, survey=tname, wcs=wcs1, shape=image1.shape,
                 _cachedir=_cachedir, _cache_downscale = 1 if pixscale*3600 < 0.6 else 2,
                 _tmpdir=settings.STDPIPE_TMPDIR,
-                # _exe=settings.STDPIPE_SWARP,
                 verbose=sub_verbose)
             if tmask is not None and tmpl is not None:
                 if tname == 'ps1':
@@ -306,6 +305,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 bg_poly_order=config.get('sfft_bg_poly_order', 0),
                 flux_poly_order=config.get('sfft_flux_poly_order', 0),
                 err=True,
+                obj=obj1[obj1['flags']==0],
                 get_convolved=True,
                 get_scaled=True,
                 get_noise=True,

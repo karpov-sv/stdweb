@@ -49,7 +49,7 @@ def stack_images(filenames, outname, config, verbose=True):
             )
 
         if config.get('stack_subtract_bg', True):
-            bg = sep.Background(image.astype(np.double), mask=mask)
+            bg = sep.Background(image.astype(np.double), mask=mask, bh=256, bw=256)
             image = 1.0*image - bg.back()
 
         wcs = WCS(header)
