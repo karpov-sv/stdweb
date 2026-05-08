@@ -1,48 +1,110 @@
-# STDWeb
+# STDWeb Docker
 
-STDWeb - web version of [STDPipe](https://github.com/karpov-sv/stdpipe) (Docker)
+`STDWeb` is the web version of [STDPipe](https://github.com/karpov-sv/stdpipe), packaged with Docker.
 
-## Step 0
-```python
+## Prerequisites
+
+- Docker Engine + Docker Compose plugin (`docker compose`)
+- At least 8 GB RAM recommended for build/runtime
+- Astrometry index files downloaded from [data.astrometry.net](http://data.astrometry.net/)
+
+## Quick Start
+
+1. Clone this repo:
+
+```bash
 git clone --depth=1 https://github.com/Astro-Lee/stdweb-docker.git
+cd stdweb-docker
 ```
-Download suitable index files from [data.astrometry.net](http://data.astrometry.net/), as introduced in [astrometry](https://github.com/neuromorphicsystems/astrometry) (also refer to [download_index.sh](https://github.com/Astro-Lee/stdweb-docker/blob/master/download_index.sh)). Map the saved path to the container by referring to [docker-compose.yaml](https://github.com/Astro-Lee/stdweb-docker/blob/master/docker-compose.yaml).
-```python
-docker compose up -d
+
+2. Prepare local mount directories:
+
+```bash
+mkdir -p data tasks notebooks index-data
 ```
-```python
+
+3. Put astrometry index files into `./index-data` on host.
+- You can refer to `download_index.sh` to fetch index files.
+- 
+- Container mapping is already configured in `docker-compose.yaml`:
+  - `./index-data:/usr/local/astrometry/data/`
+
+
+4. Build and start:
+
+```bash
+docker compose up -d --build
+```
+
+5. Check services:
+
+```bash
+docker compose ps
+docker logs -f stdweb
+```
+
+If everything is healthy:
+- STDWeb: `http://localhost:8123`
+- JupyterLab: `http://localhost:8124`
+
+## First-Time Setup (inside container)
+
+```bash
 docker exec -it stdweb bash
 ```
 
-⚠️: All the following operations are carried out in the container
+1. Create admin user:
 
-## Step 1
-### create a superuser
+```bash
+/opt/conda3/bin/python manage.py createsuperuser
+```
+
+2. Generate and set a production secret key:
+
+```bash
+/opt/conda3/bin/python -c "from django.core.management import utils; print(utils.get_random_secret_key())"
+```
+
+Edit `/opt/stdweb/.env` and replace:
+
+```bash
+SECRET_KEY = 'your django secret key goes here'
+```
+
+3. If using reverse proxy / domain, set trusted origins in `stdweb/settings.py`:
+
 ```python
-python manage.py createsuperuser
+CSRF_TRUSTED_ORIGINS = ['https://example.domain.com']
 ```
 
-## Step 2
-### generate a django secret key
+Then restart container:
+
 ```bash
-#edit .env
-python -c "from django.core.management import utils; print(utils.get_random_secret_key())"
+docker compose restart stdweb
 ```
 
-## Step 3
-### reverse proxy 
+## Notes
+
+- `docker-compose.yaml` starts `redis` and `stdweb`.
+- `start.sh` launches:
+  - JupyterLab (port `8888` in container)
+  - Celery worker (with redis broker)
+  - Django dev server (port `8000` in container)
+- Host port mapping:
+  - `8123 -> 8000`
+  - `8124 -> 8888`
+
+## Update Existing Deployment
+
+Inside container:
+
 ```bash
-#edit stdweb/settings.py
-CSRF_TRUSTED_ORIGINS = [ 'https://example.domain.com', ]
+cd /opt/stdpipe && git pull && /opt/conda3/bin/python -m pip install -e .
+cd /opt/stdweb && git pull && /opt/conda3/bin/pip install -r requirements.txt
 ```
 
----
-## update
+After update:
+
 ```bash
-cd /opt/stdpipe && git pull && python -m pip install -e .
-cd /opt/stdweb && git pull && pip install -r requirements.txt \
-&& sed -i "/ALLOWED_HOSTS/a\# CSRF_TRUSTED_ORIGINS = [ 'https://example.domain.com', ]" stdweb/settings.py \
-&& sed -i "s@redis:\/\/localhost\/@redis:\/\/redis\/@g" stdweb/settings.py \
-&& sed -i "s@redis:\/\/127.0.0.1@redis:\/\/redis@g" stdweb/settings.py
+docker compose restart stdweb
 ```
----
