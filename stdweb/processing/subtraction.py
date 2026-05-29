@@ -579,7 +579,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 log(f"{len(sobj)} candidates inside the region")
 
             # Pre-filter detections if requested
-            if config.get('filter_prefilter') and len(sobj):
+            if config.get('filter_prefilter', True) and len(sobj):
                 if classifier is None:
                     # Prepare the classifier based on SExtractor shape parameters
                     classifier = artefacts.filter_sextractor_detections(obj, verbose=False, return_classifier=True)
@@ -609,7 +609,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             os.makedirs(os.path.join(basepath, 'candidates'), exist_ok=True)
 
             cutout_size = config.get('cutout_size', 30)
-            do_adjust = config.get('filter_adjust')
+            do_adjust = config.get('filter_adjust', True)
             adjust_inner = int(np.ceil(2.0*config.get('fwhm'))) if do_adjust else None
 
             def process_sub_candidate(cand):
