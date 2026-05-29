@@ -29,7 +29,7 @@ def parallel_map(fn, items, max_workers=8, verbose=None):
 
     results = [None] * len(items)
 
-    with ThreadPoolExecutor(max_workers=min(max_workers, len(items))) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(items)))) as pool:
         futures = {pool.submit(fn, item): i for i, item in enumerate(items)}
         n_done = 0
         for future in futures:
