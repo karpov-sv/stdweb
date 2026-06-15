@@ -17,6 +17,7 @@ import dill as pickle
 from concurrent.futures import ThreadPoolExecutor
 
 from stdpipe import astrometry, cutouts, templates
+from stdpipe import fringe_removal
 
 
 def parallel_map(fn, items, max_workers=8, verbose=None):
@@ -255,7 +256,7 @@ def crop_image(filename, config, x1=None, y1=None, x2=None, y2=None, verbose=Tru
     fits.writeto(filename, image, header, overwrite=True)
 
 
-def preprocess_image(filename, config, destripe_horizontal=False, destripe_vertical=False, verbose=True):
+def preprocess_image(filename, config, destripe_horizontal=False, destripe_vertical=False, remove_fringes=False, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
@@ -283,6 +284,21 @@ def preprocess_image(filename, config, destripe_horizontal=False, destripe_verti
             image1[_,:] += med - np.nanmedian(image1[_,:])
 
         image = image1
+
+    if remove_fringes:
+        if os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
+            mask = fits.getdata(os.path.join(basepath, 'custom_mask.fits'), -1) > 0
+        else:
+            mask = None
+
+        image,model = fringe_removal.remove_fringes(
+            image,
+            mask=mask,
+            get_fringe_model=True,
+            verbose=True
+        )
+        # FIXME: we save the model for now. When removing it - celery_tasks.task_cleanup should be also updated
+        fits.writeto(os.path.join(basepath, 'fringe_model.fits'), model, header, overwrite=True)
 
     # Write the image and header back
     fits.writeto(filename, image, header, overwrite=True)

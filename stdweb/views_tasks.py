@@ -623,7 +623,7 @@ def task_preprocess(request, id=None):
     if request.method == 'POST':
         action = request.POST.get('action')
 
-        if action in ['destripe_vertical', 'destripe_horizontal']:
+        if action in ['destripe_vertical', 'destripe_horizontal', 'remove_fringes']:
             # Create backup before first modification
             _backup_image()
 
@@ -632,6 +632,7 @@ def task_preprocess(request, id=None):
                 image_path, task.config,
                 destripe_vertical=(action == 'destripe_vertical'),
                 destripe_horizontal=(action == 'destripe_horizontal'),
+                remove_fringes=(action == 'remove_fringes'),
             )
 
             messages.success(request, "Removed lines from the image for task " + str(id))
