@@ -43,17 +43,13 @@ from .serializers import (
 # =============================================================================
 
 def check_task_permission(request, task):
-    """Check if user has permission to access/modify the task."""
-    user = request.user
-    if user.is_staff:
-        return True
-    if user == task.user:
-        return True
-    if user.has_perm('stdweb.edit_all_tasks'):
-        return True
-    if user.has_perm('stdweb.view_all_tasks') and request.method in ['GET', 'HEAD', 'OPTIONS']:
-        return True
-    return False
+    """Check if user has permission to access/modify the task.
+
+    Safe methods need view access; everything else needs edit access.
+    """
+    if request.method in ['GET', 'HEAD', 'OPTIONS']:
+        return task.can_view(request.user)
+    return task.can_edit(request.user)
 
 
 def validate_task_path(task, path):
@@ -87,11 +83,7 @@ def task_list(request):
     POST: Create a new task with optional file upload.
     """
     if request.method == 'GET':
-        user = request.user
-        if user.is_staff or user.has_perm('stdweb.view_all_tasks'):
-            tasks = Task.objects.all().order_by('-created')
-        else:
-            tasks = Task.objects.filter(user=user).order_by('-created')
+        tasks = Task.accessible_to(request.user).order_by('-created')
 
         serializer = TaskListSerializer(tasks, many=True)
         return Response(serializer.data)

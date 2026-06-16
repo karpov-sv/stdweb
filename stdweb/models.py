@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils.timezone import now
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.conf import settings
 
 import os, shutil
@@ -22,6 +22,10 @@ class Task(models.Model):
 
     user =  models.ForeignKey(User, on_delete=models.CASCADE)
 
+    # Groups this task is shared with. Every member of a listed group may
+    # view and edit the task, in addition to the owner. See can_view()/can_edit().
+    groups = models.ManyToManyField(Group, blank=True, related_name='tasks')
+
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True) # Updated on every .save()
     completed = models.DateTimeField(default=now, editable=False) # Manually updated on finishing the processing
@@ -39,6 +43,53 @@ class Task(models.Model):
 
     def complete(self):
         self.completed = now()
+
+    # --- Access control -----------------------------------------------------
+    # All task access checks funnel through these helpers so that the rules
+    # live in exactly one place. The matching queryset filter is
+    # Task.accessible_to() below.
+
+    def is_shared_with(self, user):
+        """Whether `user` belongs to any group this task is shared with."""
+        return self.groups.filter(user=user).exists()
+
+    def can_view(self, user):
+        """Whether `user` may read this task."""
+        if not user.is_authenticated:
+            return False
+        if user.is_staff or user == self.user:
+            return True
+        if user.has_perm('stdweb.view_all_tasks') or user.has_perm('stdweb.edit_all_tasks'):
+            return True
+        return self.is_shared_with(user)
+
+    def can_edit(self, user):
+        """Whether `user` may modify / submit / run this task."""
+        if not user.is_authenticated:
+            return False
+        if user.is_staff or user == self.user:
+            return True
+        if user.has_perm('stdweb.edit_all_tasks'):
+            return True
+        return self.is_shared_with(user)
+
+    def can_delete(self, user):
+        """Whether `user` may delete this task. Only the owner or staff."""
+        if not user.is_authenticated:
+            return False
+        return user.is_staff or user == self.user
+
+    @staticmethod
+    def accessible_to(user, queryset=None):
+        """Queryset of tasks `user` may view. Mirrors can_view() at the DB level."""
+        if queryset is None:
+            queryset = Task.objects.all()
+        if not user.is_authenticated:
+            return queryset.none()
+        if user.is_staff or user.has_perm('stdweb.view_all_tasks') or user.has_perm('stdweb.edit_all_tasks'):
+            return queryset
+        # Own tasks plus those shared with any of the user's groups.
+        return queryset.filter(models.Q(user=user) | models.Q(groups__user=user)).distinct()
 
     def __str__(self):
         return f"{self.id}: {self.user.username} : {self.original_name}"

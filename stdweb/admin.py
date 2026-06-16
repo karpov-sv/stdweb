@@ -14,6 +14,7 @@ class TaskAdmin(admin.ModelAdmin):
     search_fields = ['original_name', 'title', 'user__username']
     list_display = ['id', 'user', 'state', 'original_name', 'title']
     list_display_links = list_display
+    filter_horizontal = ['groups']
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)

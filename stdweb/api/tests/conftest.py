@@ -8,7 +8,7 @@ import tempfile
 
 import pytest
 from django.conf import settings
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import User, Permission, Group
 from rest_framework.test import APIClient
 
 from stdweb.models import Task, Preset
@@ -167,6 +167,24 @@ def other_user_task(db, other_user, temp_tasks_path):
     )
     os.makedirs(task.path(), exist_ok=True)
     return task
+
+
+@pytest.fixture
+def shared_group(db):
+    """Create a group used for task sharing."""
+    return Group.objects.create(name='collab')
+
+
+@pytest.fixture
+def group_member(db, shared_group):
+    """Create a user who is a member of shared_group but owns no task."""
+    user = User.objects.create_user(
+        username='groupmember',
+        email='member@example.com',
+        password='testpass123'
+    )
+    user.groups.add(shared_group)
+    return user
 
 
 @pytest.fixture

@@ -42,7 +42,9 @@ def _get_filtered_tasks(request):
 
     if form.is_valid():
         show_all = form.cleaned_data.get('show_all')
-        if not show_all:
+        if show_all:
+            tasks = models.Task.accessible_to(request.user, tasks)
+        else:
             tasks = tasks.filter(user=request.user)
 
         query = form.cleaned_data.get('query')
@@ -84,12 +86,7 @@ def tasks(request, id=None):
         path = task.path()
 
         # Permissions
-        if request.user.is_authenticated and (
-                request.user.is_staff or request.user == task.user or request.user.has_perm('stdweb.edit_all_tasks')
-        ):
-            context['user_may_submit'] = True
-        else:
-            context['user_may_submit'] = False
+        context['user_may_submit'] = task.can_edit(request.user)
 
         # Clear the link to queued task if it was revoked
         if task.celery_id:
@@ -152,7 +149,7 @@ def tasks(request, id=None):
 
                 if action == 'delete_task':
                     # Only owner or staff may delete the task
-                    if request.user.is_staff or request.user == task.user:
+                    if task.can_delete(request.user):
                         log_action('task_delete', task=task, request=request,
                                    details={'original_name': task.original_name, 'access': 'web'})
                         task.delete()
@@ -397,7 +394,7 @@ def tasks_actions(request):
                     messages.success(request, "Started cleanup for task " + str(id))
 
                 if action == 'delete':
-                    if request.user.is_staff or request.user == task.user:
+                    if task.can_delete(request.user):
                         log_action('task_delete', task=task, request=request,
                                    details={'original_name': task.original_name, 'access': 'web'})
                         task.delete()
@@ -435,8 +432,8 @@ def task_files(request, id, path=''):
     """Browse files within a task folder using the generic file browser."""
     task = get_object_or_404(models.Task, id=id)
 
-    # Permission check: owner or user with view_all_tasks permission
-    if task.user != request.user and not request.user.has_perm('stdweb.view_all_tasks'):
+    # Permission check: owner, staff or user with view/edit-all permission
+    if not task.can_view(request.user):
         return HttpResponseForbidden("You don't have permission to view this task")
 
     # Call generic list_files with task base path
@@ -760,9 +757,7 @@ def task_update_title(request, id):
     task = get_object_or_404(models.Task, id=id)
 
     # Permission check
-    if not request.user.is_authenticated or not (
-        request.user.is_staff or request.user == task.user or request.user.has_perm('stdweb.edit_all_tasks')
-    ):
+    if not task.can_edit(request.user):
         return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
 
     # Don't allow updates while task is running

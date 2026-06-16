@@ -4,6 +4,8 @@ Serializers for the STDWeb REST API.
 
 from rest_framework import serializers
 
+from django.contrib.auth.models import Group
+
 from stdweb.models import Task, Preset
 
 
@@ -14,6 +16,12 @@ class TaskSerializer(serializers.ModelSerializer):
     """
     user = serializers.ReadOnlyField(source='user.username')
     path = serializers.SerializerMethodField()
+    groups = serializers.SlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=Group.objects.all(),
+        required=False,
+    )
 
     class Meta:
         model = Task
@@ -23,6 +31,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'title',
             'state',
             'user',
+            'groups',
             'created',
             'modified',
             'completed',

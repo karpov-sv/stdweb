@@ -103,6 +103,60 @@ class TestCheckTaskPermission:
         assert check_task_permission(request, task) is True
 
 
+class TestGroupSharing:
+    """Tests for sharing tasks with groups."""
+
+    def test_non_member_denied(self, other_user, task, shared_group):
+        """A user not in a shared group has no access by default."""
+        assert task.can_view(other_user) is False
+        assert task.can_edit(other_user) is False
+
+    def test_member_can_view_and_edit(self, group_member, task, shared_group):
+        """Once a task is shared with the user's group, they get view and edit access."""
+        task.groups.add(shared_group)
+
+        assert task.can_view(group_member) is True
+        assert task.can_edit(group_member) is True
+
+    def test_member_cannot_delete(self, group_member, task, shared_group):
+        """Group sharing does not grant delete; only owner or staff may delete."""
+        task.groups.add(shared_group)
+
+        assert task.can_delete(group_member) is False
+
+    def test_check_task_permission_respects_groups(self, group_member, task, shared_group):
+        """The API helper honours group sharing for both read and write."""
+        task.groups.add(shared_group)
+
+        get_request = Mock(user=group_member, method='GET')
+        patch_request = Mock(user=group_member, method='PATCH')
+
+        assert check_task_permission(get_request, task) is True
+        assert check_task_permission(patch_request, task) is True
+
+    def test_accessible_to_includes_shared_tasks(self, group_member, task, other_user_task, shared_group):
+        """accessible_to() returns own/shared tasks but not unrelated ones."""
+        from stdweb.models import Task
+
+        task.groups.add(shared_group)
+        accessible = Task.accessible_to(group_member)
+
+        assert task in accessible
+        assert other_user_task not in accessible
+
+    def test_accessible_to_no_duplicates(self, group_member, task, shared_group):
+        """A task shared via multiple of the user's groups appears only once."""
+        from django.contrib.auth.models import Group
+        from stdweb.models import Task
+
+        second = Group.objects.create(name='collab2')
+        group_member.groups.add(second)
+        task.groups.add(shared_group, second)
+
+        accessible = list(Task.accessible_to(group_member))
+        assert accessible.count(task) == 1
+
+
 class TestValidateTaskPath:
     """Tests for validate_task_path helper function."""
 

@@ -39,7 +39,9 @@ def _find_matching_tasks(user, coordinates, extra, targets_only, show_all, radiu
     tasks = models.Task.objects.all().order_by('-id')
 
     # Apply permission filtering
-    if not show_all or not (user.is_staff or user.has_perm('stdweb.view_all_tasks')):
+    if show_all:
+        tasks = models.Task.accessible_to(user, tasks)
+    else:
         tasks = tasks.filter(user=user)
 
     if extra:
@@ -251,8 +253,7 @@ def task_photometry_html(request, id):
     if not request.user.is_authenticated:
         return HttpResponse('<div class="alert alert-danger">Authentication required</div>', status=403)
 
-    if not (request.user.is_staff or request.user == task.user or
-            request.user.has_perm('stdweb.view_all_tasks')):
+    if not task.can_view(request.user):
         return HttpResponse('<div class="alert alert-danger">Permission denied</div>', status=403)
 
     html = ""
