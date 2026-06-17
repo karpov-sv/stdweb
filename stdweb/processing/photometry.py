@@ -92,6 +92,11 @@ def photometry_image(filename, config, verbose=True, show=False):
     fits_write(os.path.join(basepath, 'segmentation.fits'), segm, header, compress=True)
     log("Segmemtation map written to file:segmentation.fits")
 
+    # SExtractor fills masked (NaN input) pixels in the FILTERED checkimage
+    # with its internal -BIG sentinel (-1e30); convert these back to NaN
+    fimg = fimg.astype(np.float32)
+    fimg[fimg < -1e29] = np.nan
+
     fits_write(os.path.join(basepath, 'filtered.fits'), fimg, header, compress=True)
     log("Filtered image written to file:filtered.fits")
 
