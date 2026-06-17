@@ -63,9 +63,12 @@ If you use STDWeb in your work, please cite:
    installation
    quickstart
    configuration
+   accounts
    architecture
    workflow
    handbook
+   image_display
+   file_browser
    cli
    output_files
    REST API <api>

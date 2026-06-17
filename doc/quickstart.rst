@@ -40,6 +40,8 @@ astrometry, queries a reference catalog, and fits the photometric zero point.
 - Inspect the diagnostic plots (``photometry.png``, ``fwhm.png``, ``limit_sn.png``)
   to confirm a clean calibration. The fitted zero point and limiting magnitude
   are reported in the log and stored in the task config.
+- Use the :doc:`interactive image controls <image_display>` to overlay detected
+  objects and catalog stars on the image and verify they line up.
 
 If you only need photometry of known targets, you are done - the measurements are
 in ``target.vot``.
