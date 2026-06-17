@@ -7,6 +7,8 @@ This section describes the image processing workflow implemented in STDWeb. The 
 
    Image Upload/Import
           ↓
+   Preprocessing (optional: destripe, fringe removal, crop, background removal)
+          ↓
    Initial Inspection & Masking
           ↓
    Object Detection
@@ -17,7 +19,11 @@ This section describes the image processing workflow implemented in STDWeb. The 
           ↓
    Transient Detection (optional)
           ├── Simple (catalogue-based)
-          └── Image Subtraction
+          └── Image Subtraction (HOTPANTS or SFFT)
+
+Results from many tasks covering the same sky position can afterwards be
+combined into :ref:`light curves <light-curves>`, and the full task collection
+can be browsed on an interactive :ref:`sky map <sky-map>`.
 
 Image Import
 ------------
@@ -35,6 +41,30 @@ Upon import, a dedicated **task** is created that holds:
 - Operation logs
 
 Tasks can be revisited at any time to review results or re-process with different parameters.
+
+Preprocessing
+-------------
+
+Before the main pipeline runs, an optional interactive preprocessing page lets
+you clean up the uploaded image. All operations rewrite ``image.fits`` in place;
+the original is backed up automatically (as ``image.orig.fits``) so it can be
+restored at any time with the **Reset** action.
+
+Available operations:
+
+- **Destriping** - removes horizontal or vertical banding by equalising the
+  per-row or per-column median to the global image median
+- **Fringe removal** - subtracts a fringe pattern model (using the custom mask,
+  if present, to exclude sources); the fitted model is saved as
+  ``fringe_model.fits``
+- **Cropping** - trims the image to a user-specified pixel box
+- **Background removal** - estimates a smooth background (``sep``, ``photutils``,
+  or ``morphology`` method, with a configurable mesh size) and either subtracts
+  it or divides by it (useful for strong gradients or large-scale flat-field
+  residuals)
+
+Each operation triggers a cleanup of downstream results so the pipeline is
+re-run from a consistent state.
 
 Initial Inspection and Masking
 ------------------------------
@@ -172,6 +202,11 @@ Additional photometry is performed using photutils routines:
 
 This step also performs forced photometry at user-specified target positions.
 
+Optionally, **optimal (PSF-weighted) extraction** can be enabled. Instead of a
+plain aperture sum, fluxes are measured with inverse-variance weighting matched
+to the image PSF, which improves the signal-to-noise ratio for faint sources at
+the cost of additional computation.
+
 S/N Filtering
 ~~~~~~~~~~~~~
 
@@ -216,7 +251,9 @@ STDWeb supports multiple reference catalogs from CDS Vizier:
      - Northern sky (δ > -30°), faint stars
    * - SkyMapper DR4
      - Southern sky, faint stars
-   * - Gaia DR3 Syntphot
+   * - SDSS DR16
+     - Footprint-limited, ugriz bands
+   * - Gaia DR3 synphot
      - All-sky, brighter stars (synthetic photometry from spectra)
    * - Gaia eDR3
      - All-sky, G/BP/RP bands only
@@ -283,7 +320,7 @@ Filtering Steps
 1. **Flag rejection** - exclude saturated, cosmic ray, and shape-outlier objects
 2. **Positional filtering** - optional restriction to error box region
 3. **Multi-image mode** - require detection in multiple uploaded images
-4. **Catalog cross-match** - sequential matching with Gaia eDR3, Pan-STARRS DR1, SkyMapper DR4
+4. **Catalog cross-match** - matching against Vizier catalogues chosen by sky position: Gaia eDR3 (all-sky), Pan-STARRS DR1 (δ > -30°), and SkyMapper DR4 plus DES DR2 (δ < 0°)
 5. **Brightness comparison** - reject matches where object is not significantly brighter than catalog star (default: 2 mag)
 6. **Solar System check** - optional SkyBoT query to reject known minor planets
 
@@ -333,12 +370,30 @@ HiPS2FITS sources lack mask information, limiting their reliability.
 Subtraction Method
 ~~~~~~~~~~~~~~~~~~
 
-STDWeb uses HOTPANTS (Alard-Lupton method) for image subtraction:
+Two subtraction methods are available, selectable per task:
+
+**HOTPANTS** (Alard-Lupton image differencing):
 
 - Automatic parameter selection based on FWHM and saturation level
 - Noise model constructed from background RMS and gain
 - Template always convolved to match image (preserves zero point)
 - Image split into overlapping chunks to handle PSF variations
+- Convolution kernel and background spatial orders adjustable via the
+  ``hotpants_extra`` parameters (``ko``, ``bgo``, ...)
+
+**SFFT** (Saccadic Fast Fourier Transform):
+
+- Fourier-domain image differencing, provided by STDPipe (no extra binaries required)
+- Spatially varying solution controlled by three polynomial orders:
+  kernel order, background order, and flux (photometric) order
+- A good alternative to HOTPANTS for difficult fields or large PSF variations
+
+Common to both methods:
+
+- The template is always matched to the science image so the difference image
+  keeps the science-image zero point
+- The image is split into overlapping sub-images to handle PSF variations; when
+  a search position is specified, splitting is restricted to that region
 
 Candidate Detection
 ~~~~~~~~~~~~~~~~~~~
@@ -376,6 +431,51 @@ Candidates are presented with six cutouts:
 - Detection footprint
 - Mask image
 
+.. _light-curves:
+
+Light Curves
+------------
+
+Photometry stored in individual tasks can be combined into a light curve for a
+given target across all images that cover its position.
+
+Searching
+~~~~~~~~~
+
+The light curve view resolves a sky position from an object name (SIMBAD/TNS) or
+coordinate string and gathers all matching tasks within a configurable search
+radius. Results can be:
+
+- Restricted to the current user or expanded to all accessible tasks
+  (own tasks plus those shared via groups)
+- Filtered by free-text criteria (filename, title, username, or group name)
+- Limited to target (forced) photometry only, or include all detected objects
+
+Output
+~~~~~~
+
+Matching measurements are presented as an interactive light curve with optional
+image cutouts, and can be downloaded as a VOTable for further analysis.
+
+.. _sky-map:
+
+Sky Map
+-------
+
+The task list offers an interactive all-sky map showing the positions (and MOC
+coverage) of all accessible tasks, making it easy to locate observations of a
+given field. Task centre coordinates and footprints are stored on the task model
+to support fast positional search.
+
+Task Sharing
+------------
+
+By default a task is private to the user who created it. Tasks can be shared
+with one or more **user groups**: every member of a listed group gains read
+access to the task and its files (including via the light curve and sky-map
+views). Sharing is managed per-task from the task page, and in bulk from the
+task list. Group membership is administered through the Django admin interface.
+
 External Dependencies
 ---------------------
 
@@ -401,7 +501,7 @@ STDWeb relies on several external tools:
      - Image reprojection
      - Bertin et al. (2002)
    * - HOTPANTS
-     - Image subtraction
+     - Image subtraction (Alard-Lupton)
      - Becker (2015)
    * - AstroSCRAPPY
      - Cosmic ray detection

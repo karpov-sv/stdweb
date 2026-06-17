@@ -39,7 +39,7 @@ Parameters used during the initial image inspection stage (`inspect_image()`).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `cat_name` | str | Auto | Reference catalog name. Auto-suggested based on sky position and filter. Options: `ps1`, `gaiaedr3`, `gaiadr3syn`, `skymapper`, `sdss`, `atlas`, `apass`. |
+| `cat_name` | str | Auto | Reference catalog name. Auto-suggested based on sky position and filter. Options: `ps1`, `gaiaedr3`, `gaiadr3syn`, `skymapper`, `sdss`, `atlas`. |
 | `cat_limit` | float | 20.0 | Magnitude limit for reference catalog query. |
 
 ### Template Selection
@@ -73,6 +73,7 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `rel_aper` | float | 1.0 | Photometry aperture radius in FWHM units. |
 | `rel_bg1` | float | 5.0 | Inner background annulus radius in FWHM units. |
 | `rel_bg2` | float | 7.0 | Outer background annulus radius in FWHM units. |
+| `optimal_extraction` | bool | False | Use optimal (PSF-weighted) extraction instead of plain aperture sums, improving S/N for faint sources. |
 
 ### Photometric Calibration
 
@@ -160,7 +161,7 @@ Parameters for image subtraction and difference imaging (`subtract_image()`).
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `subtraction_mode` | str | 'detection' | Mode: `detection` for transient search, `target` for forced photometry at known position. |
-| `subtraction_method` | str | 'hotpants' | Algorithm: `hotpants` (Alard-Lupton) or `zogy`. |
+| `subtraction_method` | str | 'hotpants' | Algorithm: `hotpants` (Alard-Lupton) or `sfft` (Saccadic Fast Fourier Transform). |
 
 ### Image Splitting
 
@@ -172,9 +173,21 @@ Parameters for image subtraction and difference imaging (`subtract_image()`).
 
 ### HOTPANTS Parameters
 
+Used when `subtraction_method` is `hotpants`.
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `hotpants_extra` | dict | `{'ko':0, 'bgo':0}` | Additional parameters passed to HOTPANTS. Common options: `ko` (kernel order), `bgo` (background order), `nsx`/`nsy` (stamp grid). |
+
+### SFFT Parameters
+
+Used when `subtraction_method` is `sfft`. Each controls the spatial polynomial order (0-4) of one component of the SFFT solution.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sfft_kernel_poly_order` | int | 0 | Spatial polynomial order of the matching kernel. |
+| `sfft_bg_poly_order` | int | 0 | Spatial polynomial order of the differential background. |
+| `sfft_flux_poly_order` | int | 0 | Spatial polynomial order of the photometric (flux) scaling. |
 
 ### Candidate Filtering
 
@@ -254,19 +267,20 @@ Standard photometric filters:
 - Johnson-Cousins: `U`, `B`, `V`, `R`, `I`
 - SDSS/Pan-STARRS: `u`, `g`, `r`, `i`, `z`, `y`
 - Gaia: `G`, `BP`, `RP`
-- Clear/unfiltered: `C`, `N`, `CV`, `CR`
+
+Non-standard or unfiltered observations are calibrated by selecting the catalog
+band that best matches the instrumental passband (smallest color term).
 
 ### Catalogs (`cat_name`)
 
 | Catalog | Coverage | Filters | Notes |
 |---------|----------|---------|-------|
-| `ps1` | Dec > -30° | grizy | Pan-STARRS DR1 |
-| `gaiaedr3` | All-sky | G, BP, RP | Gaia EDR3 photometry |
-| `gaiadr3syn` | All-sky | All | Gaia DR3 synthetic photometry |
-| `skymapper` | Dec < +10° | uvgriz | SkyMapper DR2 |
-| `sdss` | Limited | ugriz | SDSS DR12 |
-| `atlas` | All-sky | griz | ATLAS Refcat2 |
-| `apass` | All-sky | BVgri | APASS DR10 |
+| `ps1` | Dec > -30° | BVRI, grizy | Pan-STARRS DR1 |
+| `gaiaedr3` | All-sky | G, BP, RP | Gaia eDR3 photometry |
+| `gaiadr3syn` | All-sky | UBVRI, ugrizy | Gaia DR3 synthetic photometry |
+| `skymapper` | Southern sky | BVRI, grizy | SkyMapper DR4 |
+| `sdss` | Footprint-limited | ugriz | SDSS DR16 |
+| `atlas` | All-sky | BVRI, griz | ATLAS-REFCAT2 |
 
 ### Templates (`template`)
 

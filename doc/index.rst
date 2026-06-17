@@ -7,34 +7,37 @@ Features
 --------
 
 - Upload your own FITS files or analyze files already on the server
-- Basic pre-processing and masking
+- Interactive pre-processing (destriping, fringe removal, cropping, background removal) and masking
 - Object detection with astrometric calibration (blind matching or WCS refinement)
 - Photometric calibration using multiple reference catalogs
-- Template subtraction with automatically downloaded or user-provided templates
+- Template subtraction (HOTPANTS or SFFT) with automatically downloaded or user-provided templates
 - Forced photometry for specified targets in original or difference images
-- Transient detection in difference images
+- Transient detection via catalogue cross-matching or image subtraction
+- Multi-task light curve assembly across images covering the same position
+- Sky-map overview of all tasks and group-based task sharing
 
 For details on the underlying routines, see the `STDPipe documentation <https://stdpipe.readthedocs.io/>`_ and `example notebooks <https://github.com/karpov-sv/stdpipe/tree/master/notebooks>`_.
 
 Supported Photometric Filters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - **Johnson-Cousins**: U, B, V, R, I
 - **Sloan/Pan-STARRS**: u, g, r, i, z, y
 - **Gaia**: G, BP, RP
 
 Reference Catalogs
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
 
 - Gaia DR3 synthetic photometry
+- Gaia eDR3
 - Pan-STARRS DR1
 - SkyMapper DR4
 - SDSS DR16
 - ATLAS-REFCAT2
-- DES DR2
+- DES DR2 (transient cross-matching)
 
 Template Sources
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 - Pan-STARRS DR2
 - Legacy Survey DR10
@@ -60,9 +63,10 @@ If you use STDWeb in your work, please cite:
    installation
    configuration
    architecture
-   api
    workflow
    handbook
+   REST API <api>
+   task_config
 
 Indices and tables
 ==================

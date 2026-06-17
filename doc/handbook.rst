@@ -20,6 +20,12 @@ Raw images may still work if you properly mask bad regions, but results will var
 .. tip::
    Always use the custom mask editor to remove artifacts or heavily vignetted regions on the edges. This typically improves calibration quality.
 
+.. tip::
+   If the image shows residual instrument signatures, use the interactive
+   preprocessing page (destriping, fringe removal, cropping, background removal)
+   before running the pipeline. All operations are reversible via **Reset**, so
+   it is safe to experiment.
+
 Setting the Gain Correctly
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -187,6 +193,16 @@ The ``limit_sn.png`` plot shows S/N vs. magnitude with fitted noise model.
 Template Subtraction Tips
 -------------------------
 
+Choosing a Method
+~~~~~~~~~~~~~~~~~
+
+STDWeb offers two subtraction methods:
+
+- **HOTPANTS** (default) - robust Alard-Lupton differencing, a good first choice
+- **SFFT** - Fourier-domain differencing (provided by STDPipe, no extra
+  binaries required); worth trying when HOTPANTS leaves strong residuals or
+  struggles with large PSF variations across the field
+
 HOTPANTS Parameters
 ~~~~~~~~~~~~~~~~~~~
 
@@ -195,7 +211,20 @@ The most important parameters to adjust if subtraction fails:
 - **ko** - Spatial order of convolution kernel
 - **bgo** - Background order inside model regions
 
-These can be specified as a JSON string in the interface.
+These can be specified as a JSON string (``hotpants_extra``) in the interface.
+
+SFFT Parameters
+~~~~~~~~~~~~~~~
+
+For SFFT, three independent polynomial orders control how the solution varies
+across the image:
+
+- **Kernel poly order** - spatial variation of the matching kernel
+- **Background poly order** - spatial variation of the differential background
+- **Flux poly order** - spatial variation of the photometric scaling
+
+Start with all orders at 0 (constant) and increase only if residuals show a
+clear spatial pattern.
 
 Template Source Selection
 ~~~~~~~~~~~~~~~~~~~~~~~~~

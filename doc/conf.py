@@ -31,6 +31,16 @@ myst_enable_extensions = [
     'fieldlist',
 ]
 
+# Generate anchors for headings up to this level so that intra-page links in
+# the included Markdown reference files (e.g. REST_API.md, TASK_CONFIG.md)
+# resolve. Without this a -W build would fail on those cross-references.
+myst_heading_anchors = 4
+
+# Cosmetic Pygments highlighting failures (e.g. abbreviated JSON examples that
+# use "..." placeholders) should not break a -W build; real problems such as
+# broken cross-references and missing toctree entries still do.
+suppress_warnings = ['misc.highlighting_failure']
+
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 

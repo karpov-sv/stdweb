@@ -19,8 +19,10 @@ Django Application (``stdweb/``)
 **Core modules:**
 
 - ``views.py``, ``views_tasks.py``, ``views_celery.py`` - Request handlers
+- ``views_lightcurves.py`` - Multi-task light curve assembly and VOTable export
 - ``forms.py`` - Multi-step form handling for task configuration
-- ``models.py`` - Task and Preset database models
+- ``models.py`` - Task, Preset and ActionLog database models; group-based task sharing
+- ``action_logging.py`` - Audit logging of user actions
 - ``celery_tasks.py`` - Async task definitions with ``TaskProcessContext``
 - ``celery.py`` - Celery app configuration
 - ``api/`` - REST API (see :doc:`api`)
@@ -43,11 +45,11 @@ Processing Package (``stdweb/processing/``)
    * - ``inspect.py``
      - Image inspection, cosmic ray removal, initial WCS refinement
    * - ``photometry.py``
-     - Source extraction (SExtractor), photometric calibration, zero-point fitting
+     - Source extraction (SExtractor), photometric calibration, zero-point fitting, optional optimal extraction
    * - ``transients.py``
      - Simple transient detection via catalog cross-matching
    * - ``subtraction.py``
-     - Template acquisition, HOTPANTS image subtraction, candidate detection
+     - Template acquisition, HOTPANTS/SFFT image subtraction, candidate detection
    * - ``stacking.py``
      - Multi-image stacking and combination
    * - ``__init__.py``
@@ -58,13 +60,19 @@ Processing Pipeline
 
 .. code-block:: text
 
+   (preprocessing)           → Optional, interactive: destripe, fringe removal, crop, background removal
+          ↓
    inspect_image()           → Loads FITS, fixes header, creates mask, refines WCS
           ↓
    photometry_image()        → Runs SExtractor, calibrates photometry, measures targets
           ↓
    transients_simple_image() → Cross-matches objects against Vizier catalogs (optional)
           ↓
-   subtract_image()          → Downloads template, runs HOTPANTS, detects candidates (optional)
+   subtract_image()          → Downloads template, runs HOTPANTS/SFFT, detects candidates (optional)
+
+Preprocessing is applied interactively from a dedicated page and rewrites
+``image.fits`` in place (the original is backed up as ``image.orig.fits`` so it
+can be restored). It is not part of the Celery chain below.
 
 Task Workflow
 -------------
@@ -125,13 +133,13 @@ Use ``revoke_task_chain(task)`` from ``views_celery.py`` to:
 External Dependencies
 ---------------------
 
-- **STDPipe** - Python astronomy toolkit (core processing library)
+- **STDPipe** - Python astronomy toolkit (core processing library; also provides the SFFT image subtraction method)
 - **Astrometry.Net** - Blind WCS solving
 - **SExtractor** - Source extraction
 - **SCAMP** - Astrometric calibration
 - **PSFEx** - PSF modeling
 - **SWarp** - Image resampling
-- **HOTPANTS** - Image subtraction
+- **HOTPANTS** - Image subtraction (Alard-Lupton)
 
 Command-Line Interface
 ----------------------
