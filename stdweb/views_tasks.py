@@ -72,8 +72,11 @@ def _get_filtered_tasks(request):
                         Q(title__icontains=token) |
                         Q(user__username__icontains=token) |
                         Q(user__first_name__icontains=token) |
-                        Q(user__last_name__icontains=token)
+                        Q(user__last_name__icontains=token) |
+                        Q(groups__name__icontains=token)
                     )
+                # M2M join can yield duplicate rows
+                tasks = tasks.distinct()
 
     return tasks, form
 
@@ -87,6 +90,10 @@ def tasks(request, id=None):
 
         # Permissions
         context['user_may_submit'] = task.can_edit(request.user)
+
+        # Group sharing
+        context['task_groups'] = list(task.groups.order_by('name'))
+        context['shareable_groups'] = models.accessible_groups(request.user)
 
         # Clear the link to queued task if it was revoked
         if task.celery_id:
@@ -326,7 +333,8 @@ def tasks(request, id=None):
                     else:
                         messages.info(request, f"Looking for tasks covering {ra0:.4f} {dec0:+.4f}")
 
-        context['tasks'] = tasks
+        context['tasks'] = tasks.prefetch_related('groups')
+        context['shareable_groups'] = models.accessible_groups(request.user)
         context['referer'] = request.path + '?' + request.GET.urlencode();
 
     return TemplateResponse(request, 'tasks.html', context=context)
@@ -375,8 +383,33 @@ def tasks_actions(request):
             task_ids = form.cleaned_data['tasks']
             action = request.POST.get('action')
 
+            # For bulk group sharing: resolve the selected groups once, scoped
+            # to those the user is allowed to manage.
+            group_action = action in ('add_to_groups', 'remove_from_groups')
+            if group_action:
+                accessible = list(models.accessible_groups(request.user))
+                selected_ids = set(request.POST.getlist('action_groups'))
+                sel_groups = [g for g in accessible if str(g.id) in selected_ids]
+                if not sel_groups:
+                    messages.warning(request, "No groups selected")
+                    return HttpResponseRedirect(form.cleaned_data['referer'])
+                group_count = 0
+
             for id in task_ids:
                 task = get_object_or_404(models.Task, id=id)
+
+                if group_action:
+                    if not task.can_edit(request.user):
+                        messages.error(request, "Cannot modify sharing for task " + str(id) + " belonging to " + task.user.username)
+                        continue
+                    if action == 'add_to_groups':
+                        task.groups.add(*sel_groups)
+                    else:
+                        task.groups.remove(*sel_groups)
+                    log_action('task_update', task=task, request=request,
+                               details={'access': 'web', 'action': action,
+                                        'groups': [_.name for _ in sel_groups]})
+                    group_count += 1
 
                 if action == 'archive':
                     task.celery_id = celery_tasks.task_cleanup.delay(task.id).id
@@ -401,6 +434,11 @@ def tasks_actions(request):
                         messages.success(request, "Task " + str(id ) + " is deleted")
                     else:
                         messages.error(request, "Cannot delete task " + str(id) + " belonging to " + task.user.username)
+
+            if group_action and group_count:
+                names = ", ".join(_.name for _ in sel_groups)
+                verb = "added to" if action == 'add_to_groups' else "removed from"
+                messages.success(request, f"{group_count} task(s) {verb} groups: {names}")
 
             return HttpResponseRedirect(form.cleaned_data['referer'])
 
@@ -769,3 +807,28 @@ def task_update_title(request, id):
     task.save(update_fields=['title', 'modified'])
 
     return JsonResponse({'success': True, 'title': title})
+
+
+@require_POST
+def task_update_groups(request, id):
+    """AJAX endpoint to update the groups a task is shared with."""
+    task = get_object_or_404(models.Task, id=id)
+
+    # Permission check
+    if not task.can_edit(request.user):
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    # Don't allow updates while task is running
+    if task.celery_id is not None:
+        return JsonResponse({'success': False, 'error': 'Task is running'}, status=400)
+
+    # Only the groups the user is allowed to manage may be toggled. Any group
+    # the task is shared with but the user cannot see is preserved untouched.
+    accessible = list(models.accessible_groups(request.user))
+    selected_ids = set(request.POST.getlist('groups'))
+    selected = [g for g in accessible if str(g.id) in selected_ids]
+    preserved = [g for g in task.groups.all() if g not in accessible]
+    task.groups.set(selected + preserved)
+
+    groups = [{'id': g.id, 'name': g.name} for g in task.groups.order_by('name')]
+    return JsonResponse({'success': True, 'groups': groups})

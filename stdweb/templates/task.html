@@ -236,6 +236,80 @@
         <span class="text-danger fw-bold">Task is read-only</span>
       {% endif %}
     </div>
+
+    {% if task_groups or shareable_groups %}
+    <div class="mb-2" id="task-groups">
+      <span class="text-muted">Shared with:</span>
+      <span id="task-groups-badges">
+        {% for g in task_groups %}<span class="badge bg-secondary me-1" data-group-id="{{ g.id }}">{{ g.name }}{% if user_may_submit and not task.celery_id and g in shareable_groups %} <a href="#" class="task-group-remove text-white text-decoration-none fw-bold" data-group-id="{{ g.id }}" title="Remove">&times;</a>{% endif %}</span>{% empty %}<span class="text-muted fst-italic">nobody</span>{% endfor %}
+      </span>
+      {% if user_may_submit and not task.celery_id and shareable_groups %}
+      <div class="dropdown d-inline">
+        <button class="btn btn-sm text-muted p-0 ms-1" type="button"
+                data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Share this task with groups">
+          <i class="fa fa-share-alt"></i> Share
+        </button>
+        <div class="dropdown-menu p-2" style="min-width: 12rem;">
+          {% for g in shareable_groups %}
+          <div class="form-check">
+            <input class="form-check-input task-group-checkbox" type="checkbox"
+                   value="{{ g.id }}" id="task-group-{{ g.id }}"
+                   {% if g in task_groups %}checked{% endif %}>
+            <label class="form-check-label" for="task-group-{{ g.id }}">{{ g.name }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% if user_may_submit and not task.celery_id and shareable_groups %}
+    <script>
+    $(function(){
+      var shareableIds = [{% for g in shareable_groups %}'{{ g.id }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+
+      function renderBadges(groups){
+        var badges = $('#task-groups-badges').empty();
+        if(groups.length){
+          groups.forEach(function(g){
+            var badge = $('<span class="badge bg-secondary me-1"></span>').attr('data-group-id', g.id);
+            badge.append(document.createTextNode(g.name));
+            if(shareableIds.indexOf(String(g.id)) !== -1){
+              badge.append(' ');
+              $('<a href="#" class="task-group-remove text-white text-decoration-none fw-bold" title="Remove">&times;</a>')
+                .attr('data-group-id', g.id).appendTo(badge);
+            }
+            badges.append(badge);
+          });
+        } else {
+          badges.append('<span class="text-muted fst-italic">nobody</span>');
+        }
+      }
+
+      function saveGroups(){
+        var ids = $('.task-group-checkbox:checked').map(function(){ return this.value; }).get();
+        $.ajax({
+          url: "{% url 'task_update_groups' id=task.id %}",
+          method: 'POST',
+          headers: {'X-CSRFToken': '{{ csrf_token }}'},
+          traditional: true,
+          data: {groups: ids},
+          success: function(resp){ if(resp.success){ renderBadges(resp.groups); } }
+        });
+      }
+
+      $('.task-group-checkbox').on('change', saveGroups);
+
+      // Clicking the × on a badge unchecks the matching box and saves
+      $('#task-groups-badges').on('click', '.task-group-remove', function(e){
+        e.preventDefault();
+        var id = $(this).data('group-id');
+        $('.task-group-checkbox[value="' + id + '"]').prop('checked', false);
+        saveGroups();
+      });
+    });
+    </script>
+    {% endif %}
+    {% endif %}
     <div class="mb-2 {% if task.celery_id %}sticky-top bg-body border-bottom pb-2{% endif %}">
       State:
       {% if task.celery_id %}

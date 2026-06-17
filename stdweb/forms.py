@@ -1,5 +1,9 @@
 from django import forms
 
+from django.contrib.auth.models import Group
+from django.template.loader import render_to_string
+from django.utils.safestring import mark_safe
+
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Field, Fieldset, Div, Row, Column, Submit, HTML
 from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
@@ -15,6 +19,23 @@ from . import models
 class MultipleChoiceFieldNoValidation(forms.MultipleChoiceField):
     def validate(self, value):
         pass
+
+
+class CheckboxDropdown(forms.SelectMultiple):
+    """Multi-select rendered as a compact Bootstrap dropdown of checkboxes."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        selected = {str(v) for v in (value or [])}
+        options = [
+            {'value': str(v), 'label': label, 'selected': str(v) in selected}
+            for v, label in self.choices
+        ]
+        context = {
+            'name': name,
+            'options': options,
+            'id': (attrs or {}).get('id') or ('id_' + name),
+        }
+        return mark_safe(render_to_string('widgets/checkbox_dropdown.html', context))
 
 
 class UploadFileForm(forms.Form):
@@ -38,6 +59,11 @@ class UploadFileForm(forms.Form):
 
     title = forms.CharField(max_length=150, required=False, label="Optional title or comment")
 
+    groups = forms.ModelMultipleChoiceField(
+        queryset=Group.objects.none(), required=False, label="Share with groups",
+        widget=CheckboxDropdown,
+    )
+
     # FIXME: changes to these fields should be reflected in views.upload_file() !!!
     stack_method = forms.ChoiceField(
         choices=[
@@ -52,7 +78,17 @@ class UploadFileForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         filename = kwargs.pop('filename', None)
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
+
+        # Scope sharing to groups the user may share with; drop the field
+        # entirely when there are none, so nothing extra is shown.
+        groups_qs = models.accessible_groups(user) if user is not None else Group.objects.none()
+        if groups_qs.exists():
+            self.fields['groups'].queryset = groups_qs
+        else:
+            del self.fields['groups']
+
         self.helper = FormHelper()
         self.helper.form_tag = False
         self.helper.form_action = 'upload'
@@ -88,6 +124,7 @@ class UploadFileForm(forms.Form):
             Row(
                 Column('title', css_class="col-md"),
                 Column('target', css_class="col-md"),
+                Column('groups', css_class="col-md-auto") if 'groups' in self.fields else None,
                 css_class='align-items-end'
             ),
             Row(
@@ -479,7 +516,7 @@ class LightcurveSearchForm(forms.Form):
         max_length=200,
         required=False,
         label="Additional criteria",
-        widget=forms.TextInput(attrs={'placeholder': 'Filter by filename or title or username'}),
+        widget=forms.TextInput(attrs={'placeholder': 'Filter by filename or title or username or group'}),
     )
     radius = forms.FloatField(min_value=0, initial=5, required=True, label="Search radius, arcsec")
     show_images = forms.BooleanField(initial=True, required=False, label="Show images")

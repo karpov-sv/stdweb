@@ -108,7 +108,7 @@ def list_files(request, path='', base=settings.DATA_PATH):
         elif 'fits' in context['mime'] or 'FITS' in context['magic_info'] or os.path.splitext(path)[1].lower().startswith('.fit') or path.endswith('.fits.gz'):
             context['mode'] = 'fits'
 
-            form = forms.UploadFileForm(filename=path)
+            form = forms.UploadFileForm(filename=path, user=request.user)
             context['form'] = form
 
             try:
@@ -185,7 +185,7 @@ def list_files(request, path='', base=settings.DATA_PATH):
 
         context['files'] = files
         context['mode'] = 'list'
-        context['form'] = forms.UploadFileForm(filename='*')
+        context['form'] = forms.UploadFileForm(filename='*', user=request.user)
 
 
     return TemplateResponse(request, 'files.html', context=context)
@@ -447,7 +447,8 @@ def handle_uploaded_file(upload, filename):
 
 
 def upload_file(request, base=settings.DATA_PATH):
-    form = forms.UploadFileForm(request.POST or None, request.FILES or None, filename=request.POST.get('local_file'))
+    form = forms.UploadFileForm(request.POST or None, request.FILES or None,
+                                filename=request.POST.get('local_file'), user=request.user)
 
     if request.method == "POST":
         if form.is_valid():
@@ -558,6 +559,12 @@ def upload_file(request, base=settings.DATA_PATH):
 
                 task.state = 'uploaded'
                 task.save()
+
+                # Share with selected groups, if any
+                groups = form.cleaned_data.get('groups')
+                if groups:
+                    task.groups.set(groups)
+                    log_details['groups'] = [_.name for _ in groups]
 
                 # Log task creation
                 log_action('task_create', task=task, request=request, details=log_details)

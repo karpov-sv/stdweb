@@ -1,0 +1,38 @@
+<div class="dropdown">
+  <button
+    class="btn btn-outline-form form-control dropdown-toggle text-end w-100"
+    type="button"
+    id="{{ id }}_button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+    <span id="{{ id }}_label">Select groups</span>
+  </button>
+  <div class="dropdown-menu p-2" id="{{ id }}_menu" style="min-width: 12rem; max-height: 16rem; overflow-y: auto;">
+    {% for opt in options %}
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="{{ name }}" value="{{ opt.value }}"
+             id="{{ id }}_{{ forloop.counter }}"{% if opt.selected %} checked{% endif %}>
+      <label class="form-check-label" for="{{ id }}_{{ forloop.counter }}">{{ opt.label }}</label>
+    </div>
+    {% empty %}
+    <span class="text-muted small">No groups available</span>
+    {% endfor %}
+  </div>
+</div>
+<script>
+(function(){
+  var menu = document.getElementById('{{ id }}_menu');
+  var label = document.getElementById('{{ id }}_label');
+  if(!menu || !label){ return; }
+  function update(){
+    var checked = menu.querySelectorAll('input:checked');
+    if(checked.length === 0){
+      label.textContent = '';
+    } else if(checked.length === 1){
+      label.textContent = checked[0].nextElementSibling.textContent.trim();
+    } else {
+      label.textContent = checked.length + ' selected';
+    }
+  }
+  menu.addEventListener('change', update);
+  update();
+})();
+</script>

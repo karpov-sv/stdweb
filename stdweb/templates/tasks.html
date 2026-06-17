@@ -123,6 +123,7 @@
                 </div>
 
                 <small class="me-2 badge bg-info">{{ task.user|user }}</small>
+                {% for g in task.groups.all %}<small class="me-2 badge bg-secondary">{{ g.name }}</small>{% endfor %}
                 <small class="me-2">Created: <span class="fst-italic">{{ task.created|timestamp }}</span></small>
                 <small class="me-2">Modified: <span class="fst-italic">{{ task.modified|timestamp }}</span></small>
               </a>
@@ -138,6 +139,33 @@
                 title="Delete all generated files">Archive</button>
         <button type="submit" name="action" value="cleanup" class="btn btn-warning"
                 title="Delete all processing results and configurations">Cleanup</button>
+
+        {% if shareable_groups %}
+          <!-- Bulk group sharing -->
+          <div class="dropdown d-inline ms-2">
+            <button class="btn btn-secondary dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                    title="Add or remove selected tasks to / from your groups">
+              <i class="fa fa-share-alt me-2"></i> Groups
+            </button>
+
+            <div class="dropdown-menu p-2" style="min-width: 14rem; max-height: 18rem; overflow-y: auto;">
+              {% for g in shareable_groups %}
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="action_groups" value="{{ g.id }}" id="bulk-group-{{ g.id }}">
+                  <label class="form-check-label" for="bulk-group-{{ g.id }}">{{ g.name }}</label>
+                </div>
+              {% endfor %}
+              <hr class="my-2">
+              <button type="submit" name="action" value="add_to_groups" class="btn btn-sm btn-success w-100 mb-1">
+                Add selected tasks
+              </button>
+              <button type="submit" name="action" value="remove_from_groups" class="btn btn-sm btn-warning w-100">
+                Remove selected tasks
+              </button>
+            </div>
+          </div>
+        {% endif %}
 
         <!-- Unsafe controls -->
         <button class="btn btn-light collapse-chevron-horizontal collapsed ms-4 me-4" type="button"

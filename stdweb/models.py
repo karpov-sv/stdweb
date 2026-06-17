@@ -9,6 +9,15 @@ import os, shutil
 import datetime
 
 
+def accessible_groups(user):
+    """Groups a user may share tasks with: their own groups, or all for staff."""
+    if not user.is_authenticated:
+        return Group.objects.none()
+    if user.is_staff:
+        return Group.objects.all()
+    return user.groups.all()
+
+
 class Task(models.Model):
     # path = models.CharField(max_length=250, blank=False, unique=True, editable=False) # Base dir where task processing will be performed
     original_name = models.CharField(max_length=250, blank=False) # Original filename
