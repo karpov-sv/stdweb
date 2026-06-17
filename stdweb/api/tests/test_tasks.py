@@ -4,6 +4,7 @@ Tests for task CRUD endpoints.
 
 import pytest
 from django.urls import reverse
+from django.contrib.auth.models import Group
 from rest_framework import status
 
 from stdweb.models import Task
@@ -249,3 +250,78 @@ class TestTaskDuplicate:
         new_task = Task.objects.get(id=response.data['id'])
         assert os.path.exists(new_task.path())
         assert os.path.exists(os.path.join(new_task.path(), 'image.fits'))
+
+
+class TestTaskGroupSharing:
+    """Tests for sharing tasks with groups via the API."""
+
+    def test_create_with_own_group(self, authenticated_client, user, shared_group, temp_tasks_path):
+        """User can share a new task with a group they belong to."""
+        user.groups.add(shared_group)
+        response = authenticated_client.post('/api/tasks/', {
+            'original_name': 'new_image.fits',
+            'groups': [shared_group.name],
+        }, format='json')
+        assert response.status_code == status.HTTP_201_CREATED
+
+        task = Task.objects.get(id=response.data['id'])
+        assert list(task.groups.all()) == [shared_group]
+
+    def test_create_with_foreign_group_denied(self, authenticated_client, shared_group, temp_tasks_path):
+        """User cannot share a new task with a group they do not belong to."""
+        response = authenticated_client.post('/api/tasks/', {
+            'original_name': 'new_image.fits',
+            'groups': [shared_group.name],
+        }, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'groups' in response.data
+
+    def test_update_shares_with_own_group(self, authenticated_client, user, task, shared_group):
+        """User can share an existing task with a group they belong to."""
+        user.groups.add(shared_group)
+        response = authenticated_client.patch(f'/api/tasks/{task.id}/', {
+            'groups': [shared_group.name],
+        }, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+        task.refresh_from_db()
+        assert list(task.groups.all()) == [shared_group]
+
+    def test_update_with_foreign_group_denied(self, authenticated_client, task, shared_group):
+        """Sharing with a group the user does not belong to is rejected."""
+        response = authenticated_client.patch(f'/api/tasks/{task.id}/', {
+            'groups': [shared_group.name],
+        }, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+        task.refresh_from_db()
+        assert task.groups.count() == 0
+
+    def test_update_empty_list_unshares(self, authenticated_client, user, task, shared_group):
+        """Sending an empty groups list removes all sharing."""
+        user.groups.add(shared_group)
+        task.groups.add(shared_group)
+        response = authenticated_client.patch(f'/api/tasks/{task.id}/', {
+            'groups': [],
+        }, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+        task.refresh_from_db()
+        assert task.groups.count() == 0
+
+    def test_unknown_group_rejected(self, authenticated_client, task):
+        """An unknown group name is rejected."""
+        response = authenticated_client.patch(f'/api/tasks/{task.id}/', {
+            'groups': ['does-not-exist'],
+        }, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_staff_can_share_with_any_group(self, staff_client, other_user_task, shared_group):
+        """Staff may share with any group, matching the UI rules."""
+        response = staff_client.patch(f'/api/tasks/{other_user_task.id}/', {
+            'groups': [shared_group.name],
+        }, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+        other_user_task.refresh_from_db()
+        assert list(other_user_task.groups.all()) == [shared_group]

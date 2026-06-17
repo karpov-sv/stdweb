@@ -40,7 +40,8 @@ Session authentication is also supported for browser-based access.
 GET /api/tasks/
 ```
 
-Returns list of tasks for the current user (or all tasks for staff).
+Returns the list of tasks the current user can access: their own tasks plus any
+tasks shared with a group they belong to (staff users see all tasks).
 
 **Response:**
 ```json
@@ -70,6 +71,9 @@ Create a new task with optional file upload.
 - `title` - Optional title/comment
 - `config` - JSON configuration object
 - `preset` - Preset ID to apply (optional)
+- `groups` - List of group names to share the task with (optional). Subject to
+  the same restriction as [Update Task](#update-task): you may only share with
+  groups you belong to (staff may use any group).
 
 **Example:**
 ```bash
@@ -77,6 +81,15 @@ curl -X POST /api/tasks/ \
   -H "Authorization: Token <token>" \
   -F "file=@image.fits" \
   -F 'config={"filter":"R","cat_name":"ps1"}'
+```
+
+To set initial sharing, send a JSON body instead so `groups` is a proper list:
+
+```bash
+curl -X POST /api/tasks/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"original_name":"image.fits","config":{"filter":"R"},"groups":["my-team"]}'
 ```
 
 #### Get Task
@@ -92,6 +105,7 @@ GET /api/tasks/{id}/
   "title": "My observation",
   "state": "photometry_done",
   "user": "username",
+  "groups": ["my-team"],
   "created": "2024-01-15T10:30:00Z",
   "modified": "2024-01-15T10:35:00Z",
   "completed": "2024-01-15T10:35:00Z",
@@ -106,6 +120,10 @@ GET /api/tasks/{id}/
   "path": "/path/to/tasks/123"
 }
 ```
+
+The `groups` field lists the user groups this task is shared with, by group name.
+Every member of a listed group can view the task and its files. See
+[Update Task](#update-task) for how to change it.
 
 #### Update Task
 ```
@@ -128,6 +146,26 @@ Update task configuration.
   }
 }
 ```
+
+**Writable fields:** `original_name`, `title`, `config`, `groups`.
+
+##### Sharing with Groups
+
+Set the `groups` field to a list of group names to share the task with those
+groups. Every member of a listed group gains view access to the task and its
+files. The list replaces the current sharing set, so send the full desired list
+(an empty list un-shares the task).
+
+```json
+{
+  "groups": ["my-team", "transients-wg"]
+}
+```
+
+You may only share with **groups you belong to**; staff users may share with any
+group. Sharing with an unknown group, or with a group you are not a member of,
+is rejected with a `400` error. Groups can also be set when creating a task —
+see [Create Task](#create-task).
 
 #### Delete Task
 ```
@@ -533,9 +571,12 @@ The task `config` object accepts these parameters:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `template` | string | - | Template source name |
-| `subtraction_method` | string | "hotpants" | Method: "hotpants" or "zogy" |
+| `subtraction_method` | string | "hotpants" | Method: "hotpants" or "sfft" |
 | `subtraction_mode` | string | "detection" | Mode: "target" or "detection" |
-| `hotpants_extra` | object | {} | Extra HOTPANTS parameters |
+| `hotpants_extra` | object | {} | Extra HOTPANTS parameters (when method is "hotpants") |
+| `sfft_kernel_poly_order` | int | 0 | SFFT kernel spatial order (when method is "sfft") |
+| `sfft_bg_poly_order` | int | 0 | SFFT background spatial order (when method is "sfft") |
+| `sfft_flux_poly_order` | int | 0 | SFFT flux spatial order (when method is "sfft") |
 
 ---
 

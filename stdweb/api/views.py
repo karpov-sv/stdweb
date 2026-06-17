@@ -89,7 +89,7 @@ def task_list(request):
         return Response(serializer.data)
 
     elif request.method == 'POST':
-        serializer = TaskCreateSerializer(data=request.data)
+        serializer = TaskCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             task = serializer.save(user=request.user)
             log_action('task_create', task=task, request=request,
@@ -116,7 +116,7 @@ def task_detail(request, pk):
         return Response(serializer.data)
 
     elif request.method == 'PATCH' or request.method == 'POST':
-        serializer = TaskSerializer(task, data=request.data, partial=True)
+        serializer = TaskSerializer(task, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

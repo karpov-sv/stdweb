@@ -6,10 +6,31 @@ from rest_framework import serializers
 
 from django.contrib.auth.models import Group
 
-from stdweb.models import Task, Preset
+from stdweb.models import Task, Preset, accessible_groups
 
 
-class TaskSerializer(serializers.ModelSerializer):
+class GroupSharingMixin:
+    """Validate that a task is only shared with groups the requester may use.
+
+    Mirrors the web UI, which restricts sharing to the user's own groups
+    (staff may share with any group). Requires ``request`` in the serializer
+    context.
+    """
+
+    def validate_groups(self, groups):
+        request = self.context.get('request')
+        if request is None:
+            return groups
+        allowed = set(accessible_groups(request.user))
+        invalid = [g.name for g in groups if g not in allowed]
+        if invalid:
+            raise serializers.ValidationError(
+                "You cannot share with group(s): " + ", ".join(invalid)
+            )
+        return groups
+
+
+class TaskSerializer(GroupSharingMixin, serializers.ModelSerializer):
     """
     Serializer for Task model.
     Includes nested config as a JSON object.
@@ -54,7 +75,7 @@ class TaskSerializer(serializers.ModelSerializer):
         return obj.path()
 
 
-class TaskCreateSerializer(serializers.ModelSerializer):
+class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
     """
     Serializer for creating new tasks.
     Handles file upload and initial configuration.
@@ -64,6 +85,12 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         queryset=Preset.objects.all(),
         required=False,
         write_only=True
+    )
+    groups = serializers.SlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=Group.objects.all(),
+        required=False,
     )
 
     class Meta:
@@ -75,13 +102,15 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             'config',
             'file',
             'preset',
+            'groups',
         ]
         read_only_fields = ['id']
 
     def create(self, validated_data):
-        # Extract file and preset before creating task
+        # Extract file, preset and groups before creating task
         file = validated_data.pop('file', None)
         preset = validated_data.pop('preset', None)
+        groups = validated_data.pop('groups', None)
 
         # Apply preset config if provided
         if preset:
@@ -96,6 +125,10 @@ class TaskCreateSerializer(serializers.ModelSerializer):
 
         # Create the task
         task = Task.objects.create(**validated_data)
+
+        # Set initial group sharing (many-to-many, must be set after creation)
+        if groups:
+            task.groups.set(groups)
 
         # Handle file upload
         if file:
