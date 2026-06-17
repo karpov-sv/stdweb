@@ -42,6 +42,23 @@ The gain (electrons per ADU) is critical for noise estimation, affecting detecti
 
 **Quick check:** Compare the image pixel value range (shown in the log) with the estimated gain. If values are small with tiny RMS, the gain should be large. Incorrect gain causes the code to fail at star detection.
 
+Stacking Images
+~~~~~~~~~~~~~~~
+
+When combining several frames into one task (the **Stack and Process** option),
+choose the combination method to match your goal:
+
+- **Sum** - maximises depth; use for clean frames of the same field. The
+  effective gain becomes ``gain × N`` and the saturation level is scaled
+  automatically.
+- **Clipped mean** - rejects outliers (cosmic rays, satellites, transient
+  artifacts) while retaining most of the depth; a good default for many frames.
+- **Median** - most robust against outliers but noisier; best with many frames.
+
+For averaging methods (mean/median) remember to set the gain to ``gain × N`` so
+noise is estimated correctly. Enable per-frame background subtraction when the
+frames have differing sky levels, and per-frame cosmic-ray masking when summing.
+
 Choosing Reference Catalogs
 ---------------------------
 

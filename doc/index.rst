@@ -61,10 +61,13 @@ If you use STDWeb in your work, please cite:
    :caption: Contents:
 
    installation
+   quickstart
    configuration
    architecture
    workflow
    handbook
+   cli
+   output_files
    REST API <api>
    task_config
    HOTPANTS Options <hotpants>

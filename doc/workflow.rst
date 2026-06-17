@@ -42,6 +42,39 @@ Upon import, a dedicated **task** is created that holds:
 
 Tasks can be revisited at any time to review results or re-process with different parameters.
 
+.. _presets:
+
+Configuration Presets
+~~~~~~~~~~~~~~~~~~~~~~
+
+When importing an image you may select a **preset** - a named, reusable bundle
+of initial configuration values (and, optionally, files to copy into the new
+task). Presets are convenient for applying a consistent setup across many images
+from the same instrument: filter, reference catalog, detection thresholds, and
+so on. They are managed by administrators through the Django admin interface,
+and the same presets are also available through the :doc:`REST API <api>` and
+the :doc:`command-line tool <cli>`.
+
+Image Stacking
+~~~~~~~~~~~~~~
+
+Several images covering the same field can be combined into a single deeper task
+at import time. Select multiple files in the browser and choose **Stack and
+Process** instead of importing them individually.
+
+The first image defines the reference pixel grid; the rest are reprojected onto
+it (flux-conserving adaptive resampling) and then combined using one of:
+
+- **Sum** - plain co-addition; the saturation level is scaled by the number of
+  images accordingly
+- **Clipped mean** - sigma-clipped mean, robust against outliers
+- **Median** - median combination
+
+Optionally, the background can be subtracted from each frame before combining,
+and cosmic rays masked per frame. The resulting stack becomes an ordinary task
+and proceeds through the normal pipeline. Remember to set the gain to reflect the
+stacking (see the :doc:`handbook`).
+
 Preprocessing
 -------------
 
@@ -430,6 +463,22 @@ Candidates are presented with six cutouts:
 - Difference image
 - Detection footprint
 - Mask image
+
+Reviewing Candidates
+--------------------
+
+Both transient-detection paths (simple and image-subtraction) produce a sortable
+candidate table, by default ordered by brightness. Each row links to its cutout
+panels (the four-panel set for simple transients, the six-panel set for image
+subtraction described above), so spurious detections - hot pixels, residual
+dipoles, masked artifacts - can be told apart from genuine sources at a glance.
+
+For a closer look, the cutout viewer offers a **blink** mode that flips between
+the relevant frames (e.g. science and difference image), making real variability
+stand out from static structure. Candidate lists are downloadable as VOTable
+(``candidates.vot`` / ``candidates_simple.vot``) for further analysis, and as DS9
+region files (``.reg``) for overlay on the original image. See
+:doc:`output_files` for the full set of files produced.
 
 .. _light-curves:
 
