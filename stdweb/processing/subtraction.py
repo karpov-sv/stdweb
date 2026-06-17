@@ -87,6 +87,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
         custom_template = fits.getdata(os.path.join(basepath, 'custom_template.fits'), -1).astype(np.double)
         custom_header = fits.getheader(os.path.join(basepath, 'custom_template.fits'), -1)
+        fix_header(custom_header, verbose=verbose)
         custom_wcs = WCS(custom_header)
 
         template_gain = config.get('custom_template_gain', 10000)
@@ -236,6 +237,14 @@ def subtract_image(filename, config, verbose=True, show=False):
                 tmask = np.isnan(tmpl)
             else:
                 raise RuntimeError(f"Error getting the template from {tconf['name']}")
+
+        # Bail out early if the template does not cover the sub-image, otherwise
+        # SExtractor would fail downstream on a fully-masked image
+        if not np.any(~tmask):
+            raise RuntimeError(
+                f"Template does not overlap sub-image {i} - "
+                "check that the template WCS matches the science image"
+            )
 
         # Estimate template FWHM
         tobj,tsegm = photometry.get_objects_sextractor(
