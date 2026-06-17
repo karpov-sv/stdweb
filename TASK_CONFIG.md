@@ -177,7 +177,45 @@ Used when `subtraction_method` is `hotpants`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `hotpants_extra` | dict | `{'ko':0, 'bgo':0}` | Additional parameters passed to HOTPANTS. Common options: `ko` (kernel order), `bgo` (background order), `nsx`/`nsy` (stamp grid). |
+| `hotpants_extra` | dict | `{'ko':0, 'bgo':0}` | Extra options passed straight through to the HOTPANTS command line (see below). |
+
+`hotpants_extra` is a JSON object whose keys are HOTPANTS option names **without
+the leading dash** and whose values are the option arguments; bare flags take the
+value `true`. For example `{"ko": 1, "bgo": 1, "nsx": 15, "nsy": 15}` invokes
+HOTPANTS with `-ko 1 -bgo 1 -nsx 15 -nsy 15`. These options are applied last, so
+they override any default chosen automatically.
+
+STDWeb (via STDPipe) already derives the following from your image, and you
+normally should **not** set them yourself:
+
+- Input/output files and masks (`-inim`, `-tmplim`, `-outim`, `-imi`, `-tmi`),
+  noise maps (`-ini`, `-tni`), and substamp positions (`-ssf`, `-savexy`)
+- Valid data ranges (`-il`/`-iu`, `-tl`/`-tu`/`-tuk`) from image statistics and the
+  saturation level
+- Gains (`-ig`, `-tg`)
+- Convolution kernel half-width (`-r`), substamp half-width (`-rss`) and the
+  Gaussian kernel composition (`-ng`), all derived from the image and template FWHM
+- Subtraction mode: normalize to image (`-n i`), convolve the template (`-c t`),
+  output all planes (`-allm`), kernel info in header (`-hki`)
+
+The options most worth tuning for difficult subtractions:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `ko` | 0 | Spatial order of kernel variation within a region |
+| `bgo` | 0 | Spatial order of background variation within a region |
+| `nrx`, `nry` | 1 | Number of sub-regions in x / y |
+| `nsx`, `nsy` | 10 | Number of stamps per region in x / y |
+| `nss` | 3 | Number of substamp centroids per stamp |
+| `rss` | from FWHM | Half-width of substamps extracted around each centroid |
+| `kcs` | 2·r+1 | Step size for spatial convolution |
+| `ft` | 20.0 | RMS threshold for a good centroid in the kernel fit |
+| `nft` | 0.1 | Allowed fraction of unfilled stamps |
+| `ssig` | 3.0 | Sigma-clipping threshold for statistics |
+| `ks` | 2.0 | High-sigma rejection for bad stamps in the kernel fit |
+
+For the complete option list, see the **HOTPANTS Options** reference (the full
+`hotpants -h` output) or run `hotpants -h`.
 
 ### SFFT Parameters
 

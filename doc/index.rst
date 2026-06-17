@@ -67,6 +67,7 @@ If you use STDWeb in your work, please cite:
    handbook
    REST API <api>
    task_config
+   HOTPANTS Options <hotpants>
 
 Indices and tables
 ==================

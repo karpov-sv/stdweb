@@ -210,8 +210,13 @@ The most important parameters to adjust if subtraction fails:
 
 - **ko** - Spatial order of convolution kernel
 - **bgo** - Background order inside model regions
+- **nsx**, **nsy** - Number of stamps per region (denser grids help on
+  structured backgrounds)
 
-These can be specified as a JSON string (``hotpants_extra``) in the interface.
+These are supplied via the ``hotpants_extra`` field as a JSON object, with
+option names given **without** the leading dash (e.g. ``{"ko": 1, "bgo": 1}``).
+See :doc:`task_config` for the options STDWeb sets automatically and the most
+useful tuning knobs, and :doc:`hotpants` for the complete HOTPANTS option list.
 
 SFFT Parameters
 ~~~~~~~~~~~~~~~
