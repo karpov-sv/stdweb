@@ -114,6 +114,7 @@ class UploadFileForm(forms.Form):
                 Column(file_field, css_class="col-md"),
                 'local_file',
                 Column('preset', css_class="col-md-auto"),
+                Column('groups', css_class="col-md-auto") if 'groups' in self.fields else None,
                 Column(submit, css_class="col-md-auto mb-1"),
                 Column(
                     Submit('stack_files', 'Stack and Process', css_class='btn-secondary'),
@@ -124,7 +125,6 @@ class UploadFileForm(forms.Form):
             Row(
                 Column('title', css_class="col-md"),
                 Column('target', css_class="col-md"),
-                Column('groups', css_class="col-md-auto") if 'groups' in self.fields else None,
                 css_class='align-items-end'
             ),
             Row(
