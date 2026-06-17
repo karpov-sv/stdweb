@@ -146,3 +146,80 @@ Production Deployment
 ---------------------
 
 For production deployment, follow the `Django deployment documentation <https://docs.djangoproject.com/en/5.0/howto/deployment/>`_.
+
+Updating an Existing Installation
+=================================
+
+STDWeb evolves quickly, so it is worth updating your cloned copy often. The code
+is run directly from the repository (it is not installed as a package), so an
+update is essentially a ``git pull`` followed by a few maintenance steps.
+
+1. Fetch the latest code
+------------------------
+
+From inside the ``stdweb`` directory:
+
+.. code-block:: bash
+
+   git pull
+
+2. Update Python dependencies
+-----------------------------
+
+In case new dependencies were added or versions bumped:
+
+.. code-block:: bash
+
+   pip install -r requirements.txt
+
+3. Apply database migrations
+----------------------------
+
+New releases may change the database schema. Apply any pending migrations:
+
+.. code-block:: bash
+
+   python manage.py migrate
+
+4. Collect static files (production only)
+-----------------------------------------
+
+If you serve static files yourself (i.e. not using the development server),
+refresh them:
+
+.. code-block:: bash
+
+   python manage.py collectstatic
+
+5. Restart the services
+-----------------------
+
+The **Celery worker** runs the processing code and must be restarted to pick up
+the new version:
+
+- In development, the ``./run_celery.sh`` helper watches the source tree and
+  restarts the worker automatically.
+- In production, restart the worker process yourself (e.g. via your service
+  manager).
+
+The **web server** must likewise be restarted (the development ``runserver``
+auto-reloads; a production server such as gunicorn/uWSGI needs an explicit
+restart or reload). Redis does not need to be restarted.
+
+Upgrading existing tasks (when needed)
+--------------------------------------
+
+Occasionally a release changes how tasks are stored on disk or in the database.
+Two management commands bring older tasks up to date; run them once after such an
+update (they are safe to run at any time and only touch tasks that need it):
+
+.. code-block:: bash
+
+   # Backfill task metadata (sky position, coverage MOC, pixel scale, ...)
+   python manage.py upgradetasks
+
+   # Convert task tables from the legacy VOTable format to Parquet
+   python manage.py migratevotables
+
+Check the commit log or release notes after pulling to see whether such a
+migration step is recommended for a given update.
