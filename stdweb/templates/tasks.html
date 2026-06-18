@@ -123,7 +123,11 @@
                 </div>
 
                 <small class="me-2 badge bg-info">{{ task.user|user }}</small>
-                {% for g in task.groups.all %}<small class="me-2 badge bg-secondary">{{ g.name }}</small>{% endfor %}
+                {% for g in task.groups.all %}
+                  <small class="me-1 badge bg-primary-subtle text-secondary{% if g.id not in user_group_ids %} border border-danger{% endif %}" {% if g.id not in user_group_ids %}title="Shared with a group you do not belong to"{% endif %}>
+                    {{ g.name }}
+                  </small>
+                {% endfor %}
                 <small class="me-2">Created: <span class="fst-italic">{{ task.created|timestamp }}</span></small>
                 <small class="me-2">Modified: <span class="fst-italic">{{ task.modified|timestamp }}</span></small>
               </a>

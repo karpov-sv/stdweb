@@ -51,7 +51,7 @@
             <p class="text-muted mb-3">You belong to the following groups:</p>
             <div>
               {% for g in user.groups.all %}
-                <span class="badge bg-secondary me-1 mb-1">{{ g.name }}</span>
+                <span class="badge bg-primary-subtle text-secondary me-1 mb-1">{{ g.name }}</span>
               {% endfor %}
             </div>
           {% else %}

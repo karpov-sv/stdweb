@@ -97,6 +97,9 @@ def tasks(request, id=None):
         # Group sharing
         context['task_groups'] = list(task.groups.order_by('name'))
         context['shareable_groups'] = models.accessible_groups(request.user)
+        # Groups the current user belongs to, used to flag badges for groups
+        # the user is not a member of.
+        context['user_group_ids'] = set(request.user.groups.values_list('id', flat=True))
 
         # Clear the link to queued task if it was revoked
         if task.celery_id:
@@ -338,6 +341,9 @@ def tasks(request, id=None):
 
         context['tasks'] = tasks.prefetch_related('groups')
         context['shareable_groups'] = models.accessible_groups(request.user)
+        # Groups the current user belongs to, used to flag badges for tasks
+        # shared with groups the user is not a member of.
+        context['user_group_ids'] = set(request.user.groups.values_list('id', flat=True))
         context['referer'] = request.path + '?' + request.GET.urlencode();
 
     return TemplateResponse(request, 'tasks.html', context=context)

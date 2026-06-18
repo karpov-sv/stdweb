@@ -241,41 +241,54 @@
     <div class="mb-2" id="task-groups">
       <span class="text-muted">Shared with:</span>
       <span id="task-groups-badges">
-        {% for g in task_groups %}<span class="badge bg-secondary me-1" data-group-id="{{ g.id }}">{{ g.name }}{% if user_may_submit and not task.celery_id and g in shareable_groups %} <a href="#" class="task-group-remove text-white text-decoration-none fw-bold" data-group-id="{{ g.id }}" title="Remove">&times;</a>{% endif %}</span>{% empty %}<span class="text-muted fst-italic">nobody</span>{% endfor %}
+        {% for g in task_groups %}
+          <span class="badge bg-primary-subtle text-secondary me-1 {% if g.id not in user_group_ids %} border border-danger{% endif %}" data-group-id="{{ g.id }}" {% if g.id not in user_group_ids %}title="Shared with a group you do not belong to"{% endif %}>
+            {{ g.name }}
+            {% if user_may_submit and not task.celery_id and g in shareable_groups %}
+              <a href="#" class="task-group-remove text-secondary text-decoration-none fw-bold" data-group-id="{{ g.id }}" title="Remove">&times;</a>
+            {% endif %}
+          </span>
+        {% empty %}
+          <span class="text-muted fst-italic">nobody</span>
+        {% endfor %}
       </span>
       {% if user_may_submit and not task.celery_id and shareable_groups %}
-      <div class="dropdown d-inline">
-        <button class="btn btn-sm text-muted p-0 ms-1" type="button"
-                data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Share this task with groups">
-          <i class="fa fa-share-alt"></i> Share
-        </button>
-        <div class="dropdown-menu p-2" style="min-width: 12rem;">
-          {% for g in shareable_groups %}
-          <div class="form-check">
-            <input class="form-check-input task-group-checkbox" type="checkbox"
-                   value="{{ g.id }}" id="task-group-{{ g.id }}"
-                   {% if g in task_groups %}checked{% endif %}>
-            <label class="form-check-label" for="task-group-{{ g.id }}">{{ g.name }}</label>
+        <div class="dropdown d-inline">
+          <button class="btn btn-sm text-muted p-0 ms-1" type="button"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Share this task with groups">
+            <i class="fa fa-share-alt"></i> Share
+          </button>
+          <div class="dropdown-menu p-2" style="min-width: 12rem;">
+            {% for g in shareable_groups %}
+              <div class="form-check">
+                <input class="form-check-input task-group-checkbox" type="checkbox"
+                       value="{{ g.id }}" id="task-group-{{ g.id }}"
+                       {% if g in task_groups %}checked{% endif %}>
+                       <label class="form-check-label" for="task-group-{{ g.id }}">{{ g.name }}</label>
+              </div>
+            {% endfor %}
           </div>
-          {% endfor %}
         </div>
-      </div>
       {% endif %}
     </div>
     {% if user_may_submit and not task.celery_id and shareable_groups %}
     <script>
     $(function(){
       var shareableIds = [{% for g in shareable_groups %}'{{ g.id }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+      var userGroupIds = [{% for gid in user_group_ids %}'{{ gid }}'{% if not forloop.last %},{% endif %}{% endfor %}];
 
       function renderBadges(groups){
         var badges = $('#task-groups-badges').empty();
         if(groups.length){
           groups.forEach(function(g){
-            var badge = $('<span class="badge bg-secondary me-1"></span>').attr('data-group-id', g.id);
+            var badge = $('<span class="badge bg-primary-subtle text-secondary me-1"></span>').attr('data-group-id', g.id);
+            if(userGroupIds.indexOf(String(g.id)) === -1){
+              badge.addClass('border border-danger').attr('title', 'Shared with a group you do not belong to');
+            }
             badge.append(document.createTextNode(g.name));
             if(shareableIds.indexOf(String(g.id)) !== -1){
               badge.append(' ');
-              $('<a href="#" class="task-group-remove text-white text-decoration-none fw-bold" title="Remove">&times;</a>')
+              $('<a href="#" class="task-group-remove text-secondary text-decoration-none fw-bold" title="Remove">&times;</a>')
                 .attr('data-group-id', g.id).appendTo(badge);
             }
             badges.append(badge);
