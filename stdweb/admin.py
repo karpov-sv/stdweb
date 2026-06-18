@@ -126,11 +126,23 @@ class CustomUserAdmin(UserAdmin):
         })
 
 
-class FieldsetFilteredSelectMultiple(FilteredSelectMultiple):
-    # Render the field label as a <legend> above the dual-list selector, the
-    # same way real filter_horizontal fields (e.g. permissions) are rendered.
-    # Without this the admin template emits the widget before its label.
+class WrappedFilteredSelectMultiple(FilteredSelectMultiple):
+    # Real filter_horizontal fields (e.g. permissions) are wrapped by the admin
+    # in a RelatedFieldWidgetWrapper, so their <select> lives in its own
+    # container <div>. SelectFilter2.js builds the dual-list UI by prepending it
+    # into the <select>'s parent node; with that wrapper the field <label> is a
+    # sibling one level up and stays ahead of the selector. A bare
+    # FilteredSelectMultiple has no wrapper, so the <select> shares its parent
+    # with the <label> and the JS-inserted selector ends up *before* it.
+    # (Django 6.0's admin template masks this by rendering the label as a
+    # <legend> when use_fieldset is set; 5.2's template ignores use_fieldset, so
+    # the bug shows in production.) Wrapping the widget output in a container
+    # <div> mirrors the permissions field and fixes it on every Django version.
     use_fieldset = True
+
+    def render(self, name, value, attrs=None, renderer=None):
+        html = super().render(name, value, attrs=attrs, renderer=renderer)
+        return mark_safe(f'<div class="related-widget-wrapper">{html}</div>')
 
 
 class GroupAdminForm(forms.ModelForm):
@@ -138,7 +150,7 @@ class GroupAdminForm(forms.ModelForm):
     users = forms.ModelMultipleChoiceField(
         queryset=User.objects.all(),
         required=False,
-        widget=FieldsetFilteredSelectMultiple('users', is_stacked=False),
+        widget=WrappedFilteredSelectMultiple('users', is_stacked=False),
     )
 
     class Meta:
