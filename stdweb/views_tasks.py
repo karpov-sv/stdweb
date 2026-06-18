@@ -45,7 +45,10 @@ def _get_filtered_tasks(request):
         if show_all:
             tasks = models.Task.accessible_to(request.user, tasks)
         else:
-            tasks = tasks.filter(user=request.user)
+            # Own tasks plus those shared with any of the user's groups.
+            tasks = tasks.filter(
+                Q(user=request.user) | Q(groups__user=request.user)
+            ).distinct()
 
         query = form.cleaned_data.get('query')
         if query:
