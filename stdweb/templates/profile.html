@@ -41,6 +41,25 @@
         </div>
       </div>
 
+      <!-- Groups -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <i class="fa fa-users"></i> Groups
+        </div>
+        <div class="card-body">
+          {% if user.groups.all %}
+            <p class="text-muted mb-3">You belong to the following groups:</p>
+            <div>
+              {% for g in user.groups.all %}
+                <span class="badge bg-secondary me-1 mb-1">{{ g.name }}</span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted mb-0">You do not belong to any groups.</p>
+          {% endif %}
+        </div>
+      </div>
+
       <!-- Password -->
       <div class="card mb-4">
         <div class="card-header">
