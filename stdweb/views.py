@@ -167,7 +167,10 @@ def list_files(request, path='', base=settings.DATA_PATH):
                 elem['type'] = 'dir'
             elif elem['mime'] and 'fits' in elem['mime']:
                 elem['type'] = 'fits'
-            elif os.path.splitext(entry.name)[1].lower().startswith('.fit'):
+            elif (elem['name'].lower().endswith('.fit') or
+                  elem['name'].lower().endswith('.fits') or
+                  elem['name'].lower().endswith('.fits.gz') or
+                  elem['name'].lower().endswith('.fits.fz')):
                 elem['type'] = 'fits'
             elif elem['mime'] and 'image' in elem['mime']:
                 elem['type'] = 'image'
