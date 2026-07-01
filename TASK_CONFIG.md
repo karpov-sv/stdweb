@@ -39,14 +39,14 @@ Parameters used during the initial image inspection stage (`inspect_image()`).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `cat_name` | str | Auto | Reference catalog name. Auto-suggested based on sky position and filter. Options: `ps1`, `gaiaedr3`, `gaiadr3syn`, `skymapper`, `sdss`, `atlas`. |
+| `cat_name` | str | Auto | Reference catalog name. Auto-suggested based on sky position and filter. Options: `ps1`, `gaiaedr3`, `gaiadr3syn`, `skymapper`, `sdss`, `atlas`, `2mass`, `vhs`. |
 | `cat_limit` | float | 20.0 | Magnitude limit for reference catalog query. |
 
 ### Template Selection
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `template` | str | Auto | Template image source. Auto-suggested based on sky position. Options: `ps1`, `ls`, `skymapper`, `des`, `decaps`, `ztf`, `custom`. |
+| `template` | str | Auto | Template image source. Auto-suggested based on sky position. Options: `ps1`, `ls`, `skymapper`, `des`, `decaps`, `ztf`, `2mass`, `custom`. |
 
 ---
 
@@ -85,6 +85,8 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `nonlin` | bool | False | Include detector nonlinearity term in photometric solution. |
 | `bg_order` | int | None | Polynomial order for background spatial variations. None = disabled. |
 | `filter_blends` | bool | True | Exclude blended stars from photometric calibration. |
+| `cat_mag_lower` | float | None | Bright limit: exclude catalog stars with primary magnitude below this value from calibration and WCS refinement. None = no limit. |
+| `cat_mag_upper` | float | None | Faint limit: exclude catalog stars with primary magnitude above this value from calibration and WCS refinement. None = no limit. |
 | `sr_override` | float | None | Override automatic matching radius (arcsec). |
 
 ### WCS Refinement
@@ -305,6 +307,7 @@ Standard photometric filters:
 - Johnson-Cousins: `U`, `B`, `V`, `R`, `I`
 - SDSS/Pan-STARRS: `u`, `g`, `r`, `i`, `z`, `y`
 - Gaia: `G`, `BP`, `RP`
+- 2MASS: `J`, `H`, `Ks`
 
 Non-standard or unfiltered observations are calibrated by selecting the catalog
 band that best matches the instrumental passband (smallest color term).
@@ -319,6 +322,8 @@ band that best matches the instrumental passband (smallest color term).
 | `skymapper` | Southern sky | BVRI, grizy | SkyMapper DR4 |
 | `sdss` | Footprint-limited | ugriz | SDSS DR16 |
 | `atlas` | All-sky | BVRI, griz | ATLAS-REFCAT2 |
+| `2mass` | All-sky | J, H, Ks | 2MASS Point Source Catalogue |
+| `vhs` | Southern sky | J, H, Ks | VISTA Hemisphere Survey DR5, augmented to 2MASS system |
 
 ### Templates (`template`)
 
@@ -330,6 +335,7 @@ band that best matches the instrumental passband (smallest color term).
 | `des` | Limited | grizY | 0.26"/pix |
 | `decaps` | Galactic plane | grizY | 0.26"/pix |
 | `ztf` | Dec > -30° | gri | 1.0"/pix |
+| `2mass` | All-sky | JHKs | 1.0"/pix |
 | `custom` | User-provided | Any | Any |
 
 ---

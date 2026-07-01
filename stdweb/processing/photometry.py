@@ -369,6 +369,17 @@ def photometry_image(filename, config, verbose=True, show=False):
             (not config.get('cat_col_color_mag2') or config['cat_col_color_mag2'] in cat.colnames)):
         raise RuntimeError('Catalogue does not have required magnitudes')
 
+    # Optionally limit to a range of catalogue magnitudes
+    if config.get('cat_mag_lower') is not None:
+        mag_lower = float(config.get('cat_mag_lower'))
+        log(f"Removing catalogue stars brighter than {mag_lower}")
+        cat_filtered = cat_filtered[cat_filtered[config['cat_col_mag']] >= mag_lower]
+
+    if config.get('cat_mag_upper') is not None:
+        mag_upper = float(config.get('cat_mag_upper'))
+        log(f"Removing catalogue stars fainter than {mag_upper}")
+        cat_filtered = cat_filtered[cat_filtered[config['cat_col_mag']] <= mag_upper]
+
     # Astrometric refinement
     if config.get('refine_wcs', False):
         log("\n---- Astrometric refinement ----\n")
