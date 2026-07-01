@@ -224,7 +224,7 @@ def skyportal(request):
                     except:
                         raise RuntimeError('Cannot load target measurements')
 
-                    magsys = 'vega' if fname in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag'] else 'ab'
+                    magsys = 'vega' if fname in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag'] else 'ab'
                     fname = {
                         'Umag': 'bessellu',
                         'Bmag': 'bessellb',
@@ -236,6 +236,9 @@ def skyportal(request):
                         'rmag': 'sdssr',
                         'imag': 'sdssi',
                         'zmag': 'sdssz',
+                        'Jmag': '2massj',
+                        'Hmag': '2massh',
+                        'Ksmag': '2massks',
                         'Gmag': 'gaia::g',
                         'BPmag': 'gaia::grp',
                         'RPmag': 'gaia::gbp',

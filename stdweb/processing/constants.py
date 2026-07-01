@@ -22,6 +22,10 @@ supported_filters = {
     'G': {'name':'Gaia G', 'aliases':[]},
     'BP': {'name':'Gaia BP', 'aliases':[]},
     'RP': {'name':'Gaia RP', 'aliases':[]},
+    # 2MASS
+    'J': {'name':'2MASS J', 'aliases':[]},
+    'H': {'name':'2MASS H', 'aliases':[]},
+    'Ks': {'name':'2MASS Ks', 'aliases':['K']},
 }
 
 supported_catalogs = {
@@ -37,6 +41,10 @@ supported_catalogs = {
               'limit':'rmag'},
     'gaiaedr3': {'name':'Gaia eDR3', 'filters':['G', 'BP', 'RP'],
               'limit':'Gmag'},
+    '2mass': {'name':'2MASS PSC', 'filters':['J', 'H', 'Ks'],
+              'limit':'Jmag'},
+    'vhs': {'name':'VHS DR5', 'filters':['J', 'H', 'Ks'],
+              'limit':'Jap3'},
 }
 
 supported_catalogs_transients = {
@@ -77,6 +85,11 @@ supported_templates = {
         'r': 'CDS/P/ZTF/DR7/r',
         'i': 'CDS/P/ZTF/DR7/i',
     }},
+    '2mass': {'name': '2MASS (HiPS)', 'filters': {
+        'J': 'CDS/P/2MASS/J',
+        'H': 'CDS/P/2MASS/H',
+        'Ks': 'CDS/P/2MASS/K',
+    }},
 }
 
 # Best guess template filter mappings
@@ -86,6 +99,9 @@ filter_mappings = {
     'V': ['g'],
     'R': ['r', 'i'],
     'I': ['i', 'z'],
+    'J': ['J', 'i', 'r'],
+    'H': ['H', 'i', 'r'],
+    'Ks': ['K', 'i', 'r'],
     'u': ['u', 'g'],
     'g': ['g', 'g'],
     'r': ['r', 'i'],
@@ -105,6 +121,9 @@ filter_ab_offset = {
     'V': 0.02,
     'R': 0.21,
     'I': 0.45,
+    'J': 0.91,
+    'H': 1.39,
+    'Ks': 1.85,
     'u': 0,
     'g': 0,
     'r': 0,

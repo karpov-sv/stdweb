@@ -134,7 +134,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
 
             if cat_col_mag is not None:
                 mag = xobj['mag_calib']
-                if fname in ['U', 'B', 'V', 'R', 'I'] and cat_col_mag not in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag']:
+                if fname in ['U', 'B', 'V', 'R', 'I', 'J', 'H', 'Ks'] and cat_col_mag not in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag']:
                     # Convert to AB mags if using AB reference catalogue
                     mag += filter_ab_offset.get(fname, 0)
 

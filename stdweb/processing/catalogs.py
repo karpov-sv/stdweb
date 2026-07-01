@@ -18,7 +18,11 @@ def guess_hips_survey(ra, dec, filter_name='R'):
 
     # TODO: add Legacy Survey?..
 
-    if dec > -30:
+    # 2MASS for NIR filters
+    if survey_filter in ['J', 'H', 'Ks']:
+        survey = f"CDS/P/2MASS/{survey_filter[0]}"
+
+    elif dec > -30:
         if survey_filter == 'u':
             survey_filter = 'g'
 

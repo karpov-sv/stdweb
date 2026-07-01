@@ -346,6 +346,9 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config['cat_col_mag'] in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag']:
         config['cat_col_color_mag1'] = 'Bmag'
         config['cat_col_color_mag2'] = 'Vmag'
+    elif config['cat_col_mag'] in ['Jmag', 'Hmag', 'Ksmag']:
+        config['cat_col_color_mag1'] = 'Jmag'
+        config['cat_col_color_mag2'] = 'Ksmag'
     elif config['cat_col_mag'] in ['umag', 'gmag', 'rmag', 'imag']:
         config['cat_col_color_mag1'] = 'gmag'
         config['cat_col_color_mag2'] = 'rmag'

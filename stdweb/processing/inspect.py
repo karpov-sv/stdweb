@@ -315,6 +315,8 @@ def inspect_image(filename, config, verbose=True, show=False):
             config['cat_name'] = 'gaiadr3syn'
         elif config['filter'] in ['G', 'BP', 'RP']:
             config['cat_name'] = 'gaiaedr3'
+        elif config['filter'] in ['J', 'H', 'Ks']:
+            config['cat_name'] = 'vhs' if (dec0 is not None and dec0 < 0) or config.get('target_dec', 0) < 0 else '2mass'
         else:
             config['cat_name'] = 'ps1'
 
