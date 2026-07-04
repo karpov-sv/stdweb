@@ -184,7 +184,7 @@ def task_process(request, pk):
         return Response({'error': 'No steps provided'}, status=400)
 
     # Validate steps
-    valid_steps = ['inspect', 'photometry', 'simple_transients', 'subtraction', 'cleanup']
+    valid_steps = ['stack', 'inspect', 'photometry', 'simple_transients', 'subtraction', 'cleanup']
     for step in steps:
         if step not in valid_steps:
             return Response({'error': f'Invalid step: {step}'}, status=400)
@@ -196,6 +196,7 @@ def task_process(request, pk):
 
     # Map step names to celery task names
     step_mapping = {
+        'stack': 'stack',
         'inspect': 'inspect',
         'photometry': 'photometry',
         'simple_transients': 'simple_transients',
