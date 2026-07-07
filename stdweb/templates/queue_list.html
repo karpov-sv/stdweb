@@ -1,0 +1,50 @@
+{% load filters %}
+
+{% if queue %}
+  <div class="list-group">
+    {% for ctask in queue %}
+      <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-start">
+        <div>
+          <a href="{% url 'queue' id=ctask.id %}" class="text-decoration-none text-reset">
+            <div class="ms-2 me-auto">
+              <div>
+                <span class="fw-bold">{{ ctask.shortname }}</span>
+                -
+                <span class="fst-italic">{{ ctask.id }}</span>
+              </div>
+              {% if ctask.time_start %}
+                <small class="me-2">Started: {{ ctask.time_start|time_from_unix|date:"Y-m-d H:i:s" }}</small>
+              {% endif %}
+            </div>
+          </a>
+          <div>
+            <small class="ms-2 me-auto text-muted">
+              {% if ctask.chain_position %}
+                Step {{ ctask.chain_position }}/{{ ctask.chain_total }} :
+              {% endif %}
+              {% if ctask.task_id %}
+                Task <a href="{% url 'tasks' id=ctask.task_id %}">{{ ctask.task_id }}</a>: {{ ctask.task_name }}
+              {% endif %}
+            </small>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-{% if ctask.state == 'active' %}primary{% else %}secondary{% endif %} rounded-pill">{{ ctask.state }}</span>
+          {% if ctask.can_manage %}
+            <form action="{% url 'queue' id=ctask.id %}" method="POST" class="queue-action-form">
+              {% csrf_token %}
+              <button type="submit" name="action" value="terminatetask" class="btn btn-sm btn-outline-danger"
+                      title="Terminate task" data-confirm="Terminate this task{% if ctask.chain_total %} chain ({{ ctask.chain_total }} subtasks){% endif %}?">
+                <i class="fa fa-times"></i>
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="mb-2">
+    Queue is empty
+  </div>
+{% endif %}

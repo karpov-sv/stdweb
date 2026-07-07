@@ -1,9 +1,14 @@
 {% extends "template.html" %}
 
 {% load filters %}
+{% load static %}
 {% load wrapwith %}
 
 {% block ptitle %}Queue : STDWeb{% endblock %}
+
+{% block head %}
+  <script src="{% static 'queue.js' %}"></script>
+{% endblock %}
 
 {% block title %}
   {% if ctask %}
@@ -17,54 +22,34 @@
 {% block content %}
 
   {% if not ctask %}
-    <div class="list-group mb-4">
-      {% for ctask in queue %}
-        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-start">
-          <div>
-            <a href="{% url 'queue' id=ctask.id %}" class="text-decoration-none text-reset">
-              <div class="ms-2 me-auto">
-                <div>
-                  <span class="fw-bold">{{ ctask.shortname }}</span>
-                  -
-                  <span class="fst-italic">{{ ctask.id }}</span>
-                </div>
-                <small class="me-2">Started: {{ ctask.time_start|time_from_unix|date:"Y-m-d H:i:s" }}</small>
-              </div>
-            </a>
-            <div>
-              <small class="ms-2 me-auto text-muted">
-                {% if ctask.chain_position %}
-                  Step {{ ctask.chain_position }}/{{ ctask.chain_total }} :
-                {% endif %}
-                {% if ctask.task_id %}
-                  Task <a href="{% url 'tasks' id=ctask.task_id %}">{{ ctask.task_id }}</a>: {{ ctask.task_name }}
-                {% endif %}
-              </small>
-            </div>
-          </div>
-              <span class="badge bg-{% if ctask.state == 'active' %}primary{% else %}secondary{% endif %} rounded-pill">{{ ctask.state }}</span>
-        </div>
-      {% endfor %}
+    <div id="queue-list-container" class="mb-2" data-url="{% url 'queue_list' %}">
+      {% include "queue_list.html" %}
+    </div>
+
+    <div class="mb-4">
+      <small class="text-muted">Auto-updated: <span id="queue-refresh-time">-</span></small>
     </div>
 
     {% if user.is_staff %}
       {% wrapwith "wrapper_card_collapsed.html" with title="Management" %}
 
-      <form action="" method="POST">
+      <form action="" method="POST" class="queue-action-form">
         {% csrf_token %}
-        <button type="submit" name="action" value="terminatealltasks" class="btn btn-danger">Terminate all queued tasks</button>
-        <button type="submit" name="action" value="cleanuplinkedtasks" class="btn btn-danger">Cleanup all linked tasks</button>
+        <button type="submit" name="action" value="terminatealltasks" class="btn btn-danger"
+                data-confirm="Terminate all queued tasks?">Terminate all queued tasks</button>
+        <button type="submit" name="action" value="cleanuplinkedtasks" class="btn btn-danger"
+                data-confirm="Mark all running tasks as failed and unlink them from the queue?">Cleanup all linked tasks</button>
       </form>
 
       {% endwrapwith %}
    {% endif %}
 
-  {% elif ctask %}
+  {% else %}
 
-    <div class="mb-4">
+    <div class="mb-4" id="ctask-info" data-state-url="{% url 'queue_state' id=ctask.id %}">
 
       <p>
-        State: <b>{{ ctask.state }}</b>
+        State: <b id="ctask-state">{{ ctask.state }}</b>
         {% if ctask.date_done %}
           at <b>{{ ctask.date_done|date:"Y-m-d H:i:s" }} UT</b>
         {% endif %}
@@ -73,32 +58,39 @@
 
       {% if chain_position %}
         <p>
-          Step: <b>{{ chain_position }}/{{ chain_total }}</b>
+          Step: <b id="chain-position">{{ chain_position }}/{{ chain_total }}</b>
         </p>
       {% endif %}
 
       {% if task %}
         <p>
           Linked to task: <a href="{% url 'tasks' id=task.id %}">{{ task.id }}</a> - {{ task.original_name }}
+          (state: <b id="task-state">{{ task.state }}</b>)
         </p>
       {% endif %}
 
+      <p id="ctask-finished" class="d-none">
+        <span class="badge bg-secondary">Not in the queue anymore</span>
+      </p>
+
     </div>
 
-    {% if user.is_staff %}
+    {% if can_manage %}
 
-      <form action="" method="POST">
-        {% csrf_token %}
-        <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate task{% if chain_total %} chain ({{ chain_total }} subtasks){% endif %}</button>
-        <button type="submit" name="action" value="cleanuplinkedtask" class="btn btn-danger">Cleanup linked tasks</button>
-      </form>
+      <div id="queue-actions">
+        <form action="" method="POST" class="queue-action-form">
+          {% csrf_token %}
+          <button type="submit" name="action" value="terminatetask" class="btn btn-danger"
+                  data-confirm="Terminate this task{% if chain_total %} chain ({{ chain_total }} subtasks){% endif %}?">
+            Terminate task{% if chain_total %} chain ({{ chain_total }} subtasks){% endif %}
+          </button>
+          <button type="submit" name="action" value="cleanuplinkedtask" class="btn btn-danger"
+                  data-confirm="Mark the linked task as failed and unlink it from the queue?">Cleanup linked tasks</button>
+        </form>
+      </div>
 
     {% endif %}
 
-  {% else %}
-    <div class="mb-2">
-    Queue is empty
-    </div>
   {% endif %}
 
 {% endblock %}

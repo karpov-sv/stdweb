@@ -23,6 +23,26 @@
     <script type="text/javascript">
      $(document).ready(function(){
      });
+
+     // Show a Bootstrap toast notification, same style as Django messages
+     function showToast(message, level){
+       var bg = {
+         danger: 'bg-danger-subtle',
+         warning: 'bg-warning-subtle',
+         success: 'bg-success-subtle'
+       }[level] || 'bg-info-subtle';
+
+       var el = $('<div class="toast align-items-center border-0 p-0 mb-2 ' + bg + '"' +
+                  ' role="alert" aria-live="assertive" aria-atomic="true"' +
+                  ' data-bs-autohide="true" data-bs-animation="true" data-bs-delay="5000">' +
+                  '<div class="d-flex"><div class="toast-body"></div>' +
+                  '<button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>' +
+                  '</div></div>');
+       el.find('.toast-body').text(message);
+       $('#toast-container').append(el);
+       el.on('hidden.bs.toast', function(){ el.remove(); });
+       new bootstrap.Toast(el[0]).show();
+     }
     </script>
 
     {% load static %}
@@ -90,11 +110,9 @@
                     </li>
                   {% endif %}
 
-                  {% if user.is_staff %}
-                    <li>
-                      <a class="dropdown-item" href="{% url 'queue' %}">Queued Tasks</a>
-                    </li>
-                  {% endif %}
+                  <li>
+                    <a class="dropdown-item" href="{% url 'queue' %}">Queued Tasks</a>
+                  </li>
 
                   {% if user.is_staff %}
                     <li>
@@ -133,9 +151,9 @@
       </div>
     </nav>
 
-    {% if messages %}
-      <!-- Toast container -->
-      <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;">
+    <!-- Toast container, also used for AJAX notifications via showToast() -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;" id="toast-container">
+      {% if messages %}
         {% for message in messages %}
           <div class="toast align-items-center border-0 p-0 mb-2
                {% if message.tags == 'danger' %}bg-danger-subtle
@@ -153,8 +171,8 @@
             </div>
           </div>
         {% endfor %}
-      </div>
-    {% endif %}
+      {% endif %}
+    </div>
 
     <!-- Main content -->
     <div class="container">

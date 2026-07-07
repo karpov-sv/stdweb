@@ -421,10 +421,14 @@ GET /api/queue/{celery_id}/
 }
 ```
 
-#### Terminate Queue Task (Staff Only)
+#### Terminate Queue Task
 ```
 POST /api/queue/{celery_id}/terminate/
 ```
+
+Allowed for staff, or for anyone able to edit the linked task (owner or member of
+a group the task is shared with). Celery tasks not linked to any task may only be
+terminated by staff.
 
 **Response:**
 ```json

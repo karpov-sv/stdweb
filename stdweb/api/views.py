@@ -585,16 +585,16 @@ def queue_detail(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def queue_terminate(request, pk):
-    """Terminate a Celery task (staff only)."""
-    if not request.user.is_staff:
-        return Response({'error': 'Staff access required'}, status=403)
-
+    """Terminate a Celery task (staff or anyone able to edit the linked task)."""
     # Find Django task and revoke entire chain
     task = Task.objects.filter(celery_id=pk).first()
     if not task:
         task = find_task_by_chain_id(pk)
 
     if task:
+        if not task.can_edit(request.user):
+            return Response({'error': 'No permission to terminate this task'}, status=403)
+
         count = revoke_task_chain(task)
         return Response({
             'id': pk,
@@ -603,6 +603,10 @@ def queue_terminate(request, pk):
             'state': 'cancelled',
         })
     else:
+        # No linked Django task - only staff may revoke arbitrary Celery IDs
+        if not request.user.is_staff:
+            return Response({'error': 'Staff access required'}, status=403)
+
         # Fallback: revoke just this ID
         celery_app.app.control.revoke(pk, terminate=True, signal='SIGTERM')
         return Response({

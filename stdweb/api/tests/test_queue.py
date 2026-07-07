@@ -172,12 +172,29 @@ class TestQueueTerminate:
         assert response.data['revoked_count'] == 3
         mock_revoke_task_chain.assert_called_once()
 
-    def test_non_staff_denied(self, authenticated_client, task):
-        """Non-staff users cannot terminate."""
+    def test_owner_can_terminate(self, authenticated_client, task, mock_revoke_task_chain):
+        """Task owner can terminate their own task."""
         task.celery_id = 'test-celery-id'
         task.save()
 
         response = authenticated_client.post('/api/queue/test-celery-id/terminate/')
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['task_id'] == task.id
+        mock_revoke_task_chain.assert_called_once()
+
+    def test_non_owner_denied(self, authenticated_client, other_user_task):
+        """Non-staff users cannot terminate tasks of other users."""
+        other_user_task.celery_id = 'test-celery-id'
+        other_user_task.save()
+
+        response = authenticated_client.post('/api/queue/test-celery-id/terminate/')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_non_staff_denied_unknown_task(self, authenticated_client):
+        """Non-staff users cannot terminate Celery tasks not linked to a Django task."""
+        with patch('stdweb.api.views.celery_app.app') as mock_app:
+            response = authenticated_client.post('/api/queue/unknown-celery-id/terminate/')
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_terminate_unknown_task(self, staff_client):
