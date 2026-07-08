@@ -421,6 +421,12 @@
           </button>
 
           <span id="unsafeButtons" class="collapse collapse-horizontal collapsed">
+            <!-- Re-stack -->
+            {% if task.config.stack_filenames %}
+              <button type="submit" name="action" value="stack" class="btn btn-secondary"
+                      title="Re-stack the original images into this task">Re-stack</button>
+            {% endif %}
+
             <!-- Preprocess -->
             <button type="submit" name="action" value="preprocess" class="btn btn-secondary"
                     title="Preprocess image (destripe, crop, background removal) to remove artifacts">Preprocess</button>

@@ -228,6 +228,12 @@ def tasks(request, id=None):
                 if action == 'preprocess':
                     return HttpResponseRedirect(reverse('task_preprocess', kwargs={'id': task.id}))
 
+                if action == 'stack':
+                    celery_tasks.run_task_steps(task, ['stack', 'inspect'])
+                    log_action('processing_start', task=task, request=request,
+                               details={'steps': ['stack', 'inspect'], 'access': 'web'})
+                    messages.success(request, "Started re-stacking for task " + str(id))
+
                 if action in ['cleanup_task', 'archive_task']:
                     if action in ['cleanup_task']:
                         task.config = {} # We reset the config on cleanup but keep on archiving
@@ -756,6 +762,8 @@ def task_preprocess(request, id=None):
             # Remove the backup to preserve space
             # FIXME: is it easier to just move the file above?..
             os.remove(orig_path)
+
+            # TODO: also remove fringe model if it exists
 
             # Run necessary post-activity actions
             _post_action()
