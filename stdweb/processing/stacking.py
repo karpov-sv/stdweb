@@ -44,6 +44,9 @@ def stack_images(filenames, outname, config, verbose=True):
     # Safeguard: refuse to read inputs from outside the allowed data directory
     validate_under_data_path(filenames)
 
+    if len(filenames) < 2:
+        raise RuntimeError(f"Stacking requires at least 2 images, got {len(filenames)}")
+
     basepath = os.path.dirname(outname)
 
     wcs0 = None
@@ -77,7 +80,7 @@ def stack_images(filenames, outname, config, verbose=True):
 
         wcs = WCS(header)
         if wcs is None or not wcs.is_celestial:
-            raise RuntimeError('No usable WCS in first image')
+            raise RuntimeError(f'No usable WCS in {filename}')
 
         if header0 is None:
             header0 = header
