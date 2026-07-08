@@ -763,7 +763,10 @@ def task_preprocess(request, id=None):
             # FIXME: is it easier to just move the file above?..
             os.remove(orig_path)
 
-            # TODO: also remove fringe model if it exists
+            # Remove the fringe model, if any, as it no longer matches the image
+            fringe_path = os.path.join(basepath, 'fringe_model.fits')
+            if os.path.exists(fringe_path):
+                os.remove(fringe_path)
 
             # Run necessary post-activity actions
             _post_action()
