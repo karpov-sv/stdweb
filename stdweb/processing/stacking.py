@@ -14,12 +14,35 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 
+from django.conf import settings
+
 from .inspect import mask_cosmics
+
+
+def validate_under_data_path(filenames):
+    """Ensure every stacking input path stays under DATA_PATH.
+
+    Guards against path traversal in user-supplied stack_filenames (which may
+    also arrive via the API, bypassing the upload view sanitization).
+
+    Uses a lexical (``..``-collapsing) check rather than resolving symlinks, so
+    that symlinked external folders placed under DATA_PATH remain usable, as
+    they are in the file browser.
+    """
+    datapath = os.path.abspath(settings.DATA_PATH)
+
+    for filename in filenames:
+        path = os.path.abspath(filename)
+        if path != datapath and not path.startswith(datapath + os.sep):
+            raise RuntimeError(f"Stacking input path is outside of DATA_PATH: {filename}")
 
 
 def stack_images(filenames, outname, config, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    # Safeguard: refuse to read inputs from outside the allowed data directory
+    validate_under_data_path(filenames)
 
     basepath = os.path.dirname(outname)
 
