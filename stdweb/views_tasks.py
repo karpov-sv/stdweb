@@ -229,9 +229,9 @@ def tasks(request, id=None):
                     return HttpResponseRedirect(reverse('task_preprocess', kwargs={'id': task.id}))
 
                 if action == 'stack':
-                    celery_tasks.run_task_steps(task, ['stack', 'inspect'])
+                    celery_tasks.run_task_steps(task, ['stack'])
                     log_action('processing_start', task=task, request=request,
-                               details={'steps': ['stack', 'inspect'], 'access': 'web'})
+                               details={'steps': ['stack'], 'access': 'web'})
                     messages.success(request, "Started re-stacking for task " + str(id))
 
                 if action in ['cleanup_task', 'archive_task']:

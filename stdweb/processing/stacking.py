@@ -9,6 +9,7 @@ import numpy as np
 import sep
 import astroscrappy
 import reproject
+import astroalign
 
 from astropy.wcs import WCS
 from astropy.io import fits
@@ -17,6 +18,8 @@ from astropy.stats import sigma_clipped_stats
 from django.conf import settings
 
 from .inspect import mask_cosmics
+from .constants import *
+from .utils import *
 
 
 def validate_under_data_path(filenames):
@@ -49,6 +52,8 @@ def stack_images(filenames, outname, config, verbose=True):
 
     basepath = os.path.dirname(outname)
 
+    cleanup_paths(cleanup_inspect, basepath=basepath)
+
     wcs0 = None
     header0 = None
 
@@ -79,24 +84,41 @@ def stack_images(filenames, outname, config, verbose=True):
             image = 1.0*image - bg.back()
 
         wcs = WCS(header)
-        if wcs is None or not wcs.is_celestial:
-            raise RuntimeError(f'No usable WCS in {filename}')
+        usable_wcs = wcs is not None and wcs.is_celestial
 
         if header0 is None:
             header0 = header
-            wcs0 = wcs
+            wcs0 = wcs if usable_wcs else None
 
-            log(f"Using ({i+1}/{len(filenames)}) {filename} as a reference pixel grid")
+            if wcs0 is not None:
+                log(f"Using ({i+1}/{len(filenames)}) {filename} as a reference pixel grid")
+            else:
+                log(f"Using ({i+1}/{len(filenames)}) {filename} as a reference pixel grid "
+                    "(no usable WCS, will align the rest with astroalign)")
 
             # First image should not be re-projected, we will keep it as-is
             images.append(image)
 
-        else:
+        elif wcs0 is not None and usable_wcs:
             log(f"Re-projecting ({i+1}/{len(filenames)}) {filename} onto the grid")
 
             # All other images should be re-projected to first one pixel grid
             image1,fp = reproject.reproject_adaptive((image, wcs), wcs0, images[0].shape, conserve_flux=True, parallel=True)
             image1[fp<0.5] = np.nan # Mask parts of the image not completely covered
+
+            images.append(image1)
+
+        else:
+            # Fallback for missing WCS: register onto the reference image pixel
+            # grid using source-matching (astroalign) instead of reprojection
+            log(f"Aligning ({i+1}/{len(filenames)}) {filename} onto the grid with astroalign")
+
+            try:
+                image1,fp = astroalign.register(image.astype(np.double), images[0].astype(np.double))
+            except Exception as e:
+                raise RuntimeError(f'Cannot align {filename} with astroalign: {e}')
+
+            image1[fp] = np.nan # Mask parts of the image not covered by the source
 
             images.append(image1)
 

@@ -12,6 +12,7 @@ astroscrappy
 dill
 astropy
 reproject>0.17
+astroalign
 scikit-learn
 django-select2
 djangorestframework>=3.14
