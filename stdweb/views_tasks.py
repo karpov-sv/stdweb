@@ -803,10 +803,33 @@ def task_candidates(request, id, filename='candidates.vot'):
     return TemplateResponse(request, 'task_candidates.html', context=context)
 
 
+# Map a running task state to the log file the corresponding step writes, so
+# the state poller can live-refresh it. States without an entry (e.g. *_done)
+# have no actively-growing log.
+STATE_LOG_FILES = {
+    'stacking': 'stacking.log',
+    'inspect': 'inspect.log',
+    'photometry': 'photometry.log',
+    'transients_simple': 'transients_simple.log',
+    'subtraction': 'subtraction.log',
+}
+
+
 def task_state(request, id):
     task = get_object_or_404(models.Task, id=id)
 
-    return JsonResponse({'state': task.state, 'id': task.id, 'celery_id': task.celery_id})
+    result = {'state': task.state, 'id': task.id, 'celery_id': task.celery_id}
+
+    # While running, also return the freshly-rendered log of the active step so
+    # the page can update it in place without a full reload.
+    if task.celery_id and task.can_view(request.user):
+        log_file = STATE_LOG_FILES.get(task.state)
+        if log_file and os.path.exists(os.path.join(task.path(), log_file)):
+            from .templatetags.tags import task_file_contents
+            result['log_file'] = log_file
+            result['log_html'] = task_file_contents(task, log_file, highlight=True)
+
+    return JsonResponse(result)
 
 
 @require_POST

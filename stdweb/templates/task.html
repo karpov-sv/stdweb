@@ -26,6 +26,22 @@
 
        success: function(json){
          $('#state').html(json.state);
+         if(json.log_file && json.log_html !== undefined){
+           var pre = $('.task-log[data-logfile="' + json.log_file + '"]');
+           if(pre.length){
+             // Preserve the user's scroll position unless already at the bottom
+             var atBottom = pre[0].scrollHeight - pre[0].scrollTop - pre[0].clientHeight < 4;
+             pre.html(json.log_html);
+             if(atBottom)
+               pre[0].scrollTop = pre[0].scrollHeight;
+           } else {
+             // The active step's block was not present at page load (e.g. the
+             // chain advanced to a later step). Reload once to render it; the
+             // section then exists and subsequent polls update it in place.
+             location.reload();
+             return;
+           }
+         }
          if(!json.celery_id){
            location.reload();
          }
@@ -354,7 +370,7 @@
     </div>
 
     <!-- Stacking -->
-    {% if 'stacking.log' in files %}
+    {% if 'stacking.log' in files or task.state == 'stacking' %}
       <h3>Stacking</h3>
       <div class="row mb-2">
         <div class="col">
@@ -464,7 +480,7 @@
     <!-- Initial inspection -->
     <hr style="border-style: dotted">
     <div class="row mb-2">
-      {% if 'inspect.log' in files %}
+      {% if 'inspect.log' in files or task.state == 'inspect' %}
         <div class="col">
           {% include "task_block_text.html" with file='inspect.log' %}
         </div>
@@ -534,7 +550,7 @@
       {% endif %}
 
       <hr style="border-style: dotted">
-      {% if 'photometry.log' in files %}
+      {% if 'photometry.log' in files or task.state == 'photometry' %}
         <div class="row mb-2">
           <div class="col">
             {% include "task_block_text.html" with file='photometry.log' %}
@@ -637,7 +653,7 @@
 
       <hr style="border-style: dotted">
       <div class="row mb-2">
-        {% if 'transients_simple.log' in files %}
+        {% if 'transients_simple.log' in files or task.state == 'transients_simple' %}
           <div class="col">
             {% include "task_block_text.html" with file='transients_simple.log' %}
           </div>
@@ -744,7 +760,7 @@
 
       <hr style="border-style: dotted">
       <div class="row mb-2">
-        {% if 'subtraction.log' in files %}
+        {% if 'subtraction.log' in files or task.state == 'subtraction' %}
           <div class="col">
             {% include "task_block_text.html" with file='subtraction.log' %}
           </div>
