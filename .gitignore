@@ -113,11 +113,14 @@ ENV/
 *.*.py
 *.patch
 *.old
+*.1
+*.py.*
 
 *.code-workspace
 .dir-locals.el
 pyrightconfig.json
 CLAUDE.md
+AGENTS.md
 
 # Project specific
 /tests/
