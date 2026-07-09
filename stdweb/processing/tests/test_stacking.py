@@ -42,6 +42,21 @@ def _write_nowcs_fits(path, data):
     fits.PrimaryHDU(data.astype(np.float32)).writeto(path, overwrite=True)
 
 
+def _write_brokenwcs_fits(path, data):
+    """Write a FITS with a formally celestial but all-zero (broken) WCS.
+
+    Mirrors task 232 inputs: CTYPE says RA/DEC TAN so ``is_celestial`` is True,
+    but all CRVAL/CRPIX/CD are zero, giving a nonsensical pixel scale.
+    """
+    hdu = fits.PrimaryHDU(data.astype(np.float32))
+    hdu.header['CTYPE1'] = 'RA---TAN'
+    hdu.header['CTYPE2'] = 'DEC--TAN'
+    for key in ['CRVAL1', 'CRVAL2', 'CRPIX1', 'CRPIX2',
+                'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2']:
+        hdu.header[key] = 0.0
+    hdu.writeto(path, overwrite=True)
+
+
 def _peak_at(arr, x, y, r=3):
     x, y = int(round(x)), int(round(y))
     return np.nanmax(arr[y - r:y + r + 1, x - r:x + r + 1])
@@ -87,6 +102,46 @@ def test_stack_without_wcs_uses_astroalign(tmp_path, settings):
 
     assert ref_peak > 1.5 * single_peak    # coherent stack -> aligned
     assert ghost_peak < 0.5 * single_peak   # no doubled star -> aligned
+
+
+def test_stack_with_broken_wcs_falls_back_to_astroalign(tmp_path, settings):
+    """Formally-celestial but all-zero WCS must be treated as absent."""
+    pytest.importorskip('astroalign')
+
+    settings.DATA_PATH = str(tmp_path)
+
+    shift = (7.0, -5.0)
+    img0, xs, ys, fluxes = _make_starfield(seed=1)
+    img1, *_ = _make_starfield(seed=1, shift=shift)
+
+    f0 = str(tmp_path / 'a.fits')
+    f1 = str(tmp_path / 'b.fits')
+    _write_brokenwcs_fits(f0, img0)
+    _write_brokenwcs_fits(f1, img1)
+
+    # Sanity: the WCS is formally celestial yet broken (huge pixel scale)
+    assert WCS(fits.getheader(f0)).is_celestial
+
+    out = str(tmp_path / 'stack.fits')
+    stack_images([f0, f1], out,
+                 {'stack_method': 'sum', 'stack_subtract_bg': False},
+                 verbose=False)
+
+    assert os.path.exists(out)
+    coadd = fits.getdata(out)
+    assert coadd.shape == img0.shape
+
+    # If the broken WCS were used for reprojection the stars would not align;
+    # astroalign fallback should coadd them coherently.
+    idx = int(np.argmax(fluxes))
+    px, py = xs[idx], ys[idx]
+
+    single_peak = _peak_at(img0, px, py)
+    ref_peak = _peak_at(coadd, px, py)
+    ghost_peak = _peak_at(coadd, px + shift[0], py + shift[1])
+
+    assert ref_peak > 1.5 * single_peak
+    assert ghost_peak < 0.5 * single_peak
 
 
 @pytest.mark.skipif(not os.path.isdir(FIXTURE_DIR),

@@ -238,7 +238,7 @@ def inspect_image(filename, config, verbose=True, show=False):
 
         config['refine_wcs'] = True
 
-        if pixscale > 100.0/3600:
+        if not is_wcs_usable(wcs):
             log("Warning: Pixel scale is too large, most probably WCS is broken! Enabling blind matching.")
             ra0,dec0,sr0 = None,None,None
             config['blind_match_wcs'] = True

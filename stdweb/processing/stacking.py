@@ -84,7 +84,13 @@ def stack_images(filenames, outname, config, verbose=True):
             image = 1.0*image - bg.back()
 
         wcs = WCS(header)
-        usable_wcs = wcs is not None and wcs.is_celestial
+        usable_wcs = is_wcs_usable(wcs)
+
+        # A formally-celestial but broken WCS (e.g. all-zero CRVAL/CRPIX/CD)
+        # is rejected by is_wcs_usable; fall back to astroalign for it.
+        if wcs is not None and wcs.is_celestial and not usable_wcs:
+            log(f"({i+1}/{len(filenames)}) {filename} has a broken WCS "
+                "(pixel scale too large), ignoring it")
 
         if header0 is None:
             header0 = header
@@ -126,6 +132,10 @@ def stack_images(filenames, outname, config, verbose=True):
 
     if stack_method == 'sum':
         log(f"Computing the stack as a plain sum of {len(images)} images")
+        # Plain sum: NaN propagates so only fully-covered pixels survive. This
+        # is intentional - partially-covered regions would have an inconsistent
+        # flux level, causing photometric problems later. Use median or
+        # clipped_mean when full coverage of incomplete regions is wanted.
         coadd = np.sum(images, axis=0)
 
         for key in ['SATURATE', 'DATAMAX']:

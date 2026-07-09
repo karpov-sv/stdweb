@@ -77,6 +77,12 @@
     float:right;
 }
 
+.collapse-dots:after {
+    content:'';
+}
+.collapse-toggle-dots.collapsed:after {
+    content:'...';
+}
 
 .collapse-chevron-horizontal:after {
     font-family:Fontawesome;

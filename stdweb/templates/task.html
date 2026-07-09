@@ -371,8 +371,13 @@
 
     <!-- Stacking -->
     {% if 'stacking.log' in files or task.state == 'stacking' %}
-      <h3>Stacking</h3>
-      <div class="row mb-2">
+      <h3 class="collapse-toggle-dots {% if 'inspect.log' in files %}collapsed{% endif %}"
+          data-bs-toggle="collapse" data-bs-target="#stackingLog"
+          aria-expanded="{% if 'inspect.log' in files %}false{% else %}true{% endif %}"
+          aria-controls="stackingLog" title="Show/hide stacking log">
+        Stacking
+      </h3>
+      <div class="row mb-2 collapse {% if 'inspect.log' not in files %}show{% endif %}" id="stackingLog">
         <div class="col">
           {% include "task_block_text.html" with file='stacking.log' %}
         </div>

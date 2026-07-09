@@ -122,6 +122,22 @@ def get_wcs(filename, header=None, verbose=True):
     return wcs
 
 
+# Pixel scales larger than this are treated as a sign of a broken WCS
+MAX_USABLE_PIXSCALE = 100.0/3600 # deg/pix
+
+
+def is_wcs_usable(wcs):
+    """Return True if the WCS is celestial and has a sane pixel scale.
+
+    Some images carry a formally valid but broken WCS (e.g. all-zero
+    CRVAL/CRPIX/CD), which passes ``is_celestial`` yet yields a nonsensical
+    pixel scale. Such a WCS is treated as unusable here so callers can fall
+    back to blind matching / astroalign.
+    """
+    return (wcs is not None and wcs.is_celestial
+            and astrometry.get_pixscale(wcs=wcs) <= MAX_USABLE_PIXSCALE)
+
+
 def fix_header(header, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
