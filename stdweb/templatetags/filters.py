@@ -15,27 +15,34 @@ register = template.Library()
 @register.filter
 def header_to_string(header):
     try:
-        contents = []
+        lines = []
 
         for card in header.cards:
             cstr = str(card)
 
             if m := re.match(r'^((HISTORY)|(COMMENT|END))\b(.*)$', cstr):
-                contents.append(
+                lines.append(
                     f"<span class='text-secondary'>{m[1]}</span>"
                     f"<span class='text-info'>{m[4]}</span>"
                 )
             elif m := re.match(r'^([^=]+)=(\s*(\'.*?\'|\S+)\s*)(/.*)?$', cstr):
-                contents.append(
+                lines.append(
                     f"<span class='text-primary'>{m[1]}</span>"
                     f"<span class='text-secondary'>=</span>"
                     f"<span class='text-body-emphasis'>{m[2]}</span>"
                     f"<span class='text-info'>{m[4] or ''}</span>"
                 )
             elif cstr:
-                contents.append(cstr)
+                lines.append(cstr)
 
-        contents = "\n".join(contents)
+        # Wrap each line in its own element so it can be toggled individually
+        # (e.g. by the interactive header filter). The trailing newline lives
+        # inside the span so hiding a line hides its line break as well.
+        contents = "".join(
+            f"<span class='fits-header-line'>{line}"
+            f"{'' if i == len(lines) - 1 else chr(10)}</span>"
+            for i, line in enumerate(lines)
+        )
 
     except KeyboardInterrupt:
         contents = "Cannot display FITS header"

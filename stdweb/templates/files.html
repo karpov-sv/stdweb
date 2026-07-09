@@ -219,7 +219,7 @@
 
                 <div class="collapse {% if hdu.data is none %}show{% endif %}" id="collapseHeader{{ forloop.counter0 }}">
                   <div class="card-body pr-2 pl-2 pt-2 pb-2">
-                    <pre>{{ hdu.header | header_to_string }}</pre>
+                    <pre class="fits-header">{{ hdu.header | header_to_string }}</pre>
                   </div>
                 </div>
               </div>

@@ -366,7 +366,7 @@
     <!-- Header -->
     {% if 'image.fits' in files %}
       {% wrapwith 'wrapper_card_collapsed.html' with title='Original FITS header' %}
-      <pre><code>{% task_fits_header task 'image.fits' %}</code></pre>
+      <pre><code class="fits-header">{% task_fits_header task 'image.fits' %}</code></pre>
       {% endwrapwith %}
     {% endif %}
 
