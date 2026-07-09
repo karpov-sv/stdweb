@@ -63,10 +63,12 @@ tasks shared with a group they belong to (staff users see all tasks).
 POST /api/tasks/
 ```
 
-Create a new task with optional file upload.
+Create a new task with optional file upload. The `file` may be omitted to create
+a file-less task (e.g. for [stacking](#stacking-tasks), where `image.fits` is
+produced from `config['stack_filenames']` by the `stack` step).
 
 **Request (multipart/form-data):**
-- `file` - FITS file to upload
+- `file` - FITS file to upload (optional)
 - `original_name` - Filename (optional, derived from file if not provided)
 - `title` - Optional title/comment
 - `config` - JSON configuration object
@@ -203,6 +205,7 @@ Queue processing steps for the task.
 ```
 
 **Available steps:**
+- `stack` - Coadd several images into `image.fits` (see [Stacking Tasks](#stacking-tasks)); usually the first step, before `inspect`
 - `cleanup` - Remove intermediate files
 - `inspect` - Image inspection, WCS refinement, cosmic ray masking
 - `photometry` - Source extraction and photometric calibration
@@ -217,6 +220,63 @@ Queue processing steps for the task.
   "celery_id": "abc123-def456",
   "steps": ["inspect", "photometry", "subtraction"]
 }
+```
+
+#### Stacking Tasks
+
+Stacking coadds several existing images into a single `image.fits`, which the
+remaining steps then process. Unlike a normal task, a stacking task is created
+**without** uploading a file — the inputs are listed in the config, and
+`image.fits` is produced by the `stack` step.
+
+**Requirements:**
+- `stack_filenames` — a list of **absolute paths** to the input images. Every
+  path must reside under the server's `DATA_PATH` (paths outside it are rejected
+  for security). These are server-side paths, so the files must already exist in
+  the data directory (e.g. previously uploaded or otherwise placed there).
+- At least two input images.
+- Include `stack` as the first entry in `steps` (before `inspect`).
+
+The stacking parameters (`stack_method`, `stack_subtract_bg`,
+`stack_mask_cosmics`) may be supplied at any point before the `stack` step runs —
+at task creation, via [Update Task](#update-task), or in the `config` override of
+the process request. See [Stacking](#stacking) for the full parameter list.
+
+**Example — create a file-less task and stack:**
+```bash
+# 1. Create a task with no file, providing the input list in config
+TASK_ID=$(curl -s -X POST /api/tasks/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "title": "My stack",
+        "config": {
+          "stack_filenames": [
+            "/data/night1/img_001.fits",
+            "/data/night1/img_002.fits",
+            "/data/night1/img_003.fits"
+          ],
+          "stack_method": "clipped_mean"
+        }
+      }' | jq -r .id)
+
+# 2. Run the stack step (optionally chained with further processing)
+curl -X POST /api/tasks/$TASK_ID/process/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"steps": ["stack", "inspect", "photometry"]}'
+```
+
+The input list may equally be provided or overridden in the process request
+itself:
+```bash
+curl -X POST /api/tasks/$TASK_ID/process/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "steps": ["stack"],
+        "config": {"stack_filenames": ["/data/a.fits", "/data/b.fits"]}
+      }'
 ```
 
 #### Cancel Task
@@ -540,6 +600,14 @@ GET /api/reference/templates/
 ## Configuration Options
 
 The task `config` object accepts these parameters:
+
+### Stacking
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `stack_filenames` | list | - | Absolute paths of input images to coadd (must be under `DATA_PATH`, at least two) |
+| `stack_method` | string | "sum" | Coaddition method: `sum`, `clipped_mean`, or `median` |
+| `stack_subtract_bg` | bool | true | Subtract background from each input before stacking |
+| `stack_mask_cosmics` | bool | false | Mask cosmic rays in each input before stacking |
 
 ### Image Inspection
 | Parameter | Type | Default | Description |

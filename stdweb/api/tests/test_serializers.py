@@ -9,65 +9,9 @@ from stdweb.api.serializers import (
     TaskCreateSerializer,
     TaskListSerializer,
     PresetSerializer,
-    ProcessRequestSerializer,
     CropRequestSerializer,
     DestripeRequestSerializer,
 )
-
-
-class TestProcessRequestSerializer:
-    """Tests for ProcessRequestSerializer."""
-
-    def test_valid_single_step(self):
-        """Valid single step should pass."""
-        serializer = ProcessRequestSerializer(data={'steps': ['inspect']})
-        assert serializer.is_valid()
-        assert serializer.validated_data['steps'] == ['inspect']
-
-    def test_valid_multiple_steps(self):
-        """Valid multiple steps should pass."""
-        serializer = ProcessRequestSerializer(data={
-            'steps': ['inspect', 'photometry', 'subtraction']
-        })
-        assert serializer.is_valid()
-        assert len(serializer.validated_data['steps']) == 3
-
-    def test_all_valid_steps(self):
-        """All valid step names should pass."""
-        all_steps = ['inspect', 'photometry', 'transients', 'subtraction', 'cleanup']
-        serializer = ProcessRequestSerializer(data={'steps': all_steps})
-        assert serializer.is_valid()
-
-    def test_invalid_step_rejected(self):
-        """Invalid step names should be rejected."""
-        serializer = ProcessRequestSerializer(data={'steps': ['invalid_step']})
-        assert not serializer.is_valid()
-        assert 'steps' in serializer.errors
-
-    def test_empty_steps_rejected(self):
-        """Empty steps list should be rejected."""
-        serializer = ProcessRequestSerializer(data={'steps': []})
-        assert not serializer.is_valid()
-
-    def test_missing_steps_rejected(self):
-        """Missing steps field should be rejected."""
-        serializer = ProcessRequestSerializer(data={})
-        assert not serializer.is_valid()
-
-    def test_config_optional(self):
-        """Config should be optional."""
-        serializer = ProcessRequestSerializer(data={'steps': ['inspect']})
-        assert serializer.is_valid()
-        assert serializer.validated_data.get('config') == {}
-
-    def test_config_accepted(self):
-        """Config should be accepted when provided."""
-        serializer = ProcessRequestSerializer(data={
-            'steps': ['photometry'],
-            'config': {'filter': 'R', 'cat_name': 'ps1'}
-        })
-        assert serializer.is_valid()
-        assert serializer.validated_data['config'] == {'filter': 'R', 'cat_name': 'ps1'}
 
 
 class TestCropRequestSerializer:

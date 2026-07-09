@@ -2,6 +2,8 @@
 Serializers for the STDWeb REST API.
 """
 
+import os
+
 from rest_framework import serializers
 
 from django.contrib.auth.models import Group
@@ -126,14 +128,17 @@ class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
         # Create the task
         task = Task.objects.create(**validated_data)
 
+        # Always create the task directory, even for file-less tasks (e.g.
+        # stacking, where inputs come from config['stack_filenames'] and
+        # image.fits is produced by the stack step). Mirrors the web UI.
+        os.makedirs(task.path(), exist_ok=True)
+
         # Set initial group sharing (many-to-many, must be set after creation)
         if groups:
             task.groups.set(groups)
 
         # Handle file upload
         if file:
-            import os
-            os.makedirs(task.path(), exist_ok=True)
             filepath = os.path.join(task.path(), 'image.fits')
             with open(filepath, 'wb') as f:
                 for chunk in file.chunks():
@@ -177,17 +182,6 @@ class PresetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Preset
         fields = ['id', 'name', 'config']
-
-
-class ProcessRequestSerializer(serializers.Serializer):
-    """Serializer for process action requests."""
-    steps = serializers.ListField(
-        child=serializers.ChoiceField(choices=[
-            'inspect', 'photometry', 'transients', 'subtraction', 'cleanup'
-        ]),
-        min_length=1
-    )
-    config = serializers.JSONField(required=False, default=dict)
 
 
 class CropRequestSerializer(serializers.Serializer):
