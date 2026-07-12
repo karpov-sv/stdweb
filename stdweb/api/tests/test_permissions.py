@@ -181,6 +181,12 @@ class TestValidateTaskPath:
         with pytest.raises(Http404):
             validate_task_path(task, 'subdir/../../etc/passwd')
 
+    def test_sibling_directory_with_prefix_rejected(self, task):
+        """Escapes into a sibling task directory whose name shares a string
+        prefix (e.g. tasks/12 vs tasks/1) should be rejected."""
+        with pytest.raises(Http404):
+            validate_task_path(task, f'../{task.id}0/image.fits')
+
     def test_absolute_path_rejected(self, task):
         """Absolute paths that escape task directory should be rejected."""
         with pytest.raises(Http404):

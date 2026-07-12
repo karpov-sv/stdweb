@@ -42,14 +42,10 @@ class TestReferenceData:
         assert response.status_code == status.HTTP_200_OK
         assert isinstance(response.data, dict)
 
-    def test_invalid_type_returns_all(self, api_client):
-        """Invalid type returns all reference data."""
+    def test_invalid_type_returns_404(self, api_client):
+        """Invalid type returns 404."""
         response = api_client.get('/api/reference/invalid_type/')
-        assert response.status_code == status.HTTP_200_OK
-        # Should fall through to default (all data)
-        assert 'filters' in response.data
-        assert 'catalogs' in response.data
-        assert 'templates' in response.data
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_no_authentication_required(self, api_client):
         """Reference endpoints don't require authentication."""

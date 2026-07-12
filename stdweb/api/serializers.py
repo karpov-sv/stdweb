@@ -3,9 +3,11 @@ Serializers for the STDWeb REST API.
 """
 
 import os
+import shutil
 
 from rest_framework import serializers
 
+from django.conf import settings
 from django.contrib.auth.models import Group
 
 from stdweb.models import Task, Preset, accessible_groups
@@ -73,8 +75,8 @@ class TaskSerializer(GroupSharingMixin, serializers.ModelSerializer):
         ]
 
     def get_path(self, obj):
-        """Return the task directory path."""
-        return obj.path()
+        """Return the task directory path, relative to the tasks base directory."""
+        return os.path.relpath(obj.path(), settings.TASKS_PATH)
 
 
 class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
@@ -132,6 +134,13 @@ class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
         # stacking, where inputs come from config['stack_filenames'] and
         # image.fits is produced by the stack step). Mirrors the web UI.
         os.makedirs(task.path(), exist_ok=True)
+
+        # Copy preset files into the task folder, like the web UI does
+        if preset and preset.files:
+            for filename in preset.files.split('\n'):
+                filename = filename.strip()
+                if filename:
+                    shutil.copy(filename, task.path())
 
         # Set initial group sharing (many-to-many, must be set after creation)
         if groups:
@@ -198,12 +207,3 @@ class DestripeRequestSerializer(serializers.Serializer):
         choices=['horizontal', 'vertical', 'both'],
         default='both'
     )
-
-
-class FileInfoSerializer(serializers.Serializer):
-    """Serializer for file information."""
-    name = serializers.CharField()
-    path = serializers.CharField()
-    size = serializers.IntegerField()
-    modified = serializers.DateTimeField()
-    is_dir = serializers.BooleanField()

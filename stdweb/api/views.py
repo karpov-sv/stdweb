@@ -4,6 +4,7 @@ Function-based views for the STDWeb REST API.
 
 import os
 import io
+import json
 import shutil
 from datetime import datetime
 
@@ -12,9 +13,13 @@ from django.http import FileResponse, HttpResponse, Http404
 from django.shortcuts import get_object_or_404
 
 from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
+
+from django.db.models import Q
 
 from stdweb.models import Task, Preset
 from stdweb import celery_tasks
@@ -34,8 +39,21 @@ from .serializers import (
     TaskSerializer,
     TaskCreateSerializer,
     TaskListSerializer,
+    TaskStateSerializer,
     PresetSerializer,
+    CropRequestSerializer,
+    DestripeRequestSerializer,
 )
+
+
+# Processing steps accepted by task_process, as understood by run_task_steps()
+VALID_STEPS = ['stack', 'inspect', 'photometry', 'simple_transients', 'subtraction', 'cleanup']
+
+
+class OptionalLimitOffsetPagination(LimitOffsetPagination):
+    """Limit/offset pagination applied only when the client passes ?limit=,
+    so that requests without it keep getting the plain un-paginated list."""
+    default_limit = None
 
 
 # =============================================================================
@@ -56,7 +74,9 @@ def validate_task_path(task, path):
     """Validate path to prevent directory traversal."""
     basepath = os.path.normpath(task.path())
     fullpath = os.path.normpath(os.path.join(basepath, path))
-    if not fullpath.startswith(basepath):
+    # Compare path components, not string prefixes, so that e.g. .../tasks/12
+    # does not pass the check for a task rooted at .../tasks/1
+    if fullpath != basepath and not fullpath.startswith(basepath + os.sep):
         raise Http404("Invalid path")
     return fullpath
 
@@ -70,6 +90,96 @@ def sanitize_data_path(path):
     return path
 
 
+def get_numeric_param(request, name, default, cast):
+    """Parse a numeric query parameter, raising a 400 error on invalid values."""
+    value = request.query_params.get(name, default)
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        raise ValidationError({name: 'Invalid numeric value'})
+
+
+def save_figure_response(fig, fmt, quality, **kwargs):
+    """Save a matplotlib figure into a JPEG/PNG HttpResponse."""
+    buf = io.BytesIO()
+    if fmt == 'png':
+        fig.savefig(buf, format='png', **kwargs)
+        content_type = 'image/png'
+    else:
+        fig.savefig(buf, format='jpeg', pil_kwargs={'quality': quality}, **kwargs)
+        content_type = 'image/jpeg'
+
+    buf.seek(0)
+    return HttpResponse(buf.read(), content_type=content_type)
+
+
+def render_fits_preview(request, fullpath, mask=None):
+    """Render a FITS file as a JPEG/PNG image, honoring display query parameters."""
+    from astropy.io import fits
+    from matplotlib.figure import Figure
+    from matplotlib.axes import Axes
+    from stdpipe import plots
+
+    # Get parameters
+    ext = get_numeric_param(request, 'ext', -1, int)
+    fmt = request.query_params.get('format', 'jpeg')
+    quality = get_numeric_param(request, 'quality', 80, int)
+    width = get_numeric_param(request, 'width', 800, int)
+
+    # Load data
+    try:
+        data = fits.getdata(fullpath, ext)
+    except Exception:
+        raise ValidationError('Cannot read FITS data from file')
+
+    # Calculate figure size
+    aspect = data.shape[0] / data.shape[1]
+    figsize = (width / 72, width * aspect / 72)
+
+    # Create figure
+    fig = Figure(dpi=72, figsize=figsize)
+    ax = Axes(fig, [0., 0., 1., 1.])
+    fig.add_axes(ax)
+
+    # Plot image
+    plots.imshow(
+        data, ax=ax, mask=mask,
+        show_axis=False,
+        show_colorbar=False,
+        origin='lower',
+        interpolation='bicubic',
+        cmap=request.query_params.get('cmap', 'Blues_r'),
+        stretch=request.query_params.get('stretch', 'linear'),
+        qq=[
+            get_numeric_param(request, 'qmin', 0.5, float),
+            get_numeric_param(request, 'qmax', 99.5, float)
+        ],
+        r0=get_numeric_param(request, 'r0', 0, float)
+    )
+
+    return save_figure_response(fig, fmt, quality)
+
+
+def find_linked_task(celery_id):
+    """Find the Django task linked to a Celery task ID."""
+    task = Task.objects.filter(celery_id=celery_id).first()
+    if not task:
+        task = find_task_by_chain_id(celery_id)
+    return task
+
+
+def task_queue_info(task, celery_id):
+    """Task-related fields to attach to a queue item."""
+    info = {
+        'task_id': task.id,
+        'task_name': task.original_name,
+    }
+    if task.celery_chain_ids and celery_id in task.celery_chain_ids:
+        info['chain_position'] = task.celery_chain_ids.index(celery_id) + 1
+        info['chain_total'] = len(task.celery_chain_ids)
+    return info
+
+
 # =============================================================================
 # Task endpoints
 # =============================================================================
@@ -80,10 +190,42 @@ def sanitize_data_path(path):
 def task_list(request):
     """
     GET: List all tasks for the current user (or all for staff).
+    Supports filtering (?query=, ?state=, ?user=) and optional
+    limit/offset pagination (?limit=, ?offset=).
     POST: Create a new task with optional file upload.
     """
     if request.method == 'GET':
         tasks = Task.accessible_to(request.user).order_by('-created')
+
+        # Free-text search over the same fields as the web UI task list
+        query = request.query_params.get('query')
+        if query:
+            for token in query.split():
+                tasks = tasks.filter(
+                    Q(original_name__icontains=token) |
+                    Q(title__icontains=token) |
+                    Q(user__username__icontains=token) |
+                    Q(user__first_name__icontains=token) |
+                    Q(user__last_name__icontains=token) |
+                    Q(groups__name__icontains=token)
+                )
+            # M2M join can yield duplicate rows
+            tasks = tasks.distinct()
+
+        state = request.query_params.get('state')
+        if state:
+            tasks = tasks.filter(state=state)
+
+        username = request.query_params.get('user')
+        if username:
+            tasks = tasks.filter(user__username=username)
+
+        # Paginated response when ?limit= is given, plain list otherwise
+        paginator = OptionalLimitOffsetPagination()
+        page = paginator.paginate_queryset(tasks, request)
+        if page is not None:
+            serializer = TaskListSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
 
         serializer = TaskListSerializer(tasks, many=True)
         return Response(serializer.data)
@@ -123,10 +265,27 @@ def task_detail(request, pk):
         return Response(serializer.errors, status=400)
 
     elif request.method == 'DELETE':
+        # Deletion is restricted to the owner or staff, like in the web UI
+        if not task.can_delete(request.user):
+            return Response({'error': 'Permission denied'}, status=403)
+
         log_action('task_delete', task=task, request=request,
                    details={'original_name': task.original_name, 'access': 'api'})
         task.delete()
         return Response(status=204)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def task_state(request, pk):
+    """Lightweight task state for polling, without the full config."""
+    task = get_object_or_404(Task, pk=pk)
+
+    if not check_task_permission(request, task):
+        return Response({'error': 'Permission denied'}, status=403)
+
+    serializer = TaskStateSerializer(task)
+    return Response(serializer.data)
 
 
 @api_view(['POST'])
@@ -174,6 +333,9 @@ def task_process(request, pk):
     if not check_task_permission(request, task):
         return Response({'error': 'Permission denied'}, status=403)
 
+    if task.celery_id:
+        return Response({'error': 'Task is already being processed'}, status=409)
+
     if hasattr(request.data, 'getlist'):
         steps = request.data.getlist('steps', [])
     else:
@@ -184,29 +346,26 @@ def task_process(request, pk):
         return Response({'error': 'No steps provided'}, status=400)
 
     # Validate steps
-    valid_steps = ['stack', 'inspect', 'photometry', 'simple_transients', 'subtraction', 'cleanup']
     for step in steps:
-        if step not in valid_steps:
+        if step not in VALID_STEPS:
             return Response({'error': f'Invalid step: {step}'}, status=400)
+
+    # Accept config as a JSON-encoded string, for form-encoded requests
+    if isinstance(config_override, str):
+        try:
+            config_override = json.loads(config_override)
+        except ValueError:
+            return Response({'error': 'Cannot parse config as JSON'}, status=400)
+    if not isinstance(config_override, dict):
+        return Response({'error': 'config must be a JSON object'}, status=400)
 
     # Update task config if provided
     if config_override:
         task.config.update(config_override)
         task.save()
 
-    # Map step names to celery task names
-    step_mapping = {
-        'stack': 'stack',
-        'inspect': 'inspect',
-        'photometry': 'photometry',
-        'simple_transients': 'simple_transients',
-        'subtraction': 'subtraction',
-        'cleanup': 'cleanup',
-    }
-    celery_steps = [step_mapping.get(s, s) for s in steps]
-
     # Start processing
-    celery_tasks.run_task_steps(task, celery_steps)
+    celery_tasks.run_task_steps(task, steps)
 
     log_action('processing_start', task=task, request=request,
                details={'steps': steps, 'access': 'api'})
@@ -252,6 +411,9 @@ def task_fix(request, pk):
     if not check_task_permission(request, task):
         return Response({'error': 'Permission denied'}, status=403)
 
+    if task.celery_id:
+        return Response({'error': 'Task is already being processed'}, status=409)
+
     filename = os.path.join(task.path(), 'image.fits')
     if not os.path.exists(filename):
         return Response({'error': 'Image file not found'}, status=404)
@@ -269,17 +431,24 @@ def task_crop(request, pk):
     if not check_task_permission(request, task):
         return Response({'error': 'Permission denied'}, status=403)
 
+    if task.celery_id:
+        return Response({'error': 'Task is already being processed'}, status=409)
+
     filename = os.path.join(task.path(), 'image.fits')
     if not os.path.exists(filename):
         return Response({'error': 'Image file not found'}, status=404)
 
+    serializer = CropRequestSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
+
     crop_image(
         filename,
         task.config,
-        x1=request.data.get('x1'),
-        y1=request.data.get('y1'),
-        x2=request.data.get('x2'),
-        y2=request.data.get('y2'),
+        x1=serializer.validated_data.get('x1'),
+        y1=serializer.validated_data.get('y1'),
+        x2=serializer.validated_data.get('x2'),
+        y2=serializer.validated_data.get('y2'),
         verbose=False,
     )
     return Response({'id': task.id, 'status': 'cropped'})
@@ -294,11 +463,18 @@ def task_destripe(request, pk):
     if not check_task_permission(request, task):
         return Response({'error': 'Permission denied'}, status=403)
 
+    if task.celery_id:
+        return Response({'error': 'Task is already being processed'}, status=409)
+
     filename = os.path.join(task.path(), 'image.fits')
     if not os.path.exists(filename):
         return Response({'error': 'Image file not found'}, status=404)
 
-    direction = request.data.get('direction', 'both')
+    serializer = DestripeRequestSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
+
+    direction = serializer.validated_data['direction']
     preprocess_image(
         filename,
         task.config,
@@ -406,9 +582,6 @@ def task_file(request, pk, path):
 def task_preview(request, pk, path):
     """Generate JPEG/PNG preview of a FITS file."""
     from astropy.io import fits
-    from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
-    from stdpipe import plots
 
     task = get_object_or_404(Task, pk=pk)
 
@@ -419,12 +592,6 @@ def task_preview(request, pk, path):
     if not os.path.exists(fullpath):
         raise Http404("File not found")
 
-    # Get parameters
-    ext = int(request.query_params.get('ext', -1))
-    fmt = request.query_params.get('format', 'jpeg')
-    quality = int(request.query_params.get('quality', 80))
-    width = int(request.query_params.get('width', 800))
-
     # Load custom mask if exists
     basepath = task.path()
     if path == 'image.fits' and os.path.exists(os.path.join(basepath, 'custom_mask.fits')):
@@ -432,45 +599,7 @@ def task_preview(request, pk, path):
     else:
         mask = None
 
-    # Load data
-    data = fits.getdata(fullpath, ext)
-
-    # Calculate figure size
-    aspect = data.shape[0] / data.shape[1]
-    figsize = (width / 72, width * aspect / 72)
-
-    # Create figure
-    fig = Figure(dpi=72, figsize=figsize)
-    ax = Axes(fig, [0., 0., 1., 1.])
-    fig.add_axes(ax)
-
-    # Plot image
-    plots.imshow(
-        data, ax=ax, mask=mask,
-        show_axis=False,
-        show_colorbar=False,
-        origin='lower',
-        interpolation='bicubic',
-        cmap=request.query_params.get('cmap', 'Blues_r'),
-        stretch=request.query_params.get('stretch', 'linear'),
-        qq=[
-            float(request.query_params.get('qmin', 0.5)),
-            float(request.query_params.get('qmax', 99.5))
-        ],
-        r0=float(request.query_params.get('r0', 0))
-    )
-
-    # Save to buffer
-    buf = io.BytesIO()
-    if fmt == 'png':
-        fig.savefig(buf, format='png')
-        content_type = 'image/png'
-    else:
-        fig.savefig(buf, format='jpeg', pil_kwargs={'quality':quality})
-        content_type = 'image/jpeg'
-
-    buf.seek(0)
-    return HttpResponse(buf.read(), content_type=content_type)
+    return render_fits_preview(request, fullpath, mask=mask)
 
 
 @api_view(['GET'])
@@ -489,25 +618,15 @@ def task_cutout(request, pk, path):
         raise Http404("File not found")
 
     # Get parameters
-    width = int(request.query_params.get('width', 800))
+    width = get_numeric_param(request, 'width', 800, int)
     fmt = request.query_params.get('format', 'jpeg')
-    quality = int(request.query_params.get('quality', 80))
+    quality = get_numeric_param(request, 'quality', 80, int)
 
     # Load and plot cutout
     cutout = cutouts.load_cutout(fullpath)
     fig = cutouts.plot_cutout(cutout, figsize=(width / 72, width / 72))
 
-    # Save to buffer
-    buf = io.BytesIO()
-    if fmt == 'png':
-        fig.savefig(buf, format='png', bbox_inches='tight')
-        content_type = 'image/png'
-    else:
-        fig.savefig(buf, format='jpeg', quality=quality, bbox_inches='tight')
-        content_type = 'image/jpeg'
-
-    buf.seek(0)
-    return HttpResponse(buf.read(), content_type=content_type)
+    return save_figure_response(fig, fmt, quality, bbox_inches='tight')
 
 
 # =============================================================================
@@ -537,17 +656,10 @@ def queue_list(request):
                         'time_start': ctask.get('time_start'),
                     }
 
-                    # Find linked Django task
-                    task = Task.objects.filter(celery_id=ctask['id']).first()
-                    if not task:
-                        task = find_task_by_chain_id(ctask['id'])
-
-                    if task:
-                        item['task_id'] = task.id
-                        item['task_name'] = task.original_name
-                        if task.celery_chain_ids and ctask['id'] in task.celery_chain_ids:
-                            item['chain_position'] = task.celery_chain_ids.index(ctask['id']) + 1
-                            item['chain_total'] = len(task.celery_chain_ids)
+                    # Attach linked Django task info, if the user may see it
+                    task = find_linked_task(ctask['id'])
+                    if task and task.can_view(request.user):
+                        item.update(task_queue_info(task, ctask['id']))
 
                     queue.append(item)
 
@@ -568,17 +680,10 @@ def queue_detail(request, pk):
         'failed': ctask.failed() if ctask.ready() else None,
     }
 
-    # Find linked Django task
-    task = Task.objects.filter(celery_id=pk).first()
-    if not task:
-        task = find_task_by_chain_id(pk)
-
-    if task:
-        result['task_id'] = task.id
-        result['task_name'] = task.original_name
-        if task.celery_chain_ids and pk in task.celery_chain_ids:
-            result['chain_position'] = task.celery_chain_ids.index(pk) + 1
-            result['chain_total'] = len(task.celery_chain_ids)
+    # Attach linked Django task info, if the user may see it
+    task = find_linked_task(pk)
+    if task and task.can_view(request.user):
+        result.update(task_queue_info(task, pk))
 
     return Response(result)
 
@@ -588,9 +693,7 @@ def queue_detail(request, pk):
 def queue_terminate(request, pk):
     """Terminate a Celery task (staff or anyone able to edit the linked task)."""
     # Find Django task and revoke entire chain
-    task = Task.objects.filter(celery_id=pk).first()
-    if not task:
-        task = find_task_by_chain_id(pk)
+    task = find_linked_task(pk)
 
     if task:
         if not task.can_edit(request.user):
@@ -663,62 +766,13 @@ def data_files(request, path=''):
 @permission_classes([IsAuthenticated])
 def data_file_preview(request, path):
     """Generate preview for a FITS file in data directory."""
-    from astropy.io import fits
-    from matplotlib.figure import Figure
-    from matplotlib.axes import Axes
-    from stdpipe import plots
-
     path = sanitize_data_path(path)
     fullpath = os.path.join(settings.DATA_PATH, path)
 
     if not os.path.exists(fullpath):
         raise Http404("File not found")
 
-    # Get parameters
-    ext = int(request.query_params.get('ext', -1))
-    fmt = request.query_params.get('format', 'jpeg')
-    quality = int(request.query_params.get('quality', 80))
-    width = int(request.query_params.get('width', 800))
-
-    # Load data
-    data = fits.getdata(fullpath, ext)
-
-    # Calculate figure size
-    aspect = data.shape[0] / data.shape[1]
-    figsize = (width / 72, width * aspect / 72)
-
-    # Create figure
-    fig = Figure(dpi=72, figsize=figsize)
-    ax = Axes(fig, [0., 0., 1., 1.])
-    fig.add_axes(ax)
-
-    # Plot image
-    plots.imshow(
-        data, ax=ax,
-        show_axis=False,
-        show_colorbar=False,
-        origin='lower',
-        interpolation='bicubic',
-        cmap=request.query_params.get('cmap', 'Blues_r'),
-        stretch=request.query_params.get('stretch', 'linear'),
-        qq=[
-            float(request.query_params.get('qmin', 0.5)),
-            float(request.query_params.get('qmax', 99.5))
-        ],
-        r0=float(request.query_params.get('r0', 0))
-    )
-
-    # Save to buffer
-    buf = io.BytesIO()
-    if fmt == 'png':
-        fig.savefig(buf, format='png')
-        content_type = 'image/png'
-    else:
-        fig.savefig(buf, format='jpeg', quality=quality)
-        content_type = 'image/jpeg'
-
-    buf.seek(0)
-    return HttpResponse(buf.read(), content_type=content_type)
+    return render_fits_preview(request, fullpath)
 
 
 # =============================================================================
@@ -757,9 +811,11 @@ def reference_data(request, data_type=None):
         return Response(supported_catalogs)
     elif data_type == 'templates':
         return Response(supported_templates)
-    else:
+    elif data_type is None:
         return Response({
             'filters': list(supported_filters.keys()),
             'catalogs': list(supported_catalogs.keys()),
             'templates': list(supported_templates.keys()),
         })
+    else:
+        raise Http404("Unknown reference data type")

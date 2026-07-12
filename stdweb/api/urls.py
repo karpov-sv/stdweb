@@ -10,6 +10,7 @@ from .views import (
     # Task endpoints
     task_list,
     task_detail,
+    task_state,
     task_process,
     task_cancel,
     task_duplicate,
@@ -44,6 +45,9 @@ urlpatterns = [
 
     # Task detail, update, delete
     path('tasks/<int:pk>/', task_detail, name='api-task-detail'),
+
+    # Lightweight task state for polling
+    path('tasks/<int:pk>/state/', task_state, name='api-task-state'),
 
     # Task actions
     path('tasks/<int:pk>/process/', task_process, name='api-task-process'),
