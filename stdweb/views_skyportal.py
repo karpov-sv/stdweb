@@ -30,8 +30,7 @@ def skyportal_resolve_source(ra, dec, sr=30/3600, api_token=settings.SKYPORTAL_T
     else:
         headers = None
 
-    base_url = 'https://skyportal-icare.ijclab.in2p3.fr/api'
-    res = requests.get(f'{base_url}/sources?ra={ra}&dec={dec}&radius={sr}&group_ids=3', headers=headers)
+    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources?ra={ra}&dec={dec}&radius={sr}&group_ids=3', headers=headers)
 
     if res:
         json = res.json()
@@ -49,8 +48,7 @@ def skyportal_get_instruments(api_token=settings.SKYPORTAL_TOKEN):
         headers = None
 
     try:
-        base_url = 'https://skyportal-icare.ijclab.in2p3.fr/api'
-        res = requests.get(f'{base_url}/instrument', headers=headers)
+        res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/instrument', headers=headers)
 
         if res:
             json = res.json()
@@ -100,8 +98,7 @@ def skyportal_upload_photometry(
         'group_ids': group_ids,
     }
 
-    base_url = 'https://skyportal-icare.ijclab.in2p3.fr/api'
-    res = requests.put(f'{base_url}/photometry', headers=headers, json=payload)
+    res = requests.put(f'{settings.SKYPORTAL_BASE_URL}/api/photometry', headers=headers, json=payload)
 
     return res.json()
 
@@ -286,5 +283,6 @@ def skyportal(request):
                 tasks.append(ctask)
 
                 context['tasks'] = tasks
+                context['skyportal_url'] = settings.SKYPORTAL_BASE_URL
 
     return TemplateResponse(request, 'skyportal.html', context=context)

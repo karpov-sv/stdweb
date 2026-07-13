@@ -213,5 +213,7 @@ STDPIPE_SWARP = config('STDPIPE_SWARP', default=None)
 # Path to store PS1 download cache (if not set, use task-local cache)
 STDPIPE_PS1_CACHE = config('STDPIPE_PS1_CACHE', default=None)
 
+# SkyPortal base URL
+SKYPORTAL_BASE_URL = config('SKYPORTAL_BASE_URL', default="https://skyportal-icare.ijclab.in2p3.fr")
 # SkyPortal API token
 SKYPORTAL_TOKEN = config('SKYPORTAL_TOKEN', default=None)
