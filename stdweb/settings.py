@@ -217,3 +217,5 @@ STDPIPE_PS1_CACHE = config('STDPIPE_PS1_CACHE', default=None)
 SKYPORTAL_BASE_URL = config('SKYPORTAL_BASE_URL', default="https://skyportal-icare.ijclab.in2p3.fr")
 # SkyPortal API token
 SKYPORTAL_TOKEN = config('SKYPORTAL_TOKEN', default=None)
+# SkyPortal group id
+SKYPORTAL_GROUP_ID = config('SKYPORTAL_GROUP_ID', default=3)

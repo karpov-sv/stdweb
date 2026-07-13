@@ -30,7 +30,7 @@ def skyportal_resolve_source(ra, dec, sr=30/3600, api_token=settings.SKYPORTAL_T
     else:
         headers = None
 
-    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources?ra={ra}&dec={dec}&radius={sr}&group_ids=3', headers=headers)
+    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources?ra={ra}&dec={dec}&radius={sr}&group_ids={settings.SKYPORTAL_GROUP_ID}', headers=headers)
 
     if res:
         json = res.json()
@@ -73,7 +73,7 @@ def skyportal_upload_photometry(
         ra=None,
         dec=None,
         altdata=None,
-        group_ids=[3],
+        group_ids=[settings.SKYPORTAL_GROUP_ID],
         origin='stdview',
         api_token=settings.SKYPORTAL_TOKEN
 ):
