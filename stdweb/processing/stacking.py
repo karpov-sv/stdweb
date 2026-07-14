@@ -22,8 +22,8 @@ from .constants import *
 from .utils import *
 
 
-def validate_under_data_path(filenames):
-    """Ensure every stacking input path stays under DATA_PATH.
+def validate_under_data_or_basepath(filenames, basepath):
+    """Ensure every stacking input path stays under DATA_PATH or task's basepath.
 
     Guards against path traversal in user-supplied stack_filenames (which may
     also arrive via the API, bypassing the upload view sanitization).
@@ -33,19 +33,20 @@ def validate_under_data_path(filenames):
     they are in the file browser.
     """
     datapath = os.path.abspath(settings.DATA_PATH)
+    basepath = os.path.abspath(basepath)
 
     for filename in filenames:
         path = os.path.abspath(filename)
-        if path != datapath and not path.startswith(datapath + os.sep):
-            raise RuntimeError(f"Stacking input path is outside of DATA_PATH: {filename}")
+        if path != datapath and path != basepath and not path.startswith(datapath + os.sep) and not path.startswith(basepath + os.sep):
+            raise RuntimeError(f"Stacking input path is outside of DATA_PATH or task path: {filename}")
 
 
-def stack_images(filenames, outname, config, verbose=True):
+def stack_images(filenames, basepath, outname, config, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
     # Safeguard: refuse to read inputs from outside the allowed data directory
-    validate_under_data_path(filenames)
+    validate_under_data_or_basepath(filenames, basepath)
 
     if len(filenames) < 2:
         raise RuntimeError(f"Stacking requires at least 2 images, got {len(filenames)}")
