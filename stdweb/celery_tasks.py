@@ -350,7 +350,7 @@ def task_stacking(self, id, finalize=True):
 
         # Start processing
         try:
-            processing.stack_images(config['stack_filenames'], os.path.join(basepath, 'image.fits'), config, verbose=log)
+            processing.stack_images(config['stack_filenames'], basepath, os.path.join(basepath, 'image.fits'), config, verbose=log)
             task.state = 'stacking_done'
         except:
             import traceback
