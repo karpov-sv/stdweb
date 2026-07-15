@@ -25,7 +25,7 @@
               {% if task.error %}
                 Error: <span class="text-danger">{{ task.error }}
               {% else %}
-                SkyPortal source: <a href="{{ skyportal_url }}/source/{{ task.sid }}" target="_blank">{{ task.sid }}</a>
+                SkyPortal source: <a href="{{ settings.SKYPORTAL_BASE_URL }}/source/{{ task.sid }}" target="_blank">{{ task.sid }}</a>
                 <br>
                 MJD <b>{{ task.mjd|floatformat:6 }}</b>
                 Filter <b>{{ task.filter }}</b> (<b>{{ task.magsys }}</b>)

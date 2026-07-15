@@ -283,6 +283,5 @@ def skyportal(request):
                 tasks.append(ctask)
 
                 context['tasks'] = tasks
-                context['skyportal_url'] = settings.SKYPORTAL_BASE_URL
 
     return TemplateResponse(request, 'skyportal.html', context=context)
