@@ -234,8 +234,15 @@ def task_list(request):
         serializer = TaskCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             task = serializer.save(user=request.user)
-            log_action('task_create', task=task, request=request,
-                       details={'original_name': task.original_name, 'access': 'api', 'source': 'upload'})
+
+            details = {'original_name': task.original_name, 'access': 'api'}
+            if serializer.validated_data.get('local_file'):
+                details['source'] = 'local'
+                details['original_path'] = serializer.validated_data['local_file']
+            else:
+                details['source'] = 'upload'
+
+            log_action('task_create', task=task, request=request, details=details)
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
 

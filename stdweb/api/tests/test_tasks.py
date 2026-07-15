@@ -189,6 +189,100 @@ class TestTaskCreate:
         task = Task.objects.get(id=response.data['id'])
         assert os.path.exists(os.path.join(task.path(), 'extra_mask.fits'))
 
+    def test_create_from_local_file(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """Task can be created from a pre-existing file in the data directory."""
+        import os
+
+        os.makedirs(os.path.join(temp_data_path, 'night1'))
+        with open(os.path.join(temp_data_path, 'night1', 'existing.fits'), 'wb') as f:
+            f.write(b'DUMMY DATA')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'night1/existing.fits'
+        })
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['original_name'] == 'existing.fits'
+
+        task = Task.objects.get(id=response.data['id'])
+        assert task.state == 'uploaded'
+        with open(os.path.join(task.path(), 'image.fits'), 'rb') as f:
+            assert f.read() == b'DUMMY DATA'
+
+    def test_create_from_local_file_with_ext(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """A single FITS extension can be extracted from a local file."""
+        import os
+        import numpy as np
+        from astropy.io import fits
+
+        hdul = fits.HDUList([
+            fits.PrimaryHDU(),
+            fits.ImageHDU(data=np.arange(100.).reshape(10, 10)),
+        ])
+        hdul.writeto(os.path.join(temp_data_path, 'multi.fits'))
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'multi.fits',
+            'ext': 1
+        })
+        assert response.status_code == status.HTTP_201_CREATED
+
+        task = Task.objects.get(id=response.data['id'])
+        data = fits.getdata(os.path.join(task.path(), 'image.fits'))
+        assert data.shape == (10, 10)
+
+    def test_create_from_local_file_invalid_ext(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """Unreadable extension is rejected and the task is not kept."""
+        import os
+
+        with open(os.path.join(temp_data_path, 'existing.fits'), 'wb') as f:
+            f.write(b'NOT A FITS FILE')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'existing.fits',
+            'ext': 5
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert not Task.objects.exists()
+
+    def test_create_from_missing_local_file(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """Nonexistent local file is rejected."""
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'nonexistent.fits'
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_from_local_file_traversal_rejected(self, authenticated_client, temp_tasks_path, temp_data_path, tmp_path):
+        """Paths escaping the data directory are rejected."""
+        secret = tmp_path / 'secret.fits'
+        secret.write_bytes(b'SECRET')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': '../secret.fits'
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_with_both_file_and_local_file_rejected(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """file and local_file are mutually exclusive."""
+        import os
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        with open(os.path.join(temp_data_path, 'existing.fits'), 'wb') as f:
+            f.write(b'DUMMY DATA')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'file': SimpleUploadedFile('upload.fits', b'UPLOAD'),
+            'local_file': 'existing.fits'
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_with_ext_without_local_file_rejected(self, authenticated_client, temp_tasks_path):
+        """ext without local_file is rejected."""
+        response = authenticated_client.post('/api/tasks/', {
+            'original_name': 'new_image.fits',
+            'ext': 1
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_unauthenticated_denied(self, api_client):
         """Unauthenticated requests should be denied."""
         response = api_client.post('/api/tasks/', {

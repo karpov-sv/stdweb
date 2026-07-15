@@ -82,9 +82,15 @@ class TaskSerializer(GroupSharingMixin, serializers.ModelSerializer):
 class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
     """
     Serializer for creating new tasks.
-    Handles file upload and initial configuration.
+    Handles file upload, or copying a pre-existing file from the data
+    directory (``local_file``), and initial configuration.
     """
+    # Optional here despite being required on the model: when omitted it is
+    # derived from the file or local_file basename in create()
+    original_name = serializers.CharField(required=False, max_length=250)
     file = serializers.FileField(write_only=True, required=False)
+    local_file = serializers.CharField(write_only=True, required=False)
+    ext = serializers.IntegerField(write_only=True, required=False)
     preset = serializers.PrimaryKeyRelatedField(
         queryset=Preset.objects.all(),
         required=False,
@@ -105,14 +111,45 @@ class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
             'title',
             'config',
             'file',
+            'local_file',
+            'ext',
             'preset',
             'groups',
         ]
         read_only_fields = ['id']
 
+    def validate_local_file(self, value):
+        """Check that the path points to an existing file inside DATA_PATH."""
+        from django.http import Http404
+        from .views import sanitize_data_path
+
+        try:
+            value = sanitize_data_path(value)
+        except Http404:
+            raise serializers.ValidationError("Invalid path")
+
+        if not os.path.isfile(os.path.join(settings.DATA_PATH, value)):
+            raise serializers.ValidationError("File not found in data directory")
+
+        return value
+
+    def validate(self, attrs):
+        if attrs.get('file') and attrs.get('local_file'):
+            raise serializers.ValidationError(
+                "Provide either 'file' or 'local_file', not both")
+        if attrs.get('ext') is not None and not attrs.get('local_file'):
+            raise serializers.ValidationError(
+                "'ext' may only be used together with 'local_file'")
+        if not attrs.get('original_name') and not attrs.get('file') and not attrs.get('local_file'):
+            raise serializers.ValidationError(
+                "'original_name' is required when no file is provided")
+        return attrs
+
     def create(self, validated_data):
         # Extract file, preset and groups before creating task
         file = validated_data.pop('file', None)
+        local_file = validated_data.pop('local_file', None)
+        ext = validated_data.pop('ext', None)
         preset = validated_data.pop('preset', None)
         groups = validated_data.pop('groups', None)
 
@@ -124,8 +161,11 @@ class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
             validated_data['config'] = preset_config
 
         # Set original_name from file if not provided
-        if file and not validated_data.get('original_name'):
-            validated_data['original_name'] = file.name
+        if not validated_data.get('original_name'):
+            if file:
+                validated_data['original_name'] = file.name
+            elif local_file:
+                validated_data['original_name'] = os.path.basename(local_file)
 
         # Create the task
         task = Task.objects.create(**validated_data)
@@ -152,6 +192,29 @@ class TaskCreateSerializer(GroupSharingMixin, serializers.ModelSerializer):
             with open(filepath, 'wb') as f:
                 for chunk in file.chunks():
                     f.write(chunk)
+            task.state = 'uploaded'
+            task.save()
+
+        # Copy a pre-existing file from the data directory, like the web UI
+        # file browser does; optionally extract a single FITS extension
+        elif local_file:
+            fullpath = os.path.join(settings.DATA_PATH, local_file)
+            filepath = os.path.join(task.path(), 'image.fits')
+
+            if ext is not None:
+                from astropy.io import fits
+                try:
+                    image = fits.getdata(fullpath, ext)
+                    header = fits.getheader(fullpath, ext)
+                except Exception as e:
+                    # Also removes the task directory, via the pre_delete hook
+                    task.delete()
+                    raise serializers.ValidationError(
+                        {'ext': f"Cannot read extension {ext} from {local_file}: {e}"})
+                fits.writeto(filepath, image, header)
+            else:
+                shutil.copyfile(fullpath, filepath)
+
             task.state = 'uploaded'
             task.save()
 

@@ -87,13 +87,22 @@ GET /api/tasks/?query=image&limit=10&offset=20
 POST /api/tasks/
 ```
 
-Create a new task with optional file upload. The `file` may be omitted to create
-a file-less task (e.g. for [stacking](#stacking-tasks), where `image.fits` is
-produced from `config['stack_filenames']` by the `stack` step).
+Create a new task. The image may come from a direct upload (`file`), from a
+pre-existing file in the server's data directory (`local_file`, like the web UI
+file browser), or be omitted entirely to create a file-less task (e.g. for
+[stacking](#stacking-tasks), where `image.fits` is produced from
+`config['stack_filenames']` by the `stack` step).
 
-**Request (multipart/form-data):**
+**Request (multipart/form-data or JSON):**
 - `file` - FITS file to upload (optional)
-- `original_name` - Filename (optional, derived from file if not provided)
+- `local_file` - Path of an existing file, relative to the server's data
+  directory (optional; see [Data Files](#data-files) for browsing it). Mutually
+  exclusive with `file`. The file is copied into the task as `image.fits`.
+- `ext` - FITS extension number to extract from `local_file` (optional; only
+  valid together with `local_file`). When given, only that extension is copied
+  into `image.fits`.
+- `original_name` - Filename (optional, derived from `file` or `local_file` if
+  not provided; required if neither is given)
 - `title` - Optional title/comment
 - `config` - JSON configuration object
 - `preset` - Preset ID to apply (optional)
@@ -107,6 +116,14 @@ curl -X POST /api/tasks/ \
   -H "Authorization: Token <token>" \
   -F "file=@image.fits" \
   -F 'config={"filter":"R","cat_name":"ps1"}'
+```
+
+**Example — from a file already in the data directory:**
+```bash
+curl -X POST /api/tasks/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"local_file":"night1/img_001.fits","config":{"filter":"R"}}'
 ```
 
 To set initial sharing, send a JSON body instead so `groups` is a proper list:
