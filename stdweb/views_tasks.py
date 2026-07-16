@@ -300,7 +300,7 @@ def tasks(request, id=None):
             for i,target in enumerate(task.config['targets']):
                 if os.path.exists(os.path.join(path, f"targets/target_{i:04d}.cutout")):
                     context['target_cutouts'].append(
-                        {'path': f"targets/target_{i:04d}.cutout", 'ra': target['ra'], 'dec': target['dec']}
+                        {'path': f"targets/target_{i:04d}.cutout", 'ra': target.get('ra'), 'dec': target.get('dec')}
                     )
         elif os.path.exists(os.path.join(path, 'target.cutout')):
             # Fallback to legacy path

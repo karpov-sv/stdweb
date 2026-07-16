@@ -701,7 +701,7 @@ The task `config` object accepts these parameters:
 ### Image Inspection
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `target` | string | - | Target name or coordinates |
+| `target` | string | - | Target name, coordinates, or `x=... y=...` pixel position (one target per line) |
 | `time` | string | - | Observation time (ISO format) |
 | `gain` | float | - | Detector gain (e/ADU) |
 | `saturation` | float | - | Saturation level (ADU) |

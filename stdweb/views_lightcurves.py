@@ -79,6 +79,10 @@ def _find_matching_tasks(user, coordinates, extra, targets_only, show_all, radiu
                     is_good = False
                 else:
                     for target in targets:
+                        # Pixel-defined targets may lack sky coordinates until photometry runs
+                        if target.get('ra') is None or target.get('dec') is None:
+                            is_good = False
+                            break
                         if astrometry.spherical_distance(
                                 target['ra'], target['dec'],
                                 ra0, dec0

@@ -586,11 +586,31 @@ def photometry_image(filename, config, verbose=True, show=False):
     if config.get('targets'):
         log("\n---- Primary and secondary targets forced photometry ----\n")
 
+        # Pixel-defined targets have authoritative x/y with sky position (re-)derived
+        # from the refined WCS and stored back to the config, while sky-defined ones
+        # are projected onto the image through it
+        xs,ys = [],[]
+        for i,target in enumerate(config['targets']):
+            if target.get('x') is not None and target.get('y') is not None:
+                target['ra'],target['dec'] = [
+                    float(_) for _ in wcs.all_pix2world(target['x'], target['y'], 0)
+                ]
+                if i == 0:
+                    # Keep backwards-compatible primary target coordinates
+                    config['target_ra'] = target['ra']
+                    config['target_dec'] = target['dec']
+                x,y = target['x'],target['y']
+            else:
+                x,y = wcs.all_world2pix(target['ra'], target['dec'], 0)
+            xs.append(x)
+            ys.append(y)
+
         target_obj = Table({
             'ra': [_['ra'] for _ in config['targets']],
-            'dec': [_['dec'] for _ in config['targets']]
+            'dec': [_['dec'] for _ in config['targets']],
+            'x': xs,
+            'y': ys,
         })
-        target_obj['x'],target_obj['y'] = wcs.all_world2pix(target_obj['ra'], target_obj['dec'], 0)
 
         # Filter out targets outside the image so that photometry routine does not crash
         def is_inside(x, y):

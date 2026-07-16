@@ -49,7 +49,7 @@ class UploadFileForm(forms.Form):
     )
     target = forms.CharField(
         required=False, empty_value=None, label="Target name or coordinates",
-        widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name or coordinates, one per line'})
+        widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name, coordinates, or x=... y=... pixel position, one per line'})
     )
 
     do_inspect = forms.BooleanField(initial=False, required=False, label="Inspection")
@@ -193,7 +193,7 @@ class PrettyJSONEncoder(json.JSONEncoder):
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
     target = forms.CharField(required=False, empty_value=None, label="Target name or coordinates",
-                             widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name or coordinates, one per line'}))
+                             widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name, coordinates, or x=... y=... pixel position, one per line'}))
     time = forms.CharField(max_length=30, required=False, empty_value=None, label="Time")
     gain = forms.FloatField(min_value=0, required=False, label="Gain, e/ADU")
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
