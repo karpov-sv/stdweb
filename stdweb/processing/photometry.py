@@ -387,9 +387,8 @@ def photometry_image(filename, config, verbose=True, show=False):
         # Exclude pre-filtered detections and limit list size
         obj_ast = obj[(obj['flags'] & 0x800) == 0]
 
-        # FIXME: make the order configurable
         wcs1 = pipeline.refine_astrometry(obj_ast, cat_filtered, fwhm*pixscale,
-                                          wcs=wcs, order=config.get('refine_order', 3), method='scamp',
+                                          wcs=wcs, order=config.get('refine_order', 'auto'), method='scamp',
                                           cat_col_mag=config.get('cat_col_mag'),
                                           cat_col_mag_err=config.get('cat_col_mag_err'),
                                           verbose=verbose,
