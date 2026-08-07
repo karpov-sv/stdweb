@@ -302,7 +302,7 @@ def filter_vizier_blends(
                         xidx = vizier_checker_fn(xobj, xcat, catname)
                         xcat = xcat[xidx]
 
-                    cand_idx &= ~np.in1d(obj[col_id], xcat[col_id])
+                    cand_idx &= ~np.isin(obj[col_id], xcat[col_id])
 
         log(
             np.sum(cand_idx),

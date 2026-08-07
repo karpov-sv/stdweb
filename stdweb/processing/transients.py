@@ -98,7 +98,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
                 else:
                     obj1 = Table.read(otherpath)
                     oidx,_,__ = astrometry.spherical_match(obj['ra'], obj['dec'], obj1['ra'], obj1['dec'], 0.5*fwhm*pixscale)
-                    idx = np.in1d(obj['NUMBER'], obj['NUMBER'][oidx])
+                    idx = np.isin(obj['NUMBER'], obj['NUMBER'][oidx])
                     obj = obj[idx]
                     log(f"Task {other}: {len(obj1)} objects, {len(obj)} matches")
 
