@@ -111,6 +111,80 @@
      }
    });
 
+   // Annotate the template selector with the survey coverage of the field, so
+   // that the user does not try to subtract with a template that is just not
+   // there. The check is approximate and never disables anything.
+   var template_coverage = null;
+
+   show_template_coverage = function(){
+     var note = $('#template_coverage_note');
+
+     if(!template_coverage || !note.length)
+       return;
+
+     var info = template_coverage[$('#id_template').find(":selected").val()];
+
+     if(!info || !info.message){
+       note.hide();
+       return;
+     }
+
+     var cls = {
+       'ok': 'text-success',
+       'partial': 'text-warning',
+       'none': 'text-danger',
+       'nofilter': 'text-danger'
+     }[info.status];
+
+     if(!cls){
+       note.hide();
+       return;
+     }
+
+     note.attr('class', 'form-text mt-0 mb-2 ' + cls).text(info.message).show();
+   }
+
+   $(function(){
+     var select = $('#id_template');
+
+     if(!select.length)
+       return;
+
+     $.ajax({
+       url: "{% url 'task_template_coverage' task.id %}",
+       dataType: "json",
+       timeout: 30000,
+
+       success: function(json){
+         if(!json.success || !json.coverage)
+           return;
+
+         template_coverage = json.coverage;
+
+         var suffixes = {
+           'partial': function(info){ return ' - partial (' + Math.round(100*info.fraction) + '%)'; },
+           'none': function(info){ return ' - not covered'; },
+           'nofilter': function(info){ return ' - no matching filter'; }
+         };
+
+         select.find('option').each(function(){
+           var info = template_coverage[$(this).val()];
+
+           if(info && suffixes[info.status])
+             $(this).text($(this).text() + suffixes[info.status](info));
+         });
+
+         // Place the note after the whole row, not inside the column - the row is
+         // bottom-aligned, so an extra element inside would shift the field up
+         $('<div id="template_coverage_note" class="form-text mt-0 mb-2"></div>')
+           .insertAfter($('#div_id_template').closest('.row'));
+         show_template_coverage();
+       }
+     });
+
+     select.on('change', show_template_coverage);
+   });
+
    {% if not task.config.target_ra and not task.config.target_dec %}
    $(function(){
      // Disable target photometry radio button

@@ -18,6 +18,8 @@ from .constants import *
 from .utils import *
 # Catalog functions
 from .catalogs import *
+# Template coverage checks
+from .coverage import *
 
 # Main processing functions
 from .inspect import *

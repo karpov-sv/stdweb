@@ -9,6 +9,7 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.core.cache import cache
 
 import os, glob, shutil
 import json
@@ -830,6 +831,43 @@ def task_state(request, id):
             result['log_html'] = task_file_contents(task, log_file, highlight=True)
 
     return JsonResponse(result)
+
+
+def task_template_coverage(request, id):
+    """AJAX endpoint reporting whether the task field is covered by the templates."""
+    task = get_object_or_404(models.Task, id=id)
+
+    if not task.can_view(request.user):
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    basepath = task.path()
+    filename = os.path.join(basepath, 'image.fits')
+
+    if not os.path.exists(filename):
+        return JsonResponse({'success': False, 'error': 'No image'}, status=404)
+
+    # The result depends on the field and the filter only, so it may be cached
+    key = f"task_template_coverage:{task.id}:{task.config.get('filter')}:{os.path.getmtime(filename)}"
+    result = cache.get(key)
+
+    if result is None:
+        try:
+            header = fits.getheader(filename, -1)
+            wcs = processing.get_wcs(filename, header=header, verbose=False)
+
+            if wcs is None or not wcs.is_celestial:
+                return JsonResponse({'success': False, 'error': 'No WCS'}, status=404)
+
+            result = processing.get_all_template_coverage(
+                wcs, (header['NAXIS2'], header['NAXIS1']),
+                filter_name=task.config.get('filter')
+            )
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+        cache.set(key, result, 24*3600)
+
+    return JsonResponse({'success': True, 'coverage': result})
 
 
 @require_POST

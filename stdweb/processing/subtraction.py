@@ -24,31 +24,8 @@ from stdpipe import resolve, utils, artefacts
 from .constants import *
 from .utils import *
 from .catalogs import *
+from .coverage import *
 from .photometry import *
-
-
-# Human-readable names of the survey tiles
-survey_cell_names = {'ps1': 'skycells', 'ls': 'bricks'}
-
-
-def get_survey_cells(survey, wcs, shape, band=None):
-    """
-    Get the list of survey (Pan-STARRS or Legacy Survey) tiles overlapping the
-    footprint of the image defined by its WCS and shape.
-
-    Returns None if the coverage may not be checked for some reason, so that the
-    caller may fall back to a generic error message.
-    """
-
-    try:
-        ra0, dec0, sr0 = astrometry.get_frame_center(wcs=wcs, width=shape[1], height=shape[0])
-
-        return templates.find_skycells(
-            ra0, dec0, sr0, band=band, survey=survey,
-            wcs=wcs, width=shape[1], height=shape[0]
-        )
-    except Exception:
-        return None
 
 
 def subtract_image(filename, config, verbose=True, show=False):
