@@ -56,7 +56,7 @@ supported_catalogs_transients = {
 supported_templates = {
     'custom': {'name': 'Custom template'},
     'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},
-    'ls': {'name': 'Legacy Survey DR10', 'filters': {'g', 'r', 'i', 'z'}},
+    'ls': {'name': 'Legacy Survey DR11', 'filters': {'g', 'r', 'i', 'z'}},
     'skymapper': {'name': 'SkyMapper DR4 (HiPS)', 'filters': {
         'u': 'CDS/P/skymapper-U', # DR1 fallback
         'g': 'CDS/P/Skymapper/DR4/g',

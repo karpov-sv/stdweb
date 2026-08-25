@@ -26,10 +26,15 @@ survey_cell_radii = {'ps1': 0.3, 'ls': 0.186}
 moc_cache_time = 7*24*3600
 
 
-def get_survey_cells(survey, wcs, shape, band=None):
+def get_survey_cells(survey, wcs, shape, band=None, ext='image'):
     """
     Get the list of survey (Pan-STARRS or Legacy Survey) tiles overlapping the
     footprint of the image defined by its WCS and shape.
+
+    Legacy Survey bricks are not all observed in all the bands, and STDPipe
+    skips the ones with no data in the requested one, so the result depends on
+    the band. Use :func:`has_survey_cells_any_band` to tell a band gap from a
+    genuinely uncovered field.
 
     Returns None if the coverage may not be checked for some reason, so that the
     caller may fall back to a generic error message.
@@ -39,11 +44,25 @@ def get_survey_cells(survey, wcs, shape, band=None):
         ra0, dec0, sr0 = astrometry.get_frame_center(wcs=wcs, width=shape[1], height=shape[0])
 
         return templates.find_skycells(
-            ra0, dec0, sr0, band=band, survey=survey,
+            ra0, dec0, sr0, band=band, ext=ext, survey=survey,
             wcs=wcs, width=shape[1], height=shape[0]
         )
     except Exception:
         return None
+
+
+def has_survey_cells_any_band(survey, wcs, shape):
+    """
+    Whether any survey tiles overlap the field, irrespective of the bands they
+    are covered in.
+
+    Legacy Survey masks are common for all the bands, so requesting them is the
+    way to check the coverage with no band filtering applied.
+    """
+
+    cells = get_survey_cells(survey, wcs, shape, ext='mask')
+
+    return cells is not None and len(cells) > 0
 
 
 # Lazily loaded centers of the survey tiles, keyed by survey name
@@ -142,7 +161,7 @@ def get_template_coverage(tname, wcs, shape, filter_name=None):
 
     Returns the dict with the following fields:
 
-    - `status` - one of `ok`, `partial`, `none`, `nofilter` or `unknown`
+    - `status` - one of `ok`, `partial`, `none`, `noband`, `nofilter` or `unknown`
     - `fraction` - estimated fraction of the image covered by the template, or None
     - `filter` - template filter that will be used for the image one
     - `message` - human-readable summary of the result
@@ -163,6 +182,8 @@ def get_template_coverage(tname, wcs, shape, filter_name=None):
         result['message'] = f"{tconf['name']} has no filter matching {filter_name}"
         return result
 
+    noband = False
+
     try:
         ra,dec = sample_footprint(wcs, shape)
 
@@ -176,7 +197,17 @@ def get_template_coverage(tname, wcs, shape, filter_name=None):
             if not len(cells):
                 # Authoritative check - STDPipe will not find anything to download
                 fraction = 0
-                result['message'] = f"No {tconf['name']} {cellname} overlap the field"
+
+                if tfilter and has_survey_cells_any_band(tname, wcs, shape):
+                    # The tiles do overlap the field, they just have no data in this
+                    # band - most notably, Legacy Survey has no i band in the north
+                    noband = True
+                    result['message'] = (
+                        f"{tconf['name']} covers the field, "
+                        f"but has no data in {tfilter} band there"
+                    )
+                else:
+                    result['message'] = f"No {tconf['name']} {cellname} overlap the field"
             else:
                 # Estimate the covered fraction from the distances to the tile centers
                 cell_ra, cell_dec = get_survey_cell_centers(tname)
@@ -216,7 +247,7 @@ def get_template_coverage(tname, wcs, shape, filter_name=None):
         result['fraction'] = fraction
 
         if fraction <= 0:
-            result['status'] = 'none'
+            result['status'] = 'noband' if noband else 'none'
         elif fraction < 0.9:
             result['status'] = 'partial'
             result['message'] = f"{tconf['name']} covers only {100*fraction:.0f}% of the field"

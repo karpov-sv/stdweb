@@ -133,6 +133,7 @@
        'ok': 'text-success',
        'partial': 'text-warning',
        'none': 'text-danger',
+       'noband': 'text-danger',
        'nofilter': 'text-danger'
      }[info.status];
 
@@ -164,6 +165,7 @@
          var suffixes = {
            'partial': function(info){ return ' - partial (' + Math.round(100*info.fraction) + '%)'; },
            'none': function(info){ return ' - not covered'; },
+           'noband': function(info){ return ' - no ' + info.filter + ' band data'; },
            'nofilter': function(info){ return ' - no matching filter'; }
          };
 

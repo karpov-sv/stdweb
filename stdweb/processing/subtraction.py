@@ -129,6 +129,14 @@ def subtract_image(filename, config, verbose=True, show=False):
                 ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, shape=image.shape)
 
                 if not len(cells):
+                    if has_survey_cells_any_band(tname, wcs, image.shape):
+                        # The tiles are there, they just have no data in this band
+                        raise RuntimeError(
+                            f"The field at RA={ra0:.4f} Dec={dec0:.4f} with radius {sr0:.3f} deg "
+                            f"is covered by {tconf['name']}, but has no data in {tfilter} band there. "
+                            "Please select a different filter or template."
+                        )
+
                     raise RuntimeError(
                         f"The field at RA={ra0:.4f} Dec={dec0:.4f} with radius {sr0:.3f} deg "
                         f"is not covered by {tconf['name']} - no survey {cellname} overlap it. "
@@ -208,7 +216,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 if tname == 'ps1':
                     tmask = tmask > 0
                 elif tname == 'ls':
-                    # Bitmask for a given band, as described at https://www.legacysurvey.org/dr10/bitmasks/
+                    # Bitmask for a given band, as described at https://www.legacysurvey.org/dr11/bitmasks/
                     imask = 0x0000
                     imask |= 0x0001 # not primary brick area
                     # imask |= 0x0002 # bright star nearby
@@ -240,6 +248,13 @@ def subtract_image(filename, config, verbose=True, show=False):
                 cellname = survey_cell_names.get(tname, 'skycells')
 
                 if cells is not None and not len(cells):
+                    if has_survey_cells_any_band(tname, wcs1, image1.shape):
+                        # The tiles are there, they just have no data in this band
+                        raise RuntimeError(
+                            f"Sub-image {i} is covered by {tconf['name']}, but has no data in "
+                            f"{tfilter} band there. Please select a different filter or template."
+                        )
+
                     raise RuntimeError(
                         f"Sub-image {i} is not covered by {tconf['name']} - "
                         f"no survey {cellname} overlap it. Please select a different template."
