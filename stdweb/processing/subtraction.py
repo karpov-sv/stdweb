@@ -27,6 +27,30 @@ from .catalogs import *
 from .photometry import *
 
 
+# Human-readable names of the survey tiles
+survey_cell_names = {'ps1': 'skycells', 'ls': 'bricks'}
+
+
+def get_survey_cells(survey, wcs, shape, band=None):
+    """
+    Get the list of survey (Pan-STARRS or Legacy Survey) tiles overlapping the
+    footprint of the image defined by its WCS and shape.
+
+    Returns None if the coverage may not be checked for some reason, so that the
+    caller may fall back to a generic error message.
+    """
+
+    try:
+        ra0, dec0, sr0 = astrometry.get_frame_center(wcs=wcs, width=shape[1], height=shape[0])
+
+        return templates.find_skycells(
+            ra0, dec0, sr0, band=band, survey=survey,
+            wcs=wcs, width=shape[1], height=shape[0]
+        )
+    except Exception:
+        return None
+
+
 def subtract_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -117,6 +141,24 @@ def subtract_image(filename, config, verbose=True, show=False):
         template_gain = 10000 # Assume effectively noise-less
 
         log(f"Using {tconf['name']} in filter {tfilter} as a template")
+
+        if tname in ['ps1', 'ls']:
+            # Check the survey footprint before doing anything else, so that the
+            # user immediately knows that the field is just not covered by it
+            cells = get_survey_cells(tname, wcs, image.shape, band=tfilter)
+            cellname = survey_cell_names.get(tname, 'skycells')
+
+            if cells is not None:
+                ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, shape=image.shape)
+
+                if not len(cells):
+                    raise RuntimeError(
+                        f"The field at RA={ra0:.4f} Dec={dec0:.4f} with radius {sr0:.3f} deg "
+                        f"is not covered by {tconf['name']} - no survey {cellname} overlap it. "
+                        "Please select a different template."
+                    )
+
+                log(f"{len(cells)} {tconf['name']} {cellname} overlap the image")
 
     sub_size = config.get('sub_size', 1000)
     sub_overlap = config.get('sub_overlap', 50)
@@ -217,7 +259,22 @@ def subtract_image(filename, config, verbose=True, show=False):
 
                 tmask |= np.isnan(tmpl)
             else:
-                raise RuntimeError(f"Error getting the template from {tconf['name']}")
+                cells = get_survey_cells(tname, wcs1, image1.shape, band=tfilter)
+                cellname = survey_cell_names.get(tname, 'skycells')
+
+                if cells is not None and not len(cells):
+                    raise RuntimeError(
+                        f"Sub-image {i} is not covered by {tconf['name']} - "
+                        f"no survey {cellname} overlap it. Please select a different template."
+                    )
+                elif cells is not None:
+                    raise RuntimeError(
+                        f"No {tconf['name']} data available for sub-image {i} in filter {tfilter} - "
+                        f"{len(cells)} {cellname} overlap it, but none of them could be retrieved. "
+                        "The region may not be observed in this filter, or the downloads failed."
+                    )
+                else:
+                    raise RuntimeError(f"Error getting the template from {tconf['name']}")
 
         elif tname == 'custom':
             log("Re-projecting custom template onto sub-image")
@@ -236,15 +293,24 @@ def subtract_image(filename, config, verbose=True, show=False):
             if tmpl is not None:
                 tmask = np.isnan(tmpl)
             else:
-                raise RuntimeError(f"Error getting the template from {tconf['name']}")
+                raise RuntimeError(
+                    f"Error getting the template from {tconf['name']} HiPS server - "
+                    "the field may not be covered by this survey"
+                )
 
         # Bail out early if the template does not cover the sub-image, otherwise
         # SExtractor would fail downstream on a fully-masked image
-        if not np.any(~tmask):
+        tcoverage = np.sum(~tmask) / tmask.size
+
+        if tcoverage <= 0:
             raise RuntimeError(
-                f"Template does not overlap sub-image {i} - "
-                "check that the template WCS matches the science image"
+                f"{tconf['name'] if tconf else 'Template'} does not cover sub-image {i} - "
+                "all its pixels are empty or masked. Please select a different template."
             )
+        elif tcoverage < 0.9:
+            log(f"Warning: template covers only {100*tcoverage:.1f}% of the sub-image")
+        else:
+            log(f"Template covers {100*tcoverage:.1f}% of the sub-image")
 
         # Estimate template FWHM
         tobj,tsegm = photometry.get_objects_sextractor(
