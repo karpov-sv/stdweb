@@ -33,6 +33,7 @@ from . import forms
 from . import models
 from .action_logging import log_action
 from . import celery_tasks
+from .processing import describe_object_flags
 
 
 def index(request):
@@ -640,10 +641,20 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
             if request.GET.get('radius'+_, None) is not None:
                 opts['mark_r'+_] = float(request.GET.get('radius'+_))
 
+    title = []
+
     if 'mag_calib_err' in cutout['meta'] or 'magerr' in cutout['meta']:
         magerr = cutout['meta'].get('mag_calib_err', cutout['meta'].get('magerr'))
         if magerr is not None:
-            opts['additional_title'] = f"S/N = {1/magerr:.2f}"
+            title.append(f"S/N = {1/magerr:.2f}")
+
+    # Flags tell why the photometry above may not be trustworthy
+    flags = describe_object_flags(cutout['meta'].get('flags'))
+    if flags:
+        title.append(flags)
+
+    if title:
+        opts['additional_title'] = ' | '.join(title)
 
     if request.GET.get('adjust'):
         planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']

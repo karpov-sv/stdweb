@@ -136,6 +136,41 @@ filter_ab_offset = {
 }
 
 
+# Object flags set by SExtractor and STDPipe during the photometry, and by the
+# pre-filtering step. Note that 0x800 is also used by STDPipe optimal extraction to
+# report a failure, so it is only unambiguous when optimal extraction is disabled.
+object_flags = {
+    0x0001: 'bad pixels',
+    0x0002: 'deblended',
+    0x0004: 'saturated',
+    0x0008: 'edge',
+    0x0010: 'incomplete',
+    0x0020: 'iso incomplete',
+    0x0040: 'deblend overflow',
+    0x0080: 'extract overflow',
+    0x0100: 'masked footprint',
+    0x0200: 'masked aperture',
+    0x0400: 'bad position',
+    0x0800: 'prefiltered',
+    0x1000: 'bad fit',
+    0x2000: 'moved',
+}
+
+
+def describe_object_flags(flags):
+    """Return a human readable, comma separated list of the object flags that are set."""
+    if not flags:
+        return ''
+
+    names = [name for bit,name in object_flags.items() if int(flags) & bit]
+    unknown = int(flags) & ~sum(object_flags.keys())
+
+    if unknown:
+        names.append(f"0x{unknown:x}")
+
+    return ', '.join(names)
+
+
 # Files created at every step
 
 files_inspect = [

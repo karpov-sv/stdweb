@@ -141,6 +141,7 @@ Parameters for catalog-based transient detection (`transients_simple_image()`).
 |-----------|------|---------|-------------|
 | `simple_mag_diff` | float | 2.0 | Magnitude difference threshold for rejecting catalog matches. Objects within this many magnitudes of a catalog star are rejected. Set to 0 to reject all matches. |
 | `simple_prefilter` | bool | True | Reject detections flagged by isolation forest pre-filter. |
+| `simple_saturated` | bool | True | Keep saturated detections as transient candidates. They are real sources with unreliable (lower limit) photometry, and rejecting them loses the brightest transients. |
 | `simple_blends` | bool | True | Reject detections near blended catalog stars. |
 | `simple_skybot` | bool | True | Query SkyBoT to reject known solar system objects. |
 | `simple_others` | str | '' | Space-separated task IDs to cross-check detections against. Detections present in other tasks are rejected. |

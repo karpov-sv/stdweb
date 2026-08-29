@@ -350,6 +350,7 @@ class TaskTransientsSimpleForm(forms.Form):
     simple_sr0 = forms.FloatField(initial=None, min_value=0, required=False, label="Radius, deg")
     simple_blends = forms.BooleanField(initial=True, required=False, label="Reject blends")
     simple_prefilter = forms.BooleanField(initial=True, required=False, label="Reject prefiltered")
+    simple_saturated = forms.BooleanField(initial=True, required=False, label="Keep saturated")
     simple_mag_diff = forms.FloatField(initial=2, min_value=0, required=False, label="Minimal mag difference")
 
     def __init__(self, *args, **kwargs):
@@ -372,6 +373,7 @@ class TaskTransientsSimpleForm(forms.Form):
                 Column('simple_skybot', css_class="col-md-auto"),
                 Column('simple_blends', css_class="col-md-auto"),
                 Column('simple_prefilter', css_class="col-md-auto"),
+                Column('simple_saturated', css_class="col-md-auto"),
             ),
         )
 

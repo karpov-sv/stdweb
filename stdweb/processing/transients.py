@@ -115,6 +115,17 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     else:
         log("Will reject pre-filtered detections")
 
+    if config.get('simple_saturated', True):
+        # Saturated stars are real sources that are merely badly measured, and rejecting
+        # them loses exactly the brightest transients. Their masked cores also raise the
+        # aperture mask flag, so we have to tolerate it as well - but only where the
+        # saturation is what caused it, and not a cosmic ray or the user mask
+        flagmask -= 0x004 + 0x200
+        idx = ((obj['flags'] & 0x200) == 0) | ((obj['flags'] & 0x004) > 0)
+        nsaturated = np.sum((obj['flags'][idx] & 0x004) > 0)
+        obj = obj[idx]
+        log(f"Will keep {nsaturated} saturated detections, their photometry is a lower limit")
+
     if config.get('simple_mag_diff', 2.0):
         log(f"Will only keep matches brighter than catalogue by {config.get('simple_mag_diff', 2.0):.2f} mags")
     else:
@@ -133,19 +144,26 @@ def transients_simple_image(filename, config, verbose=True, show=False):
             cat_col_mag, cat_col_mag_err = guess_catalogue_mag_columns(fname, xcat)
 
             if cat_col_mag is not None:
-                mag = xobj['mag_calib']
+                # Plain arrays with NaNs for the missing values - the catalogue columns
+                # are routinely masked, and np.nanmedian below is not mask aware, so a
+                # masked array here silently poisons the whole comparison
+                mag = np.ma.filled(np.ma.masked_array(xobj['mag_calib']).astype(float), np.nan)
+                cmag = np.ma.filled(np.ma.masked_array(xcat[cat_col_mag]).astype(float), np.nan)
+
                 if fname in ['U', 'B', 'V', 'R', 'I', 'J', 'H', 'Ks'] and cat_col_mag not in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag']:
                     # Convert to AB mags if using AB reference catalogue
-                    mag += filter_ab_offset.get(fname, 0)
+                    mag = mag + filter_ab_offset.get(fname, 0)
 
-                diff = mag - xcat[cat_col_mag]
+                diff = mag - cmag
 
-                if len(diff[np.isfinite(diff)]) > 10:
+                if np.sum(np.isfinite(diff)) > 10:
                     # Adjust zeropoint
                     diff -= np.nanmedian(diff)
 
                 # TODO: take errors into account?..
-                xidx = diff > -config.get('simple_mag_diff', 2.0)
+                # Matches we may not check are kept as real ones, so that the candidate
+                # is rejected the same way it would be without the magnitude comparison
+                xidx = ~(diff <= -config.get('simple_mag_diff', 2.0))
 
         return xidx
 
