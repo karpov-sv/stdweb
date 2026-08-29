@@ -45,8 +45,25 @@ def guess_hips_survey(ra, dec, filter_name='R'):
     return survey
 
 
-def guess_vizier_catalogues(ra, dec):
+def guess_vizier_catalogues(ra, dec, filter_name=None):
+    """Vizier catalogues to check the transient candidates against.
+
+    Gaia is always there, being the deepest all-sky one, and the rest are added by the
+    sky position. When `filter_name` is known, the catalogues actually covering that
+    band are added too, so that the candidate magnitudes are compared against a similar
+    band instead of a distant proxy - Gaia eDR3 alone would have to stand in for the
+    near infrared with its G magnitude.
+    """
     vizier = ['gaiaedr3'] # All-sky
+
+    if filter_name in ['J', 'H', 'Ks']:
+        vizier.append('2mass') # All-sky, and the only one Gaia may not stand in for
+
+        if dec < 0:
+            vizier.append('vhs')
+    else:
+        # Synthetic photometry in the proper bands, much shallower than Gaia itself
+        vizier.append('gaiadr3syn')
 
     if dec > -30:
         vizier.append('ps1')
@@ -121,6 +138,55 @@ def guess_catalogue_mag_columns(fname, cat, augmented_only=False):
     return cat_col_mag, cat_col_mag_err
 
 
+def filters_by_distance(fname):
+    """Return the known filters ordered by how close they are to `fname` in wavelength.
+
+    The distance is measured in log scale, as the bands span more than a decade.
+    """
+    if fname not in filter_wavelengths:
+        return sorted(filter_wavelengths, key=lambda _: filter_wavelengths[_])
+
+    return sorted(
+        filter_wavelengths,
+        key=lambda _: abs(np.log(filter_wavelengths[_] / filter_wavelengths[fname]))
+    )
+
+
+def guess_catalogue_mags_any(cat, fname=None):
+    """Return the catalogue magnitudes for the band closest to `fname` that is actually
+    usable for every individual entry, along with the column every value came from.
+
+    Looking up a single column is not enough, as the catalogues are routinely incomplete:
+    about a third of the Pan-STARRS entries have no r magnitude while having i or g. An
+    entry whose magnitude we may not compare is an entry whose candidate gets rejected,
+    so we keep looking in the neighbouring bands instead of giving up on it.
+
+    The bands sit at different offsets from our instrumental system, so the caller has to
+    bring them together - the returned column names tell which values belong together.
+    """
+    mags = np.full(len(cat), np.nan)
+    cols = np.full(len(cat), '', dtype=object)
+    seen = set()
+
+    for fname1 in filters_by_distance(fname):
+        if np.all(np.isfinite(mags)):
+            break
+
+        cat_col_mag,_ = guess_catalogue_mag_columns(fname1, cat)
+
+        if cat_col_mag is None or cat_col_mag in seen:
+            continue
+
+        seen.add(cat_col_mag)
+        values = _column_values(cat[cat_col_mag])
+        idx = ~np.isfinite(mags) & np.isfinite(values)
+
+        mags[idx] = values[idx]
+        cols[idx] = cat_col_mag
+
+    return mags, cols
+
+
 def guess_catalogue_mag_columns_all(cat_name, cat):
     """Return the (magnitude, magnitude error) column pairs for every filter the
     catalogue is known to provide, so that they may all be kept consistent."""
@@ -130,41 +196,58 @@ def guess_catalogue_mag_columns_all(cat_name, cat):
     ]
 
 
-def guess_catalogue_radec_columns(cat):
+def guess_catalogue_radec_columns(cat, exclude=None):
+    """Guess the columns holding the catalogue coordinates.
+
+    `exclude` lists the columns belonging to the objects the catalogue was cross-matched
+    with. XMatch keeps them under their original names and renames the clashing
+    catalogue ones, so without it the object positions would be taken for the catalogue
+    ones - which for Gaia, whose columns are named just `ra` and `dec`, silently
+    collapses every match onto the object it was matched to.
+    """
     cat_col_ra = None
     cat_col_dec = None
 
+    exclude = exclude or []
+
+    def has(*names):
+        return all(_ in cat.keys() and _ not in exclude for _ in names)
+
     # Find relevant coordinate columns
-    if 'RAJ2000' in cat.keys():
+    if has('RAJ2000', 'DEJ2000'):
         cat_col_ra = 'RAJ2000'
         cat_col_dec = 'DEJ2000'
 
-    elif '_RAJ2000' in cat.keys():
+    elif has('_RAJ2000', '_DEJ2000'):
         cat_col_ra = '_RAJ2000'
         cat_col_dec = '_DEJ2000'
 
-    elif 'RA_ICRS' in cat.keys():
+    elif has('RA_ICRS', 'DE_ICRS'):
         cat_col_ra = 'RA_ICRS'
         cat_col_dec = 'DE_ICRS'
 
     # SkyMapper 1.1
-    elif 'RAICRS' in cat.keys():
+    elif has('RAICRS', 'DEICRS'):
         cat_col_ra = 'RAICRS'
         cat_col_dec = 'DEICRS'
 
     # SkyMapper 4
-    elif 'RAdeg' in cat.keys():
+    elif has('RAdeg', 'DEdeg'):
         cat_col_ra = 'RAdeg'
         cat_col_dec = 'DEdeg'
 
-    # cross-match with Gaia eDR3
-    elif 'ra' in cat.keys():
-        cat_col_ra = 'ra'
-        cat_col_dec = 'dec'
+    # cross-match with Gaia eDR3, where XMatch had to rename the clashing columns
+    elif has('ra2', 'dec2'):
+        cat_col_ra = 'ra2'
+        cat_col_dec = 'dec2'
 
-    elif 'ra_2' in cat.keys():
+    elif has('ra_2', 'dec_2'):
         cat_col_ra = 'ra_2'
         cat_col_dec = 'dec_2'
+
+    elif has('ra', 'dec'):
+        cat_col_ra = 'ra'
+        cat_col_dec = 'dec'
 
     # else:
     #     raise RuntimeError(f"Cannot find coordinate columns for the catalogue")
@@ -515,7 +598,9 @@ def filter_vizier_blends(
         if fname is not None:
             # Find relevant magnitude and coordinate columns
             cat_col_mag,cat_col_mag_err = guess_catalogue_mag_columns(fname, xcat)
-            cat_col_ra,cat_col_dec = guess_catalogue_radec_columns(xcat)
+            cat_col_ra,cat_col_dec = guess_catalogue_radec_columns(
+                xcat, exclude=[obj_col_ra, obj_col_dec]
+            )
 
             if cat_col_ra is None:
                 log("Cannot guess catalogue coordinate columns, skipping")

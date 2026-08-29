@@ -28,6 +28,28 @@ supported_filters = {
     'Ks': {'name':'2MASS Ks', 'aliases':['K']},
 }
 
+# Approximate effective wavelengths in nm, used to pick the band closest to the one we
+# need when a catalogue does not provide it
+filter_wavelengths = {
+    'u': 354,
+    'U': 365,
+    'B': 445,
+    'g': 477,
+    'BP': 511,
+    'V': 551,
+    'G': 622,
+    'r': 623,
+    'R': 658,
+    'i': 762,
+    'RP': 777,
+    'I': 806,
+    'z': 913,
+    'y': 962,
+    'J': 1235,
+    'H': 1662,
+    'Ks': 2159,
+}
+
 supported_catalogs = {
     'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'u', 'g', 'r', 'i', 'z', 'y'],
                    'limit': 'rmag'},

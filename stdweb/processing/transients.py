@@ -10,7 +10,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.time import Time
 
-from stdpipe import astrometry, cutouts, templates, pipeline
+from stdpipe import astrometry, catalogs, cutouts, templates, pipeline
 from stdpipe import resolve, utils
 
 from .constants import *
@@ -105,7 +105,7 @@ def transients_simple_image(filename, config, verbose=True, show=False):
         log(f"{len(obj)} objects after cross-checking")
 
     # Vizier catalogues to check
-    vizier = guess_vizier_catalogues(ra0, dec0)
+    vizier = guess_vizier_catalogues(ra0, dec0, filter_name=config.get('filter'))
     log(f"Will check Vizier catalogues: {' '.join(vizier)}")
 
     # Filter based on flags and Vizier catalogs
@@ -131,34 +131,126 @@ def transients_simple_image(filename, config, verbose=True, show=False):
     else:
         log("Will reject all positional matches")
 
+    # Colour term from the photometric calibration. Candidate magnitudes are measured in
+    # the instrumental system, which is offset from the catalogue one by it, so applying
+    # it to the catalogue magnitudes makes the two directly comparable
+    color_term = None
+    color_fnames = []
+
+    if config.get('simple_color_term', True) and len(obj) and 'mag_color_term' in obj.colnames:
+        value = np.ma.filled(np.ma.masked_array(obj['mag_color_term'][:1]).astype(float), np.nan)[0]
+        for cname in [config.get('cat_col_color_mag1'), config.get('cat_col_color_mag2')]:
+            if cname and cname.endswith('mag'):
+                color_fnames.append(cname[:-3])
+
+        if np.isfinite(value) and value and len(color_fnames) == 2:
+            color_term = value
+            log(f"Will apply {color_term:.3f} colour term over "
+                f"({color_fnames[0]} - {color_fnames[1]}) to catalogue magnitudes")
+
+    # Filter name the calibration was done in
+    fname = config.get('cat_col_mag')
+    if fname.endswith('mag'):
+        fname = fname[:-3]
+
+    def catalogue_diff(omag, xcat):
+        """Difference between the instrumental magnitudes and the catalogue ones, taken
+        in the closest usable band for every entry separately, before the per band zero
+        points are removed. Also returns the column every value came from."""
+        cmag,ccols = guess_catalogue_mags_any(xcat, fname)
+
+        used = sorted(set(ccols) - {''})
+
+        if used and (fname in ['U', 'B', 'V', 'R', 'I', 'J', 'H', 'Ks']
+                     and not any(_ in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag'] for _ in used)):
+            # Convert to AB mags if using AB reference catalogue
+            omag = omag + filter_ab_offset.get(fname, 0)
+
+        if color_term:
+            # The colours of the matched stars are known, so we may predict what they
+            # would be in the instrumental system. A catalogue providing only an
+            # approximation of the colour still removes most of the trend
+            c1,_ = guess_catalogue_mag_columns(color_fnames[0], xcat)
+            c2,_ = guess_catalogue_mag_columns(color_fnames[1], xcat)
+
+            if c1 is not None and c2 is not None and c1 != c2:
+                color = (np.ma.filled(np.ma.masked_array(xcat[c1]).astype(float), np.nan) -
+                         np.ma.filled(np.ma.masked_array(xcat[c2]).astype(float), np.nan))
+                # Entries with no colour keep their plain magnitude. Merged blends are
+                # exactly such entries, and a NaN here would silently turn every one of
+                # them into a real star, rejecting the candidate it stands for
+                idx = np.isfinite(color)
+                cmag[idx] = cmag[idx] - color_term*color[idx]
+
+        return omag - cmag, ccols, used
+
+    # Zero points between our instrumental magnitudes and every catalogue band. They have
+    # to be measured on a representative sample of objects - the checker below only sees
+    # the candidates that survived the previous catalogues, and by the last one there may
+    # be a couple of them left, all of them potential transients whose own magnitudes
+    # must not define the zero point. The bands differ by several magnitudes, so getting
+    # this wrong is worse than not comparing at all
+    cat_zero = {}
+    sample = obj[(obj['flags'] == 0) & np.isfinite(np.ma.filled(obj['mag_calib'], np.nan))]
+
+    if config.get('simple_mag_diff', 2.0) and len(sample) > 10:
+        sample = sample[:1000]
+        smag = np.ma.filled(np.ma.masked_array(sample['mag_calib']).astype(float), np.nan)
+        stab = sample['ra', 'dec'].copy()
+        stab['stdpipe_id'] = np.arange(len(stab))
+
+        for catname in vizier or []:
+            try:
+                scat = catalogs.xmatch_objects(
+                    stab, catname, 0.5*fwhm*pixscale, col_ra='ra', col_dec='dec'
+                )
+            except Exception as e:
+                log(f"Cannot measure {catname} zero points: {e}")
+                continue
+
+            if scat is None or not len(scat):
+                continue
+
+            sdiff,scols,_ = catalogue_diff(smag[np.asarray(scat['stdpipe_id'], dtype=int)], scat)
+            zero = {}
+
+            for col in sorted(set(scols) - {''}):
+                idx = (scols == col) & np.isfinite(sdiff)
+                if np.sum(idx) > 10:
+                    zero[col] = np.median(sdiff[idx])
+
+            if zero:
+                cat_zero[catname] = zero
+                log(f"{catname} zero points from {len(scat)} matches: "
+                    + ', '.join(f"{_} {zero[_]:+.2f}" for _ in sorted(zero)))
+
     # Cross-match checker
     def checker_fn(xobj, xcat, catname):
         xidx = np.ones_like(xobj, dtype=bool)
 
         if config.get('simple_mag_diff', 2.0):
-            # Get filter used for photometric calibration
-            fname = config.get('cat_col_mag')
-            if fname.endswith('mag'):
-                fname = fname[:-3]
+            mag = np.ma.filled(np.ma.masked_array(xobj['mag_calib']).astype(float), np.nan)
+            diff, ccols, used = catalogue_diff(mag, xcat)
 
-            cat_col_mag, cat_col_mag_err = guess_catalogue_mag_columns(fname, xcat)
+            if not used:
+                log(f"No usable magnitudes for the {len(xcat)} matches in {catname}, "
+                    f"keeping them as real")
+            else:
+                zero = cat_zero.get(catname, {})
+                unknown = [_ for _ in used if _ not in zero]
 
-            if cat_col_mag is not None:
-                # Plain arrays with NaNs for the missing values - the catalogue columns
-                # are routinely masked, and np.nanmedian below is not mask aware, so a
-                # masked array here silently poisons the whole comparison
-                mag = np.ma.filled(np.ma.masked_array(xobj['mag_calib']).astype(float), np.nan)
-                cmag = np.ma.filled(np.ma.masked_array(xcat[cat_col_mag]).astype(float), np.nan)
+                if unknown:
+                    # Nothing measured for these on the sample, so the candidates left at
+                    # this point are all we have. It is a poor estimate, and it is skipped
+                    # altogether when there are too few of them to be meaningful
+                    finite = np.isfinite(diff)
+                    for col in unknown:
+                        idx = (ccols == col) & finite
+                        if np.sum(idx) > 10:
+                            zero = dict(zero, **{col: np.median(diff[idx])})
 
-                if fname in ['U', 'B', 'V', 'R', 'I', 'J', 'H', 'Ks'] and cat_col_mag not in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag']:
-                    # Convert to AB mags if using AB reference catalogue
-                    mag = mag + filter_ab_offset.get(fname, 0)
-
-                diff = mag - cmag
-
-                if np.sum(np.isfinite(diff)) > 10:
-                    # Adjust zeropoint
-                    diff -= np.nanmedian(diff)
+                for col in used:
+                    diff[ccols == col] -= zero.get(col, 0.0)
 
                 # TODO: take errors into account?..
                 # Matches we may not check are kept as real ones, so that the candidate
