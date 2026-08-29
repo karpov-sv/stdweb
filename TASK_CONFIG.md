@@ -84,7 +84,9 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `force_color_term` | float | None | Force specific color term value instead of fitting. |
 | `nonlin` | bool | False | Include detector nonlinearity term in photometric solution. |
 | `bg_order` | int | None | Polynomial order for background spatial variations. None = disabled. |
-| `filter_blends` | bool | True | Exclude blended stars from photometric calibration. |
+| `filter_blends` | bool | True | Merge unresolved blends of catalog stars, and reject the ones contaminated by their neighbours. |
+| `cat_blend_radius` | float | 0.25 | Radius, in FWHM units, within which catalog stars are merged into a single blended entry. Crowded fields may benefit from larger values. |
+| `cat_contamination` | float | 0.1 | Maximum flux fraction a catalog star may receive from its neighbours inside the photometric aperture before being rejected. |
 | `cat_mag_lower` | float | None | Bright limit: exclude catalog stars with primary magnitude below this value from calibration and WCS refinement. None = no limit. |
 | `cat_mag_upper` | float | None | Faint limit: exclude catalog stars with primary magnitude above this value from calibration and WCS refinement. None = no limit. |
 | `sr_override` | float | None | Override automatic matching radius (arcsec). |

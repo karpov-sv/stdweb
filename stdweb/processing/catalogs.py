@@ -5,8 +5,14 @@ Includes HiPS survey selection, Vizier catalog handling, and blend filtering.
 
 import numpy as np
 
-from sklearn.ensemble import IsolationForest
+from scipy.spatial import cKDTree
+from scipy.spatial.distance import pdist
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
+
 from sklearn.cluster import AgglomerativeClustering
+
+from astropy import units as u
 
 from stdpipe import astrometry, catalogs
 
@@ -115,6 +121,15 @@ def guess_catalogue_mag_columns(fname, cat, augmented_only=False):
     return cat_col_mag, cat_col_mag_err
 
 
+def guess_catalogue_mag_columns_all(cat_name, cat):
+    """Return the (magnitude, magnitude error) column pairs for every filter the
+    catalogue is known to provide, so that they may all be kept consistent."""
+    return [
+        guess_catalogue_mag_columns(fname, cat)
+        for fname in supported_catalogs.get(cat_name, {}).get('filters', [])
+    ]
+
+
 def guess_catalogue_radec_columns(cat):
     cat_col_ra = None
     cat_col_dec = None
@@ -157,71 +172,301 @@ def guess_catalogue_radec_columns(cat):
     return cat_col_ra, cat_col_dec
 
 
+def _column_values(col):
+    """Return the column values as a plain float array, with masked and non-finite
+    entries set to NaN."""
+    return np.asarray(np.ma.filled(col, np.nan), dtype=float)
+
+
+def _column_fluxes(col):
+    """Return the linear fluxes corresponding to the magnitudes stored in the column,
+    with unusable entries set to zero so that they do not contribute to the sums."""
+    mag = _column_values(col)
+    flux = np.zeros_like(mag)
+    good = np.isfinite(mag)
+    flux[good] = 10**(-0.4*mag[good])
+
+    return flux
+
+
+def _invalidate_column(col, idx):
+    """Mark the given rows of the column as unusable, either by masking them out, or by
+    setting them to NaN if the column does not support masking."""
+    if not np.any(idx):
+        return
+
+    if np.ma.isMaskedArray(col):
+        col.mask[idx] = True
+    elif col.dtype.kind == 'f':
+        col[idx] = np.nan
+
+
+def _catalogue_xyz(cat, cat_col_ra, cat_col_dec):
+    """Return the catalogue positions as an (N, 3) array of unit vectors."""
+    return np.array([
+        np.asarray(_, dtype=float)
+        for _ in astrometry.radectoxyz(cat[cat_col_ra], cat[cat_col_dec])
+    ]).T
+
+
+def _close_pairs(points, sr):
+    """Return the indices of all pairs of points closer than `sr` degrees.
+
+    The threshold is applied to the chord between the unit vectors, which for the
+    separations we care about is the angle itself to better than a part in a million.
+    A KD-tree is used instead of :func:`astrometry.spherical_match` as the catalogues
+    here routinely have hundreds of thousands of entries.
+    """
+    return cKDTree(points).query_pairs(np.deg2rad(sr), output_type='ndarray')
+
+
+def _group_bounds(labels, ngroups):
+    """Return the per-group member indices as a flat array, with the start of every
+    group inside it."""
+    order = np.argsort(labels, kind='stable')
+
+    return order, np.searchsorted(labels[order], np.arange(ngroups))
+
+
+# Groups larger than that are not worth splitting, as it costs O(N^2) memory
+MAX_SPLITTABLE_GROUP = 5000
+
+
+def group_catalogue_stars(cat, sr, sr_max=None, cat_col_ra='RAJ2000', cat_col_dec='DEJ2000',
+                          verbose=False):
+    """Group the catalogue stars so that every pair closer than `sr` degrees ends up in
+    the same group.
+
+    The result is identical to single-linkage clustering with `sr` distance threshold,
+    but it is computed as the connected components of the pair graph built using a
+    KD-tree, which scales to the large catalogues typical for crowded fields.
+
+    Single linkage chains the stars, so the groups may be arbitrarily larger than `sr`.
+    If `sr_max` is set, they are additionally split, using complete linkage, so that no
+    two members of a group are farther than `sr_max` degrees from each other. It keeps
+    the groups within the size a fixed photometric aperture may actually collect, and so
+    prevents merging the stars the aperture will never see together.
+
+    Returns the array of per-star group indices.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    points = _catalogue_xyz(cat, cat_col_ra, cat_col_dec)
+    pairs = _close_pairs(points, sr)
+
+    graph = coo_matrix(
+        (np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])),
+        shape=(len(cat), len(cat))
+    )
+
+    _,labels = connected_components(graph, directed=False)
+
+    if sr_max is None:
+        return labels
+
+    threshold = np.deg2rad(sr_max)
+
+    ngroups = labels.max() + 1
+    cnt = np.bincount(labels, minlength=ngroups)
+    order,starts = _group_bounds(labels, ngroups)
+    ends = np.append(starts[1:], len(order))
+
+    extra = ngroups
+    nunsplittable = 0
+
+    for g in np.where(cnt > 1)[0]:
+        ids = order[starts[g]:ends[g]]
+
+        if len(ids) > MAX_SPLITTABLE_GROUP:
+            # Too large to split - safer to not merge these stars at all
+            labels[ids] = extra + np.arange(len(ids))
+            extra += len(ids)
+            nunsplittable += len(ids)
+            continue
+
+        sub = points[ids]
+
+        if pdist(sub).max() <= threshold:
+            continue # Already compact enough
+
+        split = AgglomerativeClustering(
+            n_clusters=None,
+            distance_threshold=threshold,
+            linkage='complete'
+        ).fit_predict(sub)
+
+        labels[ids] = extra + split
+        extra += split.max() + 1
+
+    if nunsplittable:
+        log(f"{nunsplittable} stars are chained into groups too large to split, "
+            f"and will not be merged")
+
+    # Renumber to keep the labels contiguous
+    return np.unique(labels, return_inverse=True)[1]
+
+
+# Number of merged members, stored into every catalogue returned by the blend merging
+COL_NBLEND = '__nblend__'
+
+
 def filter_catalogue_blends(
         cat_in,
         sr,
         cat_col_ra='RAJ2000',
         cat_col_dec='DEJ2000',
-        cat_col_mag=None,
-        cat_col_mag_err=None
+        cat_col_mags=None,
+        sr_max=None,
+        verbose=False,
 ):
+    """Merge the groups of catalogue stars closer than `sr` degrees to each other into
+    single entries, so that they represent what is actually seen in the image.
+
+    `sr_max`, when set, caps the size of a group, so that the stars chained into
+    something wider than the photometric aperture are not merged together - see
+    :func:`group_catalogue_stars`.
+
+    Every magnitude listed in `cat_col_mags`, as a list of (magnitude, magnitude error)
+    column name pairs, is replaced with the sum of the fluxes of all group members, with
+    the errors added in quadrature. The first pair is the primary one, and defines the
+    weights for the flux weighted centroid the position is replaced with. Number of
+    merged members is stored into `COL_NBLEND` column.
+
+    Any other magnitude-like column would still hold the value of an arbitrary group
+    member, and is thus masked out on merged entries so that it may not be silently used
+    downstream.
+
+    The merged magnitude is masked out if any group member lacks a usable value for it,
+    as the sum would then miss a part of the group flux.
+
+    If no usable magnitude columns are provided, the blends may not be merged, and all
+    members of every group are rejected instead.
+    """
     # Clustering fails if we have less than 2 stars. And it is meaningless anyway
     if len(cat_in) < 2:
         return cat_in
 
-    x,y,z = astrometry.radectoxyz(cat_in[cat_col_ra], cat_in[cat_col_dec])
+    # Magnitude columns to merge, without duplicates and unknown ones. The caller may
+    # well list the same column twice, e.g. as both the primary and a colour one
+    cols = {}
+    for cm,ce in cat_col_mags or []:
+        if cm and cm in cat_in.colnames and cm not in cols:
+            cols[cm] = ce if ce and ce in cat_in.colnames else None
 
-    # Cluster into groups using sr radius
-    cids = AgglomerativeClustering(
-        n_clusters=None,
-        distance_threshold=np.deg2rad(sr),
-        linkage='single'
-    ).fit_predict(np.array([x, y, z]).T)
+    labels = group_catalogue_stars(cat_in, sr, sr_max=sr_max, verbose=verbose,
+                                   cat_col_ra=cat_col_ra, cat_col_dec=cat_col_dec)
+    ngroups = labels.max() + 1
+    nmem = np.bincount(labels, minlength=ngroups)
 
-    # Unique clusters
-    uid,uids,urids,ucnt = np.unique(cids, return_index=True, return_inverse=True, return_counts=True)
+    if not cols:
+        # Without magnitudes we may not merge the blends, so we just reject them
+        cat = cat_in[nmem[labels] == 1]
+        cat[COL_NBLEND] = 1
 
-    # Copy of the catalogue to work on
-    cat = cat_in.copy()
-    # cat['__blend__'] = False
-    cat['__remove__'] = False
+        return cat
 
-    for i,row in enumerate(cat):
-        uid1 = urids[i]
+    # First member of every group, to be used as a template for the merged entry
+    order,starts = _group_bounds(labels, ngroups)
 
-        if row['__remove__']:
-            continue
+    cat = cat_in[order[starts]]
+    cat[COL_NBLEND] = nmem
 
-        if ucnt[uid1] > 1:
-            ids = np.where(urids == uid1)[0]
+    idx = nmem > 1 # Groups that actually need merging
 
-            if cat_col_mag is not None:
-                x1,y1,z1 = astrometry.radectoxyz(cat_in[cat_col_ra][ids], cat_in[cat_col_dec][ids])
-                flux1 = 10**(-0.4*cat[cat_col_mag][ids])
-                flux1 = np.ma.filled(flux1, np.nan)
-                x0,y0,z0 = [np.nansum(_*flux1)/np.nansum(flux1) for _ in [x1,y1,z1]]
-                ra,dec = astrometry.xyztoradec([x0,y0,z0])
+    if not np.any(idx):
+        return cat
 
-                if not np.isfinite(ra) or not np.isfinite(dec):
-                    # No usable fluxes at all?..
-                    continue
+    fluxes = {cm: _column_fluxes(cat_in[cm]) for cm in cols}
 
-                cat[cat_col_ra][ids[0]],cat[cat_col_dec][ids[0]] = ra, dec
-                cat[cat_col_mag][ids[0]] = -2.5*np.log10(np.nansum(flux1))
+    # Flux weighted centroids, falling back to plain ones for the groups where no member
+    # has a usable flux at all
+    primary = fluxes[next(iter(cols))]
+    psum = np.bincount(labels, weights=primary, minlength=ngroups)
+    weight = np.where(psum[labels] > 0, primary, 1.0)
+    wsum = np.where(psum > 0, psum, nmem)
 
-                # cat['__blend__'][ids[0]] = True
-                cat['__remove__'][ids[1:]] = True
-            else:
-                cat['__remove__'][ids] = True
+    points = _catalogue_xyz(cat_in, cat_col_ra, cat_col_dec)
+    xyz = np.array([
+        np.bincount(labels, weights=weight*points[:, i], minlength=ngroups)
+        for i in range(3)
+    ]) / wsum
 
-        else:
-            pass
+    ra,dec = astrometry.xyztoradec(xyz)
+    cat[cat_col_ra][idx] = ra[idx]
+    cat[cat_col_dec][idx] = dec[idx]
 
-    cat = cat[~cat['__remove__']]
-    cat.remove_column('__remove__')
-    # cat.remove_column('__blend__')
+    for cm,ce in cols.items():
+        flux = fluxes[cm]
+        fsum = np.bincount(labels, weights=flux, minlength=ngroups)
+        # Members with no usable magnitude, that would make the merged flux incomplete.
+        # It typically happens for spurious catalogue entries around bright stars
+        nmiss = np.bincount(labels, weights=(flux <= 0).astype(float), minlength=ngroups)
+
+        good = idx & (fsum > 0) & (nmiss == 0)
+        cat[cm][good] = -2.5*np.log10(fsum[good])
+        # Nothing usable to merge, or only a part of the group flux - the value would be wrong
+        _invalidate_column(cat[cm], idx & ~good)
+
+        if ce:
+            # Magnitude errors converted to flux ones and added in quadrature
+            err = _column_values(cat_in[ce])
+            ferr = np.zeros_like(err)
+            good_err = np.isfinite(err)
+            ferr[good_err] = 0.4*np.log(10)*flux[good_err]*err[good_err]
+            fesum = np.sqrt(np.bincount(labels, weights=ferr**2, minlength=ngroups))
+
+            cat[ce][good] = 2.5/np.log(10)*fesum[good]/fsum[good]
+            _invalidate_column(cat[ce], idx & ~good)
+
+    # Mask out the magnitudes we did not merge, as they still correspond to a single
+    # arbitrarily chosen member of the group
+    merged = [_ for pair in cols.items() for _ in pair if _]
+    for cname in cat.colnames:
+        if cname not in merged and getattr(cat[cname], 'unit', None) == u.mag:
+            _invalidate_column(cat[cname], idx)
 
     return cat
+
+
+def filter_catalogue_contamination(
+        cat,
+        sr,
+        cat_col_ra='RAJ2000',
+        cat_col_dec='DEJ2000',
+        cat_col_mag=None,
+        contamination=0.1,
+):
+    """Reject the catalogue entries that are significantly contaminated by their
+    neighbours inside `sr` degrees radius, i.e. the ones where the total flux of all
+    other entries exceeds `contamination` fraction of their own flux.
+
+    Unlike rejecting everything that merely has a neighbour, it keeps the stars that
+    dominate their photometric aperture, which is what actually matters for the
+    calibration, and thus works much better in crowded fields.
+
+    Entries with no usable magnitude, as well as the ones having such a neighbour whose
+    contribution may not be estimated, are rejected as well.
+    """
+    if len(cat) < 2 or not cat_col_mag or cat_col_mag not in cat.colnames:
+        return cat
+
+    pairs = _close_pairs(_catalogue_xyz(cat, cat_col_ra, cat_col_dec), sr)
+
+    flux = _column_fluxes(cat[cat_col_mag])
+
+    def sum_over_neighbours(values):
+        return (np.bincount(pairs[:, 0], weights=values[pairs[:, 1]], minlength=len(cat)) +
+                np.bincount(pairs[:, 1], weights=values[pairs[:, 0]], minlength=len(cat)))
+
+    # Total flux of the neighbours of every entry
+    neighbours = sum_over_neighbours(flux)
+
+    # Neighbours with no usable magnitude contribute an unknown amount of flux, so the
+    # entries they may contaminate have to be rejected instead of being deemed clean
+    unknown = sum_over_neighbours((flux <= 0).astype(float))
+
+    return cat[(flux > 0) & (unknown == 0) & (neighbours <= contamination*flux)]
 
 
 def filter_vizier_blends(
@@ -269,7 +514,7 @@ def filter_vizier_blends(
 
         if fname is not None:
             # Find relevant magnitude and coordinate columns
-            cat_col_mag,_ = guess_catalogue_mag_columns(fname, xcat)
+            cat_col_mag,cat_col_mag_err = guess_catalogue_mag_columns(fname, xcat)
             cat_col_ra,cat_col_dec = guess_catalogue_radec_columns(xcat)
 
             if cat_col_ra is None:
@@ -283,7 +528,7 @@ def filter_vizier_blends(
                     sr_blend,
                     cat_col_ra=cat_col_ra,
                     cat_col_dec=cat_col_dec,
-                    cat_col_mag=cat_col_mag
+                    cat_col_mags=[(cat_col_mag, cat_col_mag_err)]
                 )
 
                 oidx,xidx,_ = astrometry.spherical_match(
