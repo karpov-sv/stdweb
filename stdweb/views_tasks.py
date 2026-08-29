@@ -295,6 +295,9 @@ def tasks(request, id=None):
 
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
+        # Marks in the contents rail, kept up to date by the state poller
+        context['step_states'] = task_step_states(task)
+
         # Target cutouts
         context['target_cutouts'] = []
         if os.path.exists(os.path.join(path, 'targets')) and 'targets' in task.config:
@@ -816,6 +819,46 @@ STATE_LOG_FILES = {
 }
 
 
+def task_step_states(task):
+    """How every processing step of the task stands, keyed by its state name.
+
+    Used for the marks in the contents rail on the task page. A step the
+    running chain has still got ahead of it is 'pending', the one it is on is
+    'running', and the rest are judged by whether they left a log behind.
+    Steps that never ran get no entry at all, and so no mark.
+    """
+    basepath = task.path()
+
+    # Only a running chain has anything queued; what is left over from an
+    # earlier one says nothing about what is going to happen now.
+    queued = list(task.celery_steps or []) if task.celery_id else []
+
+    # Where the chain stands, so that the steps still ahead of it are told
+    # apart from the ones it has already been through. Right after submission
+    # the state is just 'running' and nothing is found here, which leaves the
+    # whole chain pending - as it indeed is.
+    current = task.state
+    for suffix in ['_done', '_failed']:
+        if current.endswith(suffix):
+            current = current[:-len(suffix)]
+
+    position = queued.index(current) if current in queued else -1
+
+    states = {}
+
+    for step, log_file in STATE_LOG_FILES.items():
+        if task.state == step:
+            states[step] = 'running'
+        elif task.state == step + '_failed':
+            states[step] = 'failed'
+        elif step in queued and queued.index(step) > position:
+            states[step] = 'pending'
+        elif os.path.exists(os.path.join(basepath, log_file)):
+            states[step] = 'done'
+
+    return states
+
+
 def task_state(request, id):
     task = get_object_or_404(models.Task, id=id)
 
@@ -824,6 +867,8 @@ def task_state(request, id):
     # While running, also return the freshly-rendered log of the active step so
     # the page can update it in place without a full reload.
     if task.celery_id and task.can_view(request.user):
+        result['step_states'] = task_step_states(task)
+
         log_file = STATE_LOG_FILES.get(task.state)
         if log_file and os.path.exists(os.path.join(task.path(), log_file)):
             from .templatetags.tags import task_file_contents

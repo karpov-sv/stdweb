@@ -11,12 +11,28 @@
   {% include "popup_image.html" %}
 
   <script src="{% static 'inline_edit.js' %}"></script>
+  <script src="{% static 'toc.js' %}"></script>
+  <script src="{% static 'queue.js' %}"></script>
 
   <script language="javascript">
    {% if task.celery_id %}
 
    var update_timer = 0;
    var update_timeout = 3000;
+
+   // The page is reloaded once, when there is something new to render.
+   // Everything else is updated in place, so that the view does not jump
+   // around, and no further polling happens once a reload is on its way.
+   var reloading = false;
+   var reload_once = function(){
+     if(!reloading){
+       reloading = true;
+       location.reload();
+     }
+   }
+
+   // Last log HTML we injected, to skip redundant DOM updates
+   var last_log = null;
 
    update = function(){
      $.ajax({
@@ -26,9 +42,30 @@
 
        success: function(json){
          $('#state').html(json.state);
-         if(json.log_file && json.log_html !== undefined){
+
+         // The state can change to a failed one mid-chain, so the colour has
+         // to follow it rather than stay as the page was rendered
+         var stateElem = $('#state');
+         stateElem.removeClass('text-danger text-primary text-success');
+         if(json.state.includes('failed') || json.state.includes('cancelled')){
+           stateElem.addClass('text-danger');
+         } else if(json.celery_id){
+           stateElem.addClass('text-primary');
+         } else {
+           stateElem.addClass('text-success');
+         }
+
+         // How each step stands, shown in the contents rail. The task state
+         // only ever names the step running now, so this is what tells the
+         // steps still to come from the ones already through.
+         if(json.step_states && window.tocSetStates){
+           window.tocSetStates(json.step_states);
+         }
+
+         if(json.log_file && json.log_html !== undefined && json.log_html !== last_log){
            var pre = $('.task-log[data-logfile="' + json.log_file + '"]');
            if(pre.length){
+             last_log = json.log_html;
              // Preserve the user's scroll position unless already at the bottom
              var atBottom = pre[0].scrollHeight - pre[0].scrollTop - pre[0].clientHeight < 4;
              pre.html(json.log_html);
@@ -38,17 +75,18 @@
              // The active step's block was not present at page load (e.g. the
              // chain advanced to a later step). Reload once to render it; the
              // section then exists and subsequent polls update it in place.
-             location.reload();
+             reload_once();
              return;
            }
          }
          if(!json.celery_id){
-           location.reload();
+           reload_once();
          }
        },
 
        complete: function(xhr, status) {
-         setTimeout(update, update_timeout);
+         if(!reloading)
+           setTimeout(update, update_timeout);
        }
      });
    }
@@ -428,7 +466,7 @@
             The image processing task is running on the server. The page will be automatically re-loaded when processing is finished.
           </p>
           <p>
-            If necessary, you may cancel the running task by clicking on the running task queue id and using corresponding button on the running task page.
+            If necessary, you may cancel the running task using the button next to its queue id, or from the running task page the id links to.
           </p>
         </div>
 
@@ -436,18 +474,22 @@
         Queue task id:
         <a href="{% url 'queue' id=task.celery_id %}">{{ task.celery_id }}</a>
         <!-- (<span id="celery_state"></span>) -->
-        {% if user_may_submit and False %}
-          <form action="{% url 'queue' id=task.celery_id %}" method="POST">
-            {% csrf_token %}
-            <button type="submit" name="action" value="terminatetask" class="btn btn-danger">Terminate</button>
-          </form>
-        {% endif %}
+        <form action="{% url 'queue' id=task.celery_id %}" method="POST" class="queue-action-form d-inline">
+          {% csrf_token %}
+          <button type="submit" name="action" value="terminatetask" class="btn btn-sm hover-danger"
+                  title="Terminate the running task"
+                  data-confirm="Terminate the task running for this image?">
+            <i class="fa fa-times"></i>
+          </button>
+        </form>
       {% endif %}
     </div>
 
     <!-- Stacking -->
     {% if 'stacking.log' in files or task.state == 'stacking' %}
-      <h3 class="collapse-toggle-dots {% if 'inspect.log' in files %}collapsed{% endif %}"
+      <h3 id="section-stacking" data-toc="Stacking" data-toc-title="Stacking"
+          data-toc-step="stacking" data-toc-state="{{ step_states.stacking }}"
+          class="collapse-toggle-dots {% if 'inspect.log' in files %}collapsed{% endif %}"
           data-bs-toggle="collapse" data-bs-target="#stackingLog"
           aria-expanded="{% if 'inspect.log' in files %}false{% else %}true{% endif %}"
           aria-controls="stackingLog" title="Show/hide stacking log">
@@ -468,7 +510,8 @@
     {% endif %}
 
     <hr>
-    <h3>Initial inspection and masking
+    <h3 id="section-inspect" data-toc="Inspection" data-toc-title="Initial inspection and masking"
+        data-toc-step="inspect" data-toc-state="{{ step_states.inspect }}">Initial inspection and masking
       {% if user_may_submit %}
         <!-- Help popover -->
         <span class="span-help-popover float-end" title="Initial inspection and masking">
@@ -590,7 +633,8 @@
     <!-- Photometry and astrometry -->
     {% if 'inspect.log' in files and 'mask.fits' in files %}
       <hr>
-      <h3>Photometry and astrometry
+      <h3 id="section-photometry" data-toc="Photometry" data-toc-title="Photometry and astrometry"
+          data-toc-step="photometry" data-toc-state="{{ step_states.photometry }}">Photometry and astrometry
         {% if user_may_submit %}
           <!-- Help popover -->
           <span class="span-help-popover float-end" title="Object detection, astrometry and photometry">
@@ -678,7 +722,7 @@
       {% endif %}
 
       <hr>
-      <h3>
+      <h3 id="section-target" data-toc="Target" data-toc-title="Target in direct image">
         Target in direct image
         <!-- Help popover -->
         <span class="span-help-popover float-end" title="Target in direct image">
@@ -702,7 +746,8 @@
     <!-- Simple transient detection -->
     {% if 'objects.parquet' in files and 'photometry.pickle' in files %}
       <hr>
-      <h3>
+      <h3 id="section-transients-simple" data-toc="Transients" data-toc-title="Simple transient detection"
+          data-toc-step="transients_simple" data-toc-state="{{ step_states.transients_simple }}">
         Simple transient detection
         {% if user_may_submit %}
           <!-- Help popover -->
@@ -757,7 +802,7 @@
       <!-- Transient candidates -->
       {% if candidates_simple %}
         <hr>
-        <h3>
+        <h3 id="section-candidates-simple" data-toc="Candidates" data-toc-title="Transient candidates from simple transient detection">
           Transient candidates from simple transient detection
           <span class="span-help-popover float-end" title="Transient candidates from simple transient detection">
             <p>
@@ -795,7 +840,8 @@
     <!-- Image subtraction -->
     {% if 'photometry.pickle' in files %}
       <hr>
-      <h3>
+      <h3 id="section-subtraction" data-toc="Subtraction" data-toc-title="Template subtraction"
+          data-toc-step="subtraction" data-toc-state="{{ step_states.subtraction }}">
         Template subtraction
         {% if user_may_submit %}
           <!-- Help popover -->
@@ -887,7 +933,7 @@
       {% endif %}
 
       <hr>
-      <h3>
+      <h3 id="section-target-diff" data-toc="Target in diff" data-toc-title="Target in difference (template-subtracted) image">
         Target in difference (template-subtracted) image
         <span class="span-help-popover float-end" title="Target in difference image">
           <p>
@@ -911,7 +957,7 @@
     <!-- Transient candidates -->
     {% if candidates %}
       <hr>
-      <h3>
+      <h3 id="section-candidates" data-toc="Candidates in diff" data-toc-title="Transient candidates in difference (template-subtracted) image">
         Transient candidates in difference (template-subtracted) image
         <span class="span-help-popover float-end" title="Transient candidates in difference image">
           <p>
