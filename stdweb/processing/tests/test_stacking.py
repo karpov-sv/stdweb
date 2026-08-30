@@ -82,7 +82,7 @@ def test_stack_without_wcs_uses_astroalign(tmp_path, settings):
     assert not WCS(fits.getheader(f0)).is_celestial
 
     out = str(tmp_path / 'stack.fits')
-    stack_images([f0, f1], out,
+    stack_images([f0, f1], tmp_path, out,
                  {'stack_method': 'sum', 'stack_subtract_bg': False},
                  verbose=False)
 
@@ -123,7 +123,7 @@ def test_stack_with_broken_wcs_falls_back_to_astroalign(tmp_path, settings):
     assert WCS(fits.getheader(f0)).is_celestial
 
     out = str(tmp_path / 'stack.fits')
-    stack_images([f0, f1], out,
+    stack_images([f0, f1], tmp_path, out,
                  {'stack_method': 'sum', 'stack_subtract_bg': False},
                  verbose=False)
 
@@ -157,7 +157,7 @@ def test_stack_task229_nowcs_fixtures(tmp_path):
     assert not WCS(fits.getheader(files[0])).is_celestial
 
     out = str(tmp_path / 'image.fits')
-    stack_images(files, out, {'stack_method': 'median'}, verbose=False)
+    stack_images(files, tmp_path, out, {'stack_method': 'median'}, verbose=False)
 
     assert os.path.exists(out)
     coadd = fits.getdata(out)
