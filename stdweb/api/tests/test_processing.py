@@ -68,6 +68,29 @@ class TestTaskProcess:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'Invalid step' in response.data.get('error', '')
 
+    def test_process_running_task_conflict(self, authenticated_client, task, mock_celery_tasks):
+        """Cannot start processing while the task is already running."""
+        task.celery_id = 'some-celery-id'
+        task.save()
+
+        response = authenticated_client.post(
+            f'/api/tasks/{task.id}/process/',
+            {'steps': ['inspect']},
+            format='json'
+        )
+        assert response.status_code == status.HTTP_409_CONFLICT
+        mock_celery_tasks.run_task_steps.assert_not_called()
+
+    def test_process_invalid_config_rejected(self, authenticated_client, task, mock_celery_tasks):
+        """Config that is not a JSON object should be rejected."""
+        response = authenticated_client.post(
+            f'/api/tasks/{task.id}/process/',
+            {'steps': ['inspect'], 'config': 'not a json object'},
+            format='json'
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        mock_celery_tasks.run_task_steps.assert_not_called()
+
     def test_process_other_user_task_denied(self, authenticated_client, other_user_task, mock_celery_tasks):
         """Cannot process another user's task."""
         response = authenticated_client.post(
@@ -142,6 +165,15 @@ class TestTaskFix:
         response = authenticated_client.post(f'/api/tasks/{other_user_task.id}/fix/')
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_fix_running_task_conflict(self, authenticated_client, task_with_file, mock_processing_functions):
+        """Cannot modify the image while the task is being processed."""
+        task_with_file.celery_id = 'some-celery-id'
+        task_with_file.save()
+
+        response = authenticated_client.post(f'/api/tasks/{task_with_file.id}/fix/')
+        assert response.status_code == status.HTTP_409_CONFLICT
+        mock_processing_functions['fix_image'].assert_not_called()
+
 
 class TestTaskCrop:
     """Tests for POST /api/tasks/{id}/crop/"""
@@ -183,6 +215,16 @@ class TestTaskCrop:
             format='json'
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_crop_invalid_coordinates_rejected(self, authenticated_client, task_with_file, mock_processing_functions):
+        """Non-integer crop coordinates should be rejected with 400."""
+        response = authenticated_client.post(
+            f'/api/tasks/{task_with_file.id}/crop/',
+            {'x1': 'abc'},
+            format='json'
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        mock_processing_functions['crop_image'].assert_not_called()
 
 
 class TestTaskDestripe:

@@ -84,7 +84,9 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `force_color_term` | float | None | Force specific color term value instead of fitting. |
 | `nonlin` | bool | False | Include detector nonlinearity term in photometric solution. |
 | `bg_order` | int | None | Polynomial order for background spatial variations. None = disabled. |
-| `filter_blends` | bool | True | Exclude blended stars from photometric calibration. |
+| `filter_blends` | bool | True | Merge unresolved blends of catalog stars, and reject the ones contaminated by their neighbours. |
+| `cat_blend_radius` | float | 0.25 | Radius, in FWHM units, within which catalog stars are merged into a single blended entry. Crowded fields may benefit from larger values. |
+| `cat_contamination` | float | 0.1 | Maximum flux fraction a catalog star may receive from its neighbours inside the photometric aperture before being rejected. |
 | `cat_mag_lower` | float | None | Bright limit: exclude catalog stars with primary magnitude below this value from calibration and WCS refinement. None = no limit. |
 | `cat_mag_upper` | float | None | Faint limit: exclude catalog stars with primary magnitude above this value from calibration and WCS refinement. None = no limit. |
 | `sr_override` | float | None | Override automatic matching radius (arcsec). |
@@ -139,6 +141,8 @@ Parameters for catalog-based transient detection (`transients_simple_image()`).
 |-----------|------|---------|-------------|
 | `simple_mag_diff` | float | 2.0 | Magnitude difference threshold for rejecting catalog matches. Objects within this many magnitudes of a catalog star are rejected. Set to 0 to reject all matches. |
 | `simple_prefilter` | bool | True | Reject detections flagged by isolation forest pre-filter. |
+| `simple_saturated` | bool | True | Keep saturated detections as transient candidates. They are real sources with unreliable (lower limit) photometry, and rejecting them loses the brightest transients. |
+| `simple_color_term` | bool | True | Apply the photometric color term to catalog magnitudes before comparing them with the candidates, so that both are in the instrumental system. |
 | `simple_blends` | bool | True | Reject detections near blended catalog stars. |
 | `simple_skybot` | bool | True | Query SkyBoT to reject known solar system objects. |
 | `simple_others` | str | '' | Space-separated task IDs to cross-check detections against. Detections present in other tasks are rejected. |

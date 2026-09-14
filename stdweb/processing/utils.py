@@ -4,6 +4,7 @@ Includes file I/O, WCS handling, image preprocessing, and helper functions.
 """
 
 import os
+import re
 import shutil
 
 import numpy as np
@@ -136,6 +137,23 @@ def is_wcs_usable(wcs):
     """
     return (wcs is not None and wcs.is_celestial
             and astrometry.get_pixscale(wcs=wcs) <= MAX_USABLE_PIXSCALE)
+
+
+def parse_pixel_coordinates(string):
+    """Parse a pixel coordinates string like 'x=123.4 y=567.8' (in any order,
+    optionally comma-separated, case-insensitive).
+
+    Returns (x, y) tuple of floats, or None if the string does not match.
+    """
+    m = re.search(
+        r"^\s*([xy])\s*=\s*([+-]?\d+\.?\d*)[\s,]+([xy])\s*=\s*([+-]?\d+\.?\d*)\s*$",
+        string, re.IGNORECASE
+    )
+    if m and {m[1].lower(), m[3].lower()} == {'x', 'y'}:
+        coords = {m[1].lower(): float(m[2]), m[3].lower(): float(m[4])}
+        return coords['x'], coords['y']
+
+    return None
 
 
 def fix_header(header, verbose=True):

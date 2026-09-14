@@ -133,7 +133,8 @@ def to_sexadecimal_hours(value):
 
 @register.filter
 def list_extract(value, key):
-    return [_[key] for _ in value]
+    # Entries lacking the key (e.g. pixel-defined targets before photometry) are skipped
+    return [_[key] for _ in value if _.get(key) is not None]
 
 
 from astropy.table import Table

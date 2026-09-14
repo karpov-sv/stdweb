@@ -58,6 +58,85 @@ class TestTaskList:
         assert 'config' not in task_data
 
 
+class TestTaskListFiltering:
+    """Tests for GET /api/tasks/ filtering and pagination."""
+
+    def test_query_matches_original_name(self, authenticated_client, user, task, temp_tasks_path):
+        """?query= should match against original filename."""
+        Task.objects.create(original_name='unrelated.fits', state='uploaded',
+                            user=user, config={})
+
+        response = authenticated_client.get('/api/tasks/', {'query': 'test_image'})
+        assert response.status_code == status.HTTP_200_OK
+        assert [t['id'] for t in response.data] == [task.id]
+
+    def test_query_matches_title(self, authenticated_client, user, task, temp_tasks_path):
+        """?query= should match against title, with all tokens required."""
+        Task.objects.create(original_name='unrelated.fits', state='uploaded',
+                            user=user, config={})
+
+        response = authenticated_client.get('/api/tasks/', {'query': 'Test Task'})
+        assert response.status_code == status.HTTP_200_OK
+        assert [t['id'] for t in response.data] == [task.id]
+
+    def test_query_no_match(self, authenticated_client, task):
+        """Non-matching query returns empty list."""
+        response = authenticated_client.get('/api/tasks/', {'query': 'nonexistent'})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == []
+
+    def test_filter_by_state(self, authenticated_client, user, task, temp_tasks_path):
+        """?state= should filter by exact task state."""
+        done = Task.objects.create(original_name='done.fits', state='photometry_done',
+                                   user=user, config={})
+
+        response = authenticated_client.get('/api/tasks/', {'state': 'photometry_done'})
+        assert response.status_code == status.HTTP_200_OK
+        assert [t['id'] for t in response.data] == [done.id]
+
+    def test_filter_by_user(self, staff_client, task, other_user_task):
+        """?user= should filter by exact username."""
+        response = staff_client.get('/api/tasks/', {'user': 'otheruser'})
+        assert response.status_code == status.HTTP_200_OK
+        assert [t['id'] for t in response.data] == [other_user_task.id]
+
+    def test_pagination(self, authenticated_client, user, temp_tasks_path):
+        """?limit=/&offset= should return a paginated response."""
+        for i in range(5):
+            Task.objects.create(original_name=f'img_{i}.fits', state='uploaded',
+                                user=user, config={})
+
+        response = authenticated_client.get('/api/tasks/', {'limit': 2, 'offset': 2})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['count'] == 5
+        assert len(response.data['results']) == 2
+        assert response.data['next'] is not None
+
+    def test_no_limit_returns_plain_list(self, authenticated_client, task):
+        """Without ?limit= the response stays a plain un-paginated list."""
+        response = authenticated_client.get('/api/tasks/')
+        assert response.status_code == status.HTTP_200_OK
+        assert isinstance(response.data, list)
+
+
+class TestTaskState:
+    """Tests for GET /api/tasks/{id}/state/"""
+
+    def test_get_state(self, authenticated_client, task):
+        """State endpoint returns id/state/celery_id without the config."""
+        response = authenticated_client.get(f'/api/tasks/{task.id}/state/')
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['id'] == task.id
+        assert response.data['state'] == task.state
+        assert 'celery_id' in response.data
+        assert 'config' not in response.data
+
+    def test_other_user_denied(self, authenticated_client, other_user_task):
+        """User cannot poll another user's task state."""
+        response = authenticated_client.get(f'/api/tasks/{other_user_task.id}/state/')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
 class TestTaskCreate:
     """Tests for POST /api/tasks/"""
 
@@ -91,6 +170,118 @@ class TestTaskCreate:
 
         task = Task.objects.get(id=response.data['id'])
         assert task.config['filter'] == preset.config['filter']
+
+    def test_create_with_preset_files(self, authenticated_client, tmp_path, temp_tasks_path, db):
+        """Preset files should be copied into the new task directory."""
+        import os
+        from stdweb.models import Preset
+
+        extra = tmp_path / 'extra_mask.fits'
+        extra.write_bytes(b'dummy')
+        preset = Preset.objects.create(name='With files', config={}, files=str(extra))
+
+        response = authenticated_client.post('/api/tasks/', {
+            'original_name': 'new_image.fits',
+            'preset': preset.id
+        })
+        assert response.status_code == status.HTTP_201_CREATED
+
+        task = Task.objects.get(id=response.data['id'])
+        assert os.path.exists(os.path.join(task.path(), 'extra_mask.fits'))
+
+    def test_create_from_local_file(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """Task can be created from a pre-existing file in the data directory."""
+        import os
+
+        os.makedirs(os.path.join(temp_data_path, 'night1'))
+        with open(os.path.join(temp_data_path, 'night1', 'existing.fits'), 'wb') as f:
+            f.write(b'DUMMY DATA')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'night1/existing.fits'
+        })
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['original_name'] == 'existing.fits'
+
+        task = Task.objects.get(id=response.data['id'])
+        assert task.state == 'uploaded'
+        with open(os.path.join(task.path(), 'image.fits'), 'rb') as f:
+            assert f.read() == b'DUMMY DATA'
+
+    def test_create_from_local_file_with_ext(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """A single FITS extension can be extracted from a local file."""
+        import os
+        import numpy as np
+        from astropy.io import fits
+
+        hdul = fits.HDUList([
+            fits.PrimaryHDU(),
+            fits.ImageHDU(data=np.arange(100.).reshape(10, 10)),
+        ])
+        hdul.writeto(os.path.join(temp_data_path, 'multi.fits'))
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'multi.fits',
+            'ext': 1
+        })
+        assert response.status_code == status.HTTP_201_CREATED
+
+        task = Task.objects.get(id=response.data['id'])
+        data = fits.getdata(os.path.join(task.path(), 'image.fits'))
+        assert data.shape == (10, 10)
+
+    def test_create_from_local_file_invalid_ext(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """Unreadable extension is rejected and the task is not kept."""
+        import os
+
+        with open(os.path.join(temp_data_path, 'existing.fits'), 'wb') as f:
+            f.write(b'NOT A FITS FILE')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'existing.fits',
+            'ext': 5
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert not Task.objects.exists()
+
+    def test_create_from_missing_local_file(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """Nonexistent local file is rejected."""
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': 'nonexistent.fits'
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_from_local_file_traversal_rejected(self, authenticated_client, temp_tasks_path, temp_data_path, tmp_path):
+        """Paths escaping the data directory are rejected."""
+        secret = tmp_path / 'secret.fits'
+        secret.write_bytes(b'SECRET')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'local_file': '../secret.fits'
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_with_both_file_and_local_file_rejected(self, authenticated_client, temp_tasks_path, temp_data_path):
+        """file and local_file are mutually exclusive."""
+        import os
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        with open(os.path.join(temp_data_path, 'existing.fits'), 'wb') as f:
+            f.write(b'DUMMY DATA')
+
+        response = authenticated_client.post('/api/tasks/', {
+            'file': SimpleUploadedFile('upload.fits', b'UPLOAD'),
+            'local_file': 'existing.fits'
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_with_ext_without_local_file_rejected(self, authenticated_client, temp_tasks_path):
+        """ext without local_file is rejected."""
+        response = authenticated_client.post('/api/tasks/', {
+            'original_name': 'new_image.fits',
+            'ext': 1
+        })
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_unauthenticated_denied(self, api_client):
         """Unauthenticated requests should be denied."""
@@ -214,6 +405,14 @@ class TestTaskDelete:
         response = staff_client.delete(f'/api/tasks/{task_id}/')
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not Task.objects.filter(id=task_id).exists()
+
+    def test_group_member_cannot_delete(self, api_client, group_member, task, shared_group):
+        """A group member with edit access still cannot delete the task."""
+        task.groups.add(shared_group)
+        api_client.force_authenticate(user=group_member)
+        response = api_client.delete(f'/api/tasks/{task.id}/')
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert Task.objects.filter(id=task.id).exists()
 
 
 class TestTaskDuplicate:

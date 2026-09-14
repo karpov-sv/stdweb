@@ -27,6 +27,7 @@ class Task(models.Model):
 
     celery_id = models.CharField(max_length=50, blank=True, null=True, default=None, editable=False) # Celery task ID, when running
     celery_chain_ids = models.JSONField(default=list, blank=True) # List of all subtask IDs in chain
+    celery_steps = models.JSONField(default=list, blank=True) # Names of the processing steps of the running chain, in order
     celery_pid = models.IntegerField(blank=True, null=True, default=None, editable=False) # PID of the Celery worker process
 
     user =  models.ForeignKey(User, on_delete=models.CASCADE)

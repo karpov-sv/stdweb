@@ -258,26 +258,44 @@ def inspect_image(filename, config, verbose=True, show=False):
             target = {'name': target_name.strip()}
             target_title = "Primary target" if i == 0 else f"Secondary target {i}"
 
-            if target_name:
-                log(f"{target_title} is {target['name']}")
+            if not target_name:
+                continue
+
+            log(f"{target_title} is {target['name']}")
+
+            xy = parse_pixel_coordinates(target['name'])
+            if xy is not None:
+                # Pixel coordinates - authoritative, sky position derived from WCS
+                target['x'],target['y'] = xy
+                log(f"Pixel position is x={target['x']:.1f} y={target['y']:.1f}")
+
+                if is_wcs_usable(wcs):
+                    try:
+                        target['ra'],target['dec'] = [
+                            float(_) for _ in wcs.all_pix2world(target['x'], target['y'], 0)
+                        ]
+                        log(f"Corresponds to RA={target['ra']:.4f} Dec={target['dec']:.4f}")
+                    except:
+                        log("Cannot convert pixel position to sky coordinates")
+            else:
                 try:
                     coords = resolve.resolve(target['name'])
                     target['ra'] = coords.ra.deg
                     target['dec'] = coords.dec.deg
-
-                    if not len(config['targets']):
-                        # Keep backwards-compatible primary target coordinates
-                        config['target_ra'] = target['ra']
-                        config['target_dec'] = target['dec']
-
-                    # Activate target photometry mode
-                    config['subtraction_mode'] = 'target'
-
                     log(f"Resolved to RA={target['ra']:.4f} Dec={target['dec']:.4f}")
-
-                    config['targets'].append(target)
                 except:
                     log("Target not resolved")
+                    continue
+
+            if not len(config['targets']) and target.get('ra') is not None:
+                # Keep backwards-compatible primary target coordinates
+                config['target_ra'] = target['ra']
+                config['target_dec'] = target['dec']
+
+            # Activate target photometry mode
+            config['subtraction_mode'] = 'target'
+
+            config['targets'].append(target)
 
         if (config.get('target_ra') or config.get('target_dec')) and wcs and wcs.is_celestial:
             if ra0 is not None and dec0 is not None and sr0 is not None:
@@ -286,19 +304,27 @@ def inspect_image(filename, config, verbose=True, show=False):
                                                  config.get('target_dec')) > 2.0*sr0:
                     log("Primary target is very far from the image center!")
 
-            try:
-                x0,y0 = wcs.all_world2pix(config.get('targets')[0].get('ra'), config.get('targets')[0].get('dec'), 0)
+        # Primary target pixel position - directly for pixel-defined targets, else through WCS
+        primary = config['targets'][0] if config.get('targets') else None
+        x0,y0 = None,None
+        if primary is not None:
+            if primary.get('x') is not None and primary.get('y') is not None:
+                x0,y0 = primary['x'],primary['y']
+            elif primary.get('ra') is not None and wcs and wcs.is_celestial:
+                try:
+                    x0,y0 = wcs.all_world2pix(primary['ra'], primary['dec'], 0)
+                except:
+                    pass
 
-                if x0 > 0 and y0 > 0 and x0 < image.shape[1] and y0 < image.shape[0]:
-                    cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
-                    fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
-                    log(f"Primary target is at x={x0:.1f} y={y0:.1f}")
-                    log("Primary target cutout written to file:image_target.fits")
-                else:
-                    log("Primary target is outside the image")
-                    log(f"{x0} {y0}")
-            except:
-                pass
+        if x0 is not None and y0 is not None:
+            if x0 > 0 and y0 > 0 and x0 < image.shape[1] and y0 < image.shape[0]:
+                cutout,cheader = cutouts.crop_image_centered(image, x0, y0, 100, header=header)
+                fits.writeto(os.path.join(basepath, 'image_target.fits'), cutout, cheader, overwrite=True)
+                log(f"Primary target is at x={x0:.1f} y={y0:.1f}")
+                log("Primary target cutout written to file:image_target.fits")
+            else:
+                log("Primary target is outside the image")
+                log(f"{x0} {y0}")
 
         # We may initialize some blind match parameters from the target position, if any
         if config.get('target_ra') is not None and config.get('blind_match_center') is None:

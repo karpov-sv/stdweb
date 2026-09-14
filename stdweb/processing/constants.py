@@ -28,6 +28,28 @@ supported_filters = {
     'Ks': {'name':'2MASS Ks', 'aliases':['K']},
 }
 
+# Approximate effective wavelengths in nm, used to pick the band closest to the one we
+# need when a catalogue does not provide it
+filter_wavelengths = {
+    'u': 354,
+    'U': 365,
+    'B': 445,
+    'g': 477,
+    'BP': 511,
+    'V': 551,
+    'G': 622,
+    'r': 623,
+    'R': 658,
+    'i': 762,
+    'RP': 777,
+    'I': 806,
+    'z': 913,
+    'y': 962,
+    'J': 1235,
+    'H': 1662,
+    'Ks': 2159,
+}
+
 supported_catalogs = {
     'gaiadr3syn': {'name':'Gaia DR3 synphot', 'filters':['U', 'B', 'V', 'R', 'I', 'u', 'g', 'r', 'i', 'z', 'y'],
                    'limit': 'rmag'},
@@ -56,7 +78,7 @@ supported_catalogs_transients = {
 supported_templates = {
     'custom': {'name': 'Custom template'},
     'ps1': {'name': 'Pan-STARRS DR2', 'filters': {'g', 'r', 'i', 'z'}},
-    'ls': {'name': 'Legacy Survey DR10', 'filters': {'g', 'r', 'i', 'z'}},
+    'ls': {'name': 'Legacy Survey DR11', 'filters': {'g', 'r', 'i', 'z'}},
     'skymapper': {'name': 'SkyMapper DR4 (HiPS)', 'filters': {
         'u': 'CDS/P/skymapper-U', # DR1 fallback
         'g': 'CDS/P/Skymapper/DR4/g',
@@ -134,6 +156,41 @@ filter_ab_offset = {
     'BP': 0,
     'RP': 0,
 }
+
+
+# Object flags set by SExtractor and STDPipe during the photometry, and by the
+# pre-filtering step. Note that 0x800 is also used by STDPipe optimal extraction to
+# report a failure, so it is only unambiguous when optimal extraction is disabled.
+object_flags = {
+    0x0001: 'bad pixels',
+    0x0002: 'deblended',
+    0x0004: 'saturated',
+    0x0008: 'edge',
+    0x0010: 'incomplete',
+    0x0020: 'iso incomplete',
+    0x0040: 'deblend overflow',
+    0x0080: 'extract overflow',
+    0x0100: 'masked footprint',
+    0x0200: 'masked aperture',
+    0x0400: 'bad position',
+    0x0800: 'prefiltered',
+    0x1000: 'bad fit',
+    0x2000: 'moved',
+}
+
+
+def describe_object_flags(flags):
+    """Return a human readable, comma separated list of the object flags that are set."""
+    if not flags:
+        return ''
+
+    names = [name for bit,name in object_flags.items() if int(flags) & bit]
+    unknown = int(flags) & ~sum(object_flags.keys())
+
+    if unknown:
+        names.append(f"0x{unknown:x}")
+
+    return ', '.join(names)
 
 
 # Files created at every step

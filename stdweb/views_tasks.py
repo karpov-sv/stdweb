@@ -9,6 +9,7 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from django.core.cache import cache
 
 import os, glob, shutil
 import json
@@ -294,13 +295,16 @@ def tasks(request, id=None):
 
         context['files'] = [os.path.split(_)[1] for _ in glob.glob(os.path.join(path, '*'))]
 
+        # Marks in the contents rail, kept up to date by the state poller
+        context['step_states'] = task_step_states(task)
+
         # Target cutouts
         context['target_cutouts'] = []
         if os.path.exists(os.path.join(path, 'targets')) and 'targets' in task.config:
             for i,target in enumerate(task.config['targets']):
                 if os.path.exists(os.path.join(path, f"targets/target_{i:04d}.cutout")):
                     context['target_cutouts'].append(
-                        {'path': f"targets/target_{i:04d}.cutout", 'ra': target['ra'], 'dec': target['dec']}
+                        {'path': f"targets/target_{i:04d}.cutout", 'ra': target.get('ra'), 'dec': target.get('dec')}
                     )
         elif os.path.exists(os.path.join(path, 'target.cutout')):
             # Fallback to legacy path
@@ -815,6 +819,46 @@ STATE_LOG_FILES = {
 }
 
 
+def task_step_states(task):
+    """How every processing step of the task stands, keyed by its state name.
+
+    Used for the marks in the contents rail on the task page. A step the
+    running chain has still got ahead of it is 'pending', the one it is on is
+    'running', and the rest are judged by whether they left a log behind.
+    Steps that never ran get no entry at all, and so no mark.
+    """
+    basepath = task.path()
+
+    # Only a running chain has anything queued; what is left over from an
+    # earlier one says nothing about what is going to happen now.
+    queued = list(task.celery_steps or []) if task.celery_id else []
+
+    # Where the chain stands, so that the steps still ahead of it are told
+    # apart from the ones it has already been through. Right after submission
+    # the state is just 'running' and nothing is found here, which leaves the
+    # whole chain pending - as it indeed is.
+    current = task.state
+    for suffix in ['_done', '_failed']:
+        if current.endswith(suffix):
+            current = current[:-len(suffix)]
+
+    position = queued.index(current) if current in queued else -1
+
+    states = {}
+
+    for step, log_file in STATE_LOG_FILES.items():
+        if task.state == step:
+            states[step] = 'running'
+        elif task.state == step + '_failed':
+            states[step] = 'failed'
+        elif step in queued and queued.index(step) > position:
+            states[step] = 'pending'
+        elif os.path.exists(os.path.join(basepath, log_file)):
+            states[step] = 'done'
+
+    return states
+
+
 def task_state(request, id):
     task = get_object_or_404(models.Task, id=id)
 
@@ -823,6 +867,8 @@ def task_state(request, id):
     # While running, also return the freshly-rendered log of the active step so
     # the page can update it in place without a full reload.
     if task.celery_id and task.can_view(request.user):
+        result['step_states'] = task_step_states(task)
+
         log_file = STATE_LOG_FILES.get(task.state)
         if log_file and os.path.exists(os.path.join(task.path(), log_file)):
             from .templatetags.tags import task_file_contents
@@ -830,6 +876,43 @@ def task_state(request, id):
             result['log_html'] = task_file_contents(task, log_file, highlight=True)
 
     return JsonResponse(result)
+
+
+def task_template_coverage(request, id):
+    """AJAX endpoint reporting whether the task field is covered by the templates."""
+    task = get_object_or_404(models.Task, id=id)
+
+    if not task.can_view(request.user):
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    basepath = task.path()
+    filename = os.path.join(basepath, 'image.fits')
+
+    if not os.path.exists(filename):
+        return JsonResponse({'success': False, 'error': 'No image'}, status=404)
+
+    # The result depends on the field and the filter only, so it may be cached
+    key = f"task_template_coverage:{task.id}:{task.config.get('filter')}:{os.path.getmtime(filename)}"
+    result = cache.get(key)
+
+    if result is None:
+        try:
+            header = fits.getheader(filename, -1)
+            wcs = processing.get_wcs(filename, header=header, verbose=False)
+
+            if wcs is None or not wcs.is_celestial:
+                return JsonResponse({'success': False, 'error': 'No WCS'}, status=404)
+
+            result = processing.get_all_template_coverage(
+                wcs, (header['NAXIS2'], header['NAXIS1']),
+                filter_name=task.config.get('filter')
+            )
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+        cache.set(key, result, 24*3600)
+
+    return JsonResponse({'success': True, 'coverage': result})
 
 
 @require_POST

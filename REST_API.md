@@ -43,6 +43,14 @@ GET /api/tasks/
 Returns the list of tasks the current user can access: their own tasks plus any
 tasks shared with a group they belong to (staff users see all tasks).
 
+**Query Parameters (all optional):**
+- `query` - Free-text search; every whitespace-separated token must match the
+  original filename, title, owner username/first/last name, or a shared group
+  name (case-insensitive substring match, same as the web UI task list)
+- `state` - Filter by exact task state (e.g. `photometry_done`)
+- `user` - Filter by exact owner username
+- `limit` / `offset` - Paginate the results (see below)
+
 **Response:**
 ```json
 [
@@ -58,18 +66,43 @@ tasks shared with a group they belong to (staff users see all tasks).
 ]
 ```
 
+Without `limit` the full list is returned as a plain JSON array, as above. When
+`limit` is given, the response is paginated:
+
+```
+GET /api/tasks/?query=image&limit=10&offset=20
+```
+
+```json
+{
+  "count": 123,
+  "next": "http://.../api/tasks/?limit=10&offset=30&query=image",
+  "previous": "http://.../api/tasks/?limit=10&offset=10&query=image",
+  "results": [ ... ]
+}
+```
+
 #### Create Task
 ```
 POST /api/tasks/
 ```
 
-Create a new task with optional file upload. The `file` may be omitted to create
-a file-less task (e.g. for [stacking](#stacking-tasks), where `image.fits` is
-produced from `config['stack_filenames']` by the `stack` step).
+Create a new task. The image may come from a direct upload (`file`), from a
+pre-existing file in the server's data directory (`local_file`, like the web UI
+file browser), or be omitted entirely to create a file-less task (e.g. for
+[stacking](#stacking-tasks), where `image.fits` is produced from
+`config['stack_filenames']` by the `stack` step).
 
-**Request (multipart/form-data):**
+**Request (multipart/form-data or JSON):**
 - `file` - FITS file to upload (optional)
-- `original_name` - Filename (optional, derived from file if not provided)
+- `local_file` - Path of an existing file, relative to the server's data
+  directory (optional; see [Data Files](#data-files) for browsing it). Mutually
+  exclusive with `file`. The file is copied into the task as `image.fits`.
+- `ext` - FITS extension number to extract from `local_file` (optional; only
+  valid together with `local_file`). When given, only that extension is copied
+  into `image.fits`.
+- `original_name` - Filename (optional, derived from `file` or `local_file` if
+  not provided; required if neither is given)
 - `title` - Optional title/comment
 - `config` - JSON configuration object
 - `preset` - Preset ID to apply (optional)
@@ -83,6 +116,14 @@ curl -X POST /api/tasks/ \
   -H "Authorization: Token <token>" \
   -F "file=@image.fits" \
   -F 'config={"filter":"R","cat_name":"ps1"}'
+```
+
+**Example — from a file already in the data directory:**
+```bash
+curl -X POST /api/tasks/ \
+  -H "Authorization: Token <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"local_file":"night1/img_001.fits","config":{"filter":"R"}}'
 ```
 
 To set initial sharing, send a JSON body instead so `groups` is a proper list:
@@ -119,13 +160,35 @@ GET /api/tasks/{id}/
     ...
   },
   "celery_id": null,
-  "path": "/path/to/tasks/123"
+  "path": "123"
 }
 ```
 
 The `groups` field lists the user groups this task is shared with, by group name.
 Every member of a listed group can view the task and its files. See
 [Update Task](#update-task) for how to change it.
+
+The `path` field is the task directory, relative to the server's tasks base
+directory.
+
+#### Get Task State
+```
+GET /api/tasks/{id}/state/
+```
+
+Lightweight state endpoint for polling during processing — returns only the
+state without the (potentially large) config.
+
+**Response:**
+```json
+{
+  "id": 123,
+  "state": "photometry",
+  "celery_id": "abc123-def456"
+}
+```
+
+The task is running while `celery_id` is not null.
 
 #### Update Task
 ```
@@ -174,7 +237,8 @@ see [Create Task](#create-task).
 DELETE /api/tasks/{id}/
 ```
 
-Deletes the task and all associated files.
+Deletes the task and all associated files. Only the task owner or staff may
+delete a task — group members with edit access cannot.
 
 #### Duplicate Task
 ```
@@ -221,6 +285,10 @@ Queue processing steps for the task.
   "steps": ["inspect", "photometry", "subtraction"]
 }
 ```
+
+Returns `409` if the task is already being processed. Poll
+[Get Task State](#get-task-state) and wait for `celery_id` to become null, or
+[cancel](#cancel-task) the run first.
 
 #### Stacking Tasks
 
@@ -301,6 +369,9 @@ POST /api/tasks/{id}/fix/
 ```
 
 Fix common FITS header issues.
+
+This and the other image-modifying actions below return `409` if the task is
+currently being processed.
 
 #### Crop Image
 ```
@@ -385,6 +456,20 @@ curl -X POST /api/tasks/123/files/custom_mask.fits \
   -H "Authorization: Token <token>" \
   -F "file=@mask.fits"
 ```
+
+The `path` is relative to the task directory. Some filenames have special
+meaning to the processing pipeline, so uploading them is the API way of
+providing custom inputs:
+
+- `image.fits` - The image to be processed (replaces the original upload)
+- `custom_mask.fits` - Custom mask; pixels with non-zero values are excluded
+  from processing (applied on top of the automatically generated mask)
+- `custom_template.fits` - Custom template image for subtraction; used when
+  `config['template']` is set to `custom`. Template gain and saturation level
+  may be provided via the `custom_template_gain` and
+  `custom_template_saturation` config options
+- `custom_template_mask.fits` - Optional mask for the custom template; pixels
+  with non-zero values are excluded
 
 #### Delete File
 ```
@@ -550,6 +635,10 @@ GET /api/presets/
 GET /api/presets/{id}/
 ```
 
+When a preset is passed to [Create Task](#create-task), its config is used as
+the base for the task config (explicitly provided config values win), and any
+files associated with the preset are copied into the task directory.
+
 ---
 
 ### Reference Data
@@ -612,7 +701,7 @@ The task `config` object accepts these parameters:
 ### Image Inspection
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `target` | string | - | Target name or coordinates |
+| `target` | string | - | Target name, coordinates, or `x=... y=...` pixel position (one target per line) |
 | `time` | string | - | Observation time (ISO format) |
 | `gain` | float | - | Detector gain (e/ADU) |
 | `saturation` | float | - | Saturation level (ADU) |
@@ -642,7 +731,9 @@ The task `config` object accepts these parameters:
 ### Template Subtraction
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `template` | string | - | Template source name |
+| `template` | string | - | Template source name (`custom` uses an uploaded `custom_template.fits`, see [Upload File](#upload-file)) |
+| `custom_template_gain` | float | 10000 | Gain of the custom template |
+| `custom_template_saturation` | float | - | Saturation level of the custom template |
 | `subtraction_method` | string | "hotpants" | Method: "hotpants" or "sfft" |
 | `subtraction_mode` | string | "detection" | Mode: "target" or "detection" |
 | `hotpants_extra` | object | {} | Extra HOTPANTS parameters (when method is "hotpants") |
@@ -667,6 +758,7 @@ All errors return JSON with an `error` or `detail` field:
 - `401` - Authentication required
 - `403` - Permission denied
 - `404` - Resource not found
+- `409` - Conflict (task is already being processed)
 - `500` - Server error
 
 ---
@@ -695,10 +787,9 @@ curl -X POST "http://localhost:8000/api/tasks/$TASK_ID/process/" \
 
 # 4. Poll for completion
 while true; do
-  STATE=$(curl -s "http://localhost:8000/api/tasks/$TASK_ID/" \
-    -H "Authorization: Token $TOKEN" | jq -r .state)
-  echo "State: $STATE"
-  if [[ "$STATE" != *"running"* ]]; then break; fi
+  CELERY_ID=$(curl -s "http://localhost:8000/api/tasks/$TASK_ID/state/" \
+    -H "Authorization: Token $TOKEN" | jq -r .celery_id)
+  if [[ "$CELERY_ID" == "null" ]]; then break; fi
   sleep 5
 done
 
@@ -755,10 +846,10 @@ print(f"Processing started: {response.json()}")
 
 # 4. Poll for completion
 while True:
-    response = session.get(f"{BASE_URL}/tasks/{task_id}/")
-    state = response.json()["state"]
-    print(f"State: {state}")
-    if "running" not in state:
+    response = session.get(f"{BASE_URL}/tasks/{task_id}/state/")
+    status = response.json()
+    print(f"State: {status['state']}")
+    if status["celery_id"] is None:
         break
     time.sleep(5)
 
@@ -862,10 +953,11 @@ class STDWebClient:
         """Wait for task processing to complete."""
         start = time.time()
         while time.time() - start < timeout:
-            task = self.get_task(task_id)
-            state = task["state"]
-            if "running" not in state:
-                return task
+            response = self.session.get(f"{self.base_url}/tasks/{task_id}/state/")
+            response.raise_for_status()
+            status = response.json()
+            if status["celery_id"] is None:
+                return self.get_task(task_id)
             time.sleep(poll_interval)
         raise TimeoutError(f"Task {task_id} did not complete within {timeout}s")
 

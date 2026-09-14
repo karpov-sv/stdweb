@@ -49,7 +49,7 @@ class UploadFileForm(forms.Form):
     )
     target = forms.CharField(
         required=False, empty_value=None, label="Target name or coordinates",
-        widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name or coordinates, one per line'})
+        widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name, coordinates, or x=... y=... pixel position, one per line'})
     )
 
     do_inspect = forms.BooleanField(initial=False, required=False, label="Inspection")
@@ -193,7 +193,7 @@ class PrettyJSONEncoder(json.JSONEncoder):
 class TaskInspectForm(forms.Form):
     form_type = forms.CharField(initial='inspect', widget=forms.HiddenInput())
     target = forms.CharField(required=False, empty_value=None, label="Target name or coordinates",
-                             widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name or coordinates, one per line'}))
+                             widget=forms.Textarea(attrs={'rows':1, 'placeholder': 'Name, coordinates, or x=... y=... pixel position, one per line'}))
     time = forms.CharField(max_length=30, required=False, empty_value=None, label="Time")
     gain = forms.FloatField(min_value=0, required=False, label="Gain, e/ADU")
     saturation = forms.FloatField(min_value=0, required=False, label="Saturation level, ADU")
@@ -350,6 +350,8 @@ class TaskTransientsSimpleForm(forms.Form):
     simple_sr0 = forms.FloatField(initial=None, min_value=0, required=False, label="Radius, deg")
     simple_blends = forms.BooleanField(initial=True, required=False, label="Reject blends")
     simple_prefilter = forms.BooleanField(initial=True, required=False, label="Reject prefiltered")
+    simple_saturated = forms.BooleanField(initial=True, required=False, label="Keep saturated")
+    simple_color_term = forms.BooleanField(initial=True, required=False, label="Use color term")
     simple_mag_diff = forms.FloatField(initial=2, min_value=0, required=False, label="Minimal mag difference")
 
     def __init__(self, *args, **kwargs):
@@ -372,6 +374,8 @@ class TaskTransientsSimpleForm(forms.Form):
                 Column('simple_skybot', css_class="col-md-auto"),
                 Column('simple_blends', css_class="col-md-auto"),
                 Column('simple_prefilter', css_class="col-md-auto"),
+                Column('simple_saturated', css_class="col-md-auto"),
+                Column('simple_color_term', css_class="col-md-auto"),
             ),
         )
 

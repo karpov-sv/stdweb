@@ -361,6 +361,19 @@ def task_stacking(self, id, finalize=True):
         # Context manager handles finalize and save
 
 
+# The state a running step reports, per step name accepted by run_task_steps.
+# Recorded on the task so that the page can tell the steps a chain has still
+# got ahead of it from the ones it has already been through.
+STEP_STATES = {
+    'stack': 'stacking',
+    'cleanup': 'cleanup',
+    'inspect': 'inspect',
+    'photometry': 'photometry',
+    'simple_transients': 'transients_simple',
+    'subtraction': 'subtraction',
+}
+
+
 # Higher-level interface for running (multiple) processing steps for the task
 def run_task_steps(task, steps):
     todo = []
@@ -417,6 +430,7 @@ def run_task_steps(task, steps):
         # Extract all task IDs from the frozen chain
         # task.celery_chain_ids = [t.id for t in todo]
         task.celery_chain_ids = list(reversed(res.as_list()))
+        task.celery_steps = [STEP_STATES[_] for _ in steps if _ in STEP_STATES]
 
         # Apply the chain
         result = task_chain.apply_async()
