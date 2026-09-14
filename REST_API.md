@@ -299,9 +299,10 @@ remaining steps then process. Unlike a normal task, a stacking task is created
 
 **Requirements:**
 - `stack_filenames` — a list of **absolute paths** to the input images. Every
-  path must reside under the server's `DATA_PATH` (paths outside it are rejected
-  for security). These are server-side paths, so the files must already exist in
-  the data directory (e.g. previously uploaded or otherwise placed there).
+  path must reside under the server's `DATA_PATH` or the task's path 
+  `TASKS_PATH/{task_id}` (paths outside these are rejected for security). 
+  These are server-side paths, so the files must already exist in the data 
+  directory (e.g. previously uploaded or otherwise placed there).
 - At least two input images.
 - Include `stack` as the first entry in `steps` (before `inspect`).
 
@@ -693,7 +694,7 @@ The task `config` object accepts these parameters:
 ### Stacking
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `stack_filenames` | list | - | Absolute paths of input images to coadd (must be under `DATA_PATH`, at least two) |
+| `stack_filenames` | list | - | Absolute paths of input images to coadd (must be under `DATA_PATH` or `TASKS_PATH/{task_id}`, at least two files) |
 | `stack_method` | string | "sum" | Coaddition method: `sum`, `clipped_mean`, or `median` |
 | `stack_subtract_bg` | bool | true | Subtract background from each input before stacking |
 | `stack_mask_cosmics` | bool | false | Mask cosmic rays in each input before stacking |
