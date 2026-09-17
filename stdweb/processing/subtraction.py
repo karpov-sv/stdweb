@@ -16,6 +16,7 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.table import Table, vstack
 from astropy.time import Time
+from astropy.stats import sigma_clip
 
 from stdpipe import astrometry, photometry, cutouts
 from stdpipe import templates, subtraction, plots, pipeline
@@ -26,6 +27,172 @@ from .utils import *
 from .catalogs import *
 from .coverage import *
 from .photometry import *
+
+
+def fit_robust_trend(y, *args, yerr=None, sigma=5):
+    """Weighted linear regression of `y` over the regressors given as positional
+    arguments, with the outliers sigma-clipped away after the initial fit.
+
+    Returns the constant term followed by the slopes, one per regressor, or None if the
+    fit may not be performed.
+    """
+    y = np.asarray(y, dtype=float)
+    A = np.column_stack([np.ones_like(y)] + [np.asarray(_, dtype=float) for _ in args])
+
+    idx = np.isfinite(y) & np.all(np.isfinite(A), axis=1)
+    if yerr is not None:
+        yerr = np.asarray(yerr, dtype=float)
+        idx &= np.isfinite(yerr) & (yerr > 0)
+
+    w = 1/yerr[idx] if yerr is not None else np.ones(np.sum(idx))
+
+    def solve(sidx):
+        if np.sum(sidx) < A.shape[1] + 2:
+            return None
+        return np.linalg.lstsq(A[idx][sidx]*w[sidx][:,None], y[idx][sidx]*w[sidx],
+                               rcond=None)[0]
+
+    res = solve(np.ones(np.sum(idx), dtype=bool))
+    if res is None:
+        return None
+
+    # Refit without the outliers
+    # Median absolute deviation, so that the outliers do not inflate the threshold
+    cidx = ~sigma_clip(y[idx] - A[idx].dot(res), sigma=sigma, maxiters=3,
+                       stdfunc='mad_std').mask
+
+    return solve(cidx) if np.sum(cidx) < np.sum(idx) else res
+
+
+def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel_aper,
+                                rel_bkgann=None, mask=None, err=None, gain=1.0,
+                                bg_size=256, optimal=False, show=False, verbose=True):
+    """Measure the catalogue stars in the difference image and plot what is left of
+    their original fluxes there, versus calibrated magnitude and catalogue color.
+
+    The stars are the ones matched with the catalogue during the photometric
+    calibration, as stored in `m`, restricted to the sub-image defined by its `origin`
+    and `shape`. Forced photometry is repeated on the difference image with the same
+    aperture as the original one, so that the ratio of the two fluxes is directly the
+    fraction of stellar flux that failed to subtract.
+
+    The ratio is kept as a fraction, as close to zero it is directly the magnitude
+    error the imperfect subtraction introduces.
+
+    Returns the dict with the median ratio (`median`), its trends with magnitude
+    (`mag_slope`) and color (`color_slope`), and the number of stars used (`nstars`).
+    Returns None if the diagnostics may not be built.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    if not len(m.get('oidx', [])) or 'mag_calib' not in obj.colnames:
+        return None
+
+    x0,y0 = origin
+    oidx = np.asarray(m['oidx'])
+
+    xs = np.asarray(obj['x'], dtype=float)[oidx] - x0
+    ys = np.asarray(obj['y'], dtype=float)[oidx] - y0
+
+    flux0 = np.asarray(obj['flux'], dtype=float)[oidx]
+    mag0 = np.asarray(obj['mag_calib'], dtype=float)[oidx]
+    color = np.asarray(m['color'], dtype=float)
+
+    # Stars well inside the sub-image, with usable original photometry
+    margin = 2*rel_aper*fwhm
+    idx = (xs > margin) & (ys > margin) & (xs < shape[1] - margin) & (ys < shape[0] - margin)
+    idx &= np.isfinite(flux0) & (flux0 > 0) & np.isfinite(mag0)
+
+    if np.sum(idx) < 10:
+        log("Too few catalogue stars in the sub-image for subtraction photometry diagnostics")
+        return None
+
+    # Forced photometry in the difference image, with the original aperture
+    sobj = photometry.measure_objects(
+        Table({'x': xs[idx], 'y': ys[idx]}), diff, mask=mask,
+        fwhm=fwhm,
+        aper=rel_aper,
+        bkgann=rel_bkgann,
+        optimal=optimal,
+        sn=0,
+        # We assume no background, and known error model
+        bg=None,
+        err=err,
+        bg_size=bg_size,
+        gain=gain,
+        verbose=False
+    )
+
+    ratio = np.asarray(sobj['flux'], dtype=float)/flux0[idx]
+    ratio_err = np.asarray(sobj['fluxerr'], dtype=float)/flux0[idx]
+
+    mag0,color = mag0[idx],color[idx]
+    # The stars actually used for the photometric calibration, and properly measured
+    good = np.asarray(m['idx'])[idx] & (np.asarray(sobj['flags']) == 0)
+    flagged = np.asarray(sobj['flags']) != 0
+
+    if np.sum(good) < 10:
+        log("Too few properly measured stars for subtraction photometry diagnostics")
+        return None
+
+    median = np.median(ratio[good])
+
+    # Magnitude and color are correlated in most of the fields, so the dependence on
+    # them is fitted jointly, and shown in the plots as partial ones
+    fit = fit_robust_trend(ratio[good], mag0[good], color[good], yerr=ratio_err[good])
+    mag_median,color_median = np.median(mag0[good]),np.median(color[good])
+
+    log(f"Subtraction leaves {median:+.3f} of stellar flux inside the aperture, "
+        f"median over {np.sum(good)} catalogue stars")
+    if fit is not None:
+        log(f"It depends on the magnitude as {fit[1]:+.3f} per mag, "
+            f"and on the color as {fit[2]:+.3f} per mag of color")
+
+    with plots.figure_saver(filename, figsize=(8, 6), show=show) as fig:
+        for i,(x,xlabel) in enumerate([
+                (mag0, f"Calibrated {m.get('cat_col_mag', '')} magnitude"),
+                (color,
+                 f"Catalogue {m.get('cat_col_mag1', '')} - {m.get('cat_col_mag2', '')} color")
+        ]):
+            ax = fig.add_subplot(2, 1, i + 1)
+
+            ax.errorbar(x[~flagged], ratio[~flagged], ratio_err[~flagged], fmt='.',
+                        alpha=0.3, label='All matched stars')
+            ax.plot(x[good], ratio[good], '.', color='red', label='Used for the fit')
+            if np.sum(flagged):
+                ax.plot(x[flagged], ratio[flagged], 'x', color='orange', label='Masked in diff')
+
+            ax.axhline(0, ls='--', color='black', alpha=0.3)
+
+            if fit is not None:
+                # Partial dependence, with the other variable kept at its median
+                xx = np.linspace(np.min(x[good]), np.max(x[good]), 100)
+                if not i:
+                    yy = fit[0] + fit[1]*xx + fit[2]*color_median
+                else:
+                    yy = fit[0] + fit[1]*mag_median + fit[2]*xx
+
+                ax.plot(xx, yy, '--', color='blue', alpha=0.3,
+                        label=f"{fit[i + 1]:+.3f} per mag")
+
+            # Robust limits, keeping the zero level visible
+            lo,hi = np.percentile(ratio[good], [1, 99])
+            pad = 0.2*max(hi - lo, 0.01)
+            ax.set_ylim(min(0, lo) - pad, max(0, hi) + pad)
+
+            ax.legend()
+            ax.grid(alpha=0.2)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel('Flux left in diff, fraction')
+
+            if not i:
+                ax.set_title(f"Subtraction photometry: {np.sum(good)} stars, "
+                             f"{median:+.3f} of flux left in the difference image")
+
+    return {'median': median, 'nstars': int(np.sum(good)),
+            'mag_slope': fit[1] if fit is not None else None,
+            'color_slope': fit[2] if fit is not None else None}
 
 
 def subtract_image(filename, config, verbose=True, show=False):
@@ -462,6 +629,22 @@ def subtract_image(filename, config, verbose=True, show=False):
             rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
         else:
             rel_bkgann = None
+
+        # How well the stars actually subtracted
+        if plot_subtraction_photometry(
+            os.path.join(basepath, 'sub_photometry.png'),
+            diff, obj, m, (x0, y0), image1.shape,
+            mask=fullmask1,
+            err=ediff,
+            fwhm=config.get('fwhm'),
+            rel_aper=config.get('rel_aper', 1.0),
+            rel_bkgann=rel_bkgann,
+            optimal=config.get('optimal_extraction', False),
+            bg_size=config.get('bg_size', 256),
+            gain=config.get('gain', 1.0),
+            show=show, verbose=verbose
+        ):
+            log("Subtraction photometry diagnostics stored to file:sub_photometry.png")
 
         if config.get('target_ra') is not None and config.get('target_dec') is not None and subtraction_mode == 'target':
             # Target forced photometry

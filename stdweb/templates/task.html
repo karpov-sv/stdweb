@@ -875,6 +875,9 @@
               If <i>Radial profile</i> option is enabled for the photometry, the subtraction quality is also diagnosed by measuring the residuals in the difference image at the positions of the stars, normalized to the peak intensities the same stars have in the original image. It directly shows the fraction of stellar flux leaking into the difference image, both in the core and in the wings.
             </p>
             <p>
+              Subtraction quality is also checked photometrically, by repeating the forced photometry of the catalogue stars in the difference image with the same aperture as used for the calibration. The fraction of their original flux that is left there is plotted versus calibrated magnitude and catalogue color, so that both the overall level of under- or over-subtraction, and its dependence on the brightness (non-linearity, saturation) or on the color (template band mismatch) are directly visible.
+            </p>
+            <p>
               Transient detection is performed in a difference image using noise model produced by HOTPANTS and combined mask. Parameters for the detection and measurement, as well as photometric calibration of the candidates are the same as used for photometric calibration above.
             </p>
             <p>
@@ -905,7 +908,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' 'sub_profile.png' as list %}
+              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' 'sub_profile.png' 'sub_photometry.png' as list %}
               {% make_list 'sub_image.fits' 'sub_template.fits' 'sub_diff.fits' as blink_list %}
               {% for name in list %}
                 {% if name in files %}

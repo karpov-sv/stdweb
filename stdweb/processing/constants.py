@@ -226,7 +226,7 @@ files_subtraction = [
     'sub_diff.fits', 'sub_sdiff.fits', 'sub_conv.fits', 'sub_ediff.fits',
     'sub_scorr.fits', 'sub_fpsf.fits', 'sub_fpsferr.fits',
     'sub_target.vot', 'sub_target.cutout',
-    'sub_profile.png', 'sub_target_profile.png',
+    'sub_profile.png', 'sub_target_profile.png', 'sub_photometry.png',
     'candidates', 'candidates.vot', 'candidates.reg'
 ]
 
