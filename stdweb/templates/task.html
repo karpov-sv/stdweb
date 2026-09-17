@@ -642,7 +642,7 @@
               Object detection is controlled by the first row of values. S/N here influences both rejection of detections with too large errors, and magnitude limit estimations.
             </p>
             <p>
-              Second row controls aperture photometry at the positions of detected objects. The sizes of apertures, and optionally local sky background estimation annuli, are specified in units of average FWHM measured on the detection step. It is also possible to manually override FWHM value by setting it here.
+              Second row controls aperture photometry at the positions of detected objects. The sizes of apertures, and optionally local sky background estimation annuli, are specified in units of average FWHM measured on the detection step. It is also possible to manually override FWHM value by setting it here. <i>Radial profile</i> checkbox enables a diagnostic plot showing normalized intensities of stellar pixels versus the distance from their centroids, along with the FWHM, aperture radius and background annulus.
             </p>
             <p>
               Photometric calibration (third row) depends on the selection of primary filter and reference catalogue. The catalogue will be downloaded from Vizier, with optionally limiting it to only have stars brighter than given magnitude. Catalogue should not be much deeper than the image, as it may lead to spurious matches. Photometric solution will use specified polynomial order of zero point spatial dependency, and if requested will use color term relevant for the specified catalogue. Supported catalogues and filters are:
@@ -683,7 +683,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'objects.png' 'segmentation.fits' 'fwhm_mag.png' 'fwhm.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
+              {% make_list 'objects.png' 'segmentation.fits' 'fwhm_mag.png' 'fwhm.png' 'profile.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">
@@ -732,6 +732,9 @@
           <p>
             Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
           </p>
+          <p>
+            If <i>Radial profile</i> option is enabled for the photometry, the plot of individual pixel intensities around the target versus the distance from it is also shown, with masked pixels marked separately, and mean stellar profile scaled to the target flux overlaid. It helps checking whether the target is a well-defined point source, and whether it is contaminated by the neighbours.
+          </p>
         </span>
       </h3>
 
@@ -739,6 +742,11 @@
         <div class="text-center">
           {% include "task_block_image.html" with image=cutout.path task=task ra=cutout.ra dec=cutout.dec only %}
         </div>
+        {% if cutout.profile %}
+          <div class="text-center">
+            {% include "task_block_image.html" with image=cutout.profile task=task only %}
+          </div>
+        {% endif %}
       {% endfor %}
 
     {% endif %}
@@ -864,6 +872,9 @@
               Image subtraction will be handled by HOTPANTS. The code will try to automatically create proper noise maps for both image and the template, and select optimal HOTPANTS parameters for the subtraction. However, you may override them, or add extra parameters, by providing them as a JSON string. The most important parameters to adjust are <code>ko</code> and <code>bgo</code> that control the spatial orders of convolution kernel and backround inside the regions used for constructing the subtraction model.
             </p>
             <p>
+              If <i>Radial profile</i> option is enabled for the photometry, the subtraction quality is also diagnosed by measuring the residuals in the difference image at the positions of the stars, normalized to the peak intensities the same stars have in the original image. It directly shows the fraction of stellar flux leaking into the difference image, both in the core and in the wings.
+            </p>
+            <p>
               Transient detection is performed in a difference image using noise model produced by HOTPANTS and combined mask. Parameters for the detection and measurement, as well as photometric calibration of the candidates are the same as used for photometric calibration above.
             </p>
             <p>
@@ -894,7 +905,7 @@
 
           <div class="col">
             <div class="row">
-              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' as list %}
+              {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' 'sub_profile.png' as list %}
               {% make_list 'sub_image.fits' 'sub_template.fits' 'sub_diff.fits' as blink_list %}
               {% for name in list %}
                 {% if name in files %}
@@ -945,12 +956,20 @@
           <p>
             Overlay controls allow to adjust the scaling and stretching of the sub-images, and to turn on the reticle marking the target position in them.
           </p>
+          <p>
+            If <i>Radial profile</i> option is enabled for the photometry, the plot of individual pixel intensities around the target in the difference image is also shown, with the mean stellar profile of the original image scaled to the target flux overlaid - the template is the one being convolved, so the difference image keeps the original PSF. It helps checking whether the residual at the target position is a well-defined point source.
+          </p>
         </span>
       </h3>
 
       <div class="text-center">
         {% include "task_block_image.html" with image='sub_target.cutout' task=task ra=task.config.target_ra dec=task.config.target_dec only %}
       </div>
+      {% if 'sub_target_profile.png' in files %}
+        <div class="text-center">
+          {% include "task_block_image.html" with image='sub_target_profile.png' task=task only %}
+        </div>
+      {% endif %}
 
     {% endif %}
 

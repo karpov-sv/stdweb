@@ -263,6 +263,7 @@ class TaskPhotometryForm(forms.Form):
     refine_wcs = forms.BooleanField(required=False, label="Refine astrometry")
     blind_match_wcs = forms.BooleanField(required=False, label="Blind match")
     inspect_bg = forms.BooleanField(required=False, label="Inspect background")
+    inspect_profile = forms.BooleanField(required=False, label="Radial profile")
     centroid_targets = forms.BooleanField(required=False, label="Centroid targets")
     optimal_extraction = forms.BooleanField(required=False, label="Optimal extraction")
     nonlin = forms.BooleanField(required=False, label="Non-linearity")
@@ -324,6 +325,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('nonlin', css_class="col-md-auto"),
                 Column('diagnose_color', css_class="col-md-auto"),
                 Column('inspect_bg', css_class="col-md-auto"),
+                Column('inspect_profile', css_class="col-md-auto"),
                 css_class='align-items-end'
             ),
             Row(

@@ -303,9 +303,16 @@ def tasks(request, id=None):
         if os.path.exists(os.path.join(path, 'targets')) and 'targets' in task.config:
             for i,target in enumerate(task.config['targets']):
                 if os.path.exists(os.path.join(path, f"targets/target_{i:04d}.cutout")):
-                    context['target_cutouts'].append(
-                        {'path': f"targets/target_{i:04d}.cutout", 'ra': target.get('ra'), 'dec': target.get('dec')}
-                    )
+                    cutout = {
+                        'path': f"targets/target_{i:04d}.cutout",
+                        'ra': target.get('ra'), 'dec': target.get('dec'),
+                    }
+
+                    # Optional radial profile diagnostic plot
+                    if os.path.exists(os.path.join(path, f"targets/target_{i:04d}_profile.png")):
+                        cutout['profile'] = f"targets/target_{i:04d}_profile.png"
+
+                    context['target_cutouts'].append(cutout)
         elif os.path.exists(os.path.join(path, 'target.cutout')):
             # Fallback to legacy path
             context['target_cutouts'].append(

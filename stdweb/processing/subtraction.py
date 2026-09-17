@@ -544,6 +544,53 @@ def subtract_image(filename, config, verbose=True, show=False):
             target_obj.write(os.path.join(basepath, 'sub_target.vot'), format='votable', overwrite=True)
             log("Measured target stored to file:sub_target.vot")
 
+            # Radial profile of the target in the difference image
+            if config.get('inspect_profile'):
+                fwhm = config.get('fwhm', 3.0)
+                aper = config.get('rel_aper', 1.0)*fwhm
+                bkgann = [_*fwhm for _ in rel_bkgann] if rel_bkgann else None
+
+                # Mean stellar profile of the original image. The template is the
+                # one being convolved, so the difference image keeps the original PSF
+                ibg = sep.Background(
+                    image1.astype(np.double), mask=mask1,
+                    bw=config.get('bg_size', 256),
+                    bh=config.get('bg_size', 256),
+                )
+
+                profile = measure_radial_profile(
+                    image1 - ibg.back(), obj1, mask=mask1,
+                    fwhm=fwhm, aper=aper, bkgann=bkgann,
+                    verbose=sub_verbose
+                )
+
+                if profile is not None:
+                    # How much of the stellar flux is leaking into the difference image
+                    if plot_residual_radial_profile(
+                            os.path.join(basepath, 'sub_profile.png'),
+                            diff, obj1, mask=fullmask1,
+                            fwhm=fwhm, aper=aper, bkgann=bkgann,
+                            profile=profile,
+                            show=show, verbose=verbose
+                    ):
+                        log("Subtraction residual profile stored to file:sub_profile.png")
+                else:
+                    log("Cannot measure the mean stellar profile of the image")
+
+                if plot_target_radial_profile(
+                        os.path.join(basepath, 'sub_target_profile.png'),
+                        diff, target_obj['x'][0], target_obj['y'][0],
+                        mask=fullmask1,
+                        # Local background, if it was used for the target photometry
+                        bg_local=target_obj['bg_local'][0] if 'bg_local' in target_obj.colnames else 0,
+                        fwhm=fwhm, aper=aper, bkgann=bkgann,
+                        flux=target_obj['flux'][0],
+                        profile=profile,
+                        title="Target radial profile in difference image",
+                        show=show, verbose=sub_verbose
+                ):
+                    log("Target radial profile stored to file:sub_target_profile.png")
+
             # Create the cutout from image based on the candidate
             cutout = cutouts.get_cutout(
                 image1, target_obj[0], config.get('cutout_size', 30),

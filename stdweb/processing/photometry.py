@@ -6,6 +6,9 @@ import os
 
 import numpy as np
 
+from scipy.spatial import cKDTree
+from scipy.stats import binned_statistic
+
 from django.conf import settings
 
 from astropy.wcs import WCS
@@ -19,6 +22,377 @@ from stdpipe import templates, plots, pipeline, artefacts
 from .constants import *
 from .utils import *
 from .catalogs import *
+
+
+def get_profile_radius(image, fwhm, aper, bkgann=None):
+    """Radius, in pixels, to accumulate the radial profiles up to."""
+    rmax = max(4*fwhm, 1.2*aper)
+
+    if bkgann is not None:
+        rmax = max(rmax, 1.05*bkgann[1])
+
+    return min(rmax, 0.45*min(image.shape))
+
+
+def get_profile_pixels(image, x0, y0, rmax, mask=None, exclude=None, exclude_r=0):
+    """Extract all image pixels within `rmax` from given position.
+
+    The pixels closer than `exclude_r` to any of the positions in `exclude` - typically
+    the neighbouring objects - are reported as masked ones.
+
+    Returns their radii, values and mask flags, with the cutout clipped to image
+    boundaries. Returns empty arrays if the position is outside the image.
+    """
+    size = int(np.ceil(rmax))
+    x1,x2 = max(0, int(round(x0)) - size), min(image.shape[1], int(round(x0)) + size + 1)
+    y1,y2 = max(0, int(round(y0)) - size), min(image.shape[0], int(round(y0)) + size + 1)
+
+    if x1 >= x2 or y1 >= y2:
+        return np.array([]), np.array([]), np.array([], dtype=bool)
+
+    cutout = image[y1:y2, x1:x2]
+    xs,ys = np.arange(x1, x2), np.arange(y1, y2)
+    r = np.hypot((xs - x0)[None,:], (ys - y0)[:,None])
+
+    idx = np.isfinite(cutout) & (r <= rmax)
+
+    if mask is not None:
+        cmask = mask[y1:y2, x1:x2]
+    else:
+        cmask = np.zeros_like(cutout, dtype=bool)
+
+    if exclude is not None and len(exclude) and exclude_r > 0:
+        cmask = cmask.copy()
+        for xn,yn in exclude:
+            cmask |= np.hypot((xs - xn)[None,:], (ys - yn)[:,None]) < exclude_r
+
+    return r[idx], cutout[idx], cmask[idx]
+
+
+def get_stars_profile_pixels(image, obj, fwhm, rmax, mask=None, nstars=200, verbose=True):
+    """Collect the pixels around unflagged stars, normalized to their fluxes.
+
+    The stars are selected from `obj` using their flags and magnitude errors, while the
+    pixels are taken from `image` which is expected to be background subtracted. Instead
+    of rejecting the stars having any neighbours nearby - too strict a cut in all but
+    the sparsest fields - the pixels around the neighbouring objects are masked out, and
+    only the stars that keep most of their cores are used.
+
+    Returns the radii and normalized values of all the pixels, and the number of stars
+    used, or empty arrays if there are no suitable stars.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    # Reasonably bright unflagged stars
+    idx = np.asarray(obj['flags'] == 0)
+    idx &= np.asarray(obj['magerr'] < 1/20)
+    idx &= np.asarray(obj['flux'] > 0)
+
+    if not np.sum(idx):
+        log("No unflagged stars for measuring the radial profile")
+        return np.array([]), np.array([]), 0
+
+    xs = np.asarray(obj['x'], dtype=float)
+    ys = np.asarray(obj['y'], dtype=float)
+    fluxes = np.asarray(obj['flux'], dtype=float)
+
+    # Prefer the ones with best S/N
+    sidx = np.where(idx)[0]
+    sidx = sidx[np.argsort(np.asarray(obj['magerr'])[sidx])][:nstars]
+
+    # All the detected objects are potential contaminants
+    tree = cKDTree(np.column_stack((xs, ys)))
+    # Their wings are negligible at this distance
+    exclude_r = 2*fwhm
+
+    rs,vs = [],[]
+
+    for i in sidx:
+        nidx = [_ for _ in tree.query_ball_point([xs[i], ys[i]], rmax + exclude_r) if _ != i]
+
+        r,v,m = get_profile_pixels(
+            image, xs[i], ys[i], rmax, mask=mask,
+            exclude=np.column_stack((xs[nidx], ys[nidx])) if len(nidx) else None,
+            exclude_r=exclude_r
+        )
+
+        # Ignore the stars with significantly masked cores, as they would only
+        # contribute their wings and thus bias the profile
+        core = r < 0.5*fwhm
+
+        if np.sum(core & ~m) > 0.5*np.sum(core):
+            rs.append(r[~m])
+            vs.append(v[~m]/fluxes[i])
+
+    if not len(rs):
+        log("No stars suitable for measuring the radial profile")
+        return np.array([]), np.array([]), 0
+
+    return np.concatenate(rs), np.concatenate(vs), len(rs)
+
+
+def get_profile_step(fwhm):
+    """Width of the radial bins used for the profiles, in pixels."""
+    return max(0.25, fwhm/10)
+
+
+def get_binned_profile(rs, vs, rmax, fwhm):
+    """Median profile of the points in radial bins. Returns bin centers and values."""
+    step = get_profile_step(fwhm)
+    bins = np.arange(0, rmax + step, step)
+
+    prof,edges,_ = binned_statistic(rs, vs, statistic='median', bins=bins)
+
+    return 0.5*(edges[1:] + edges[:-1]), prof
+
+
+def measure_radial_profile(image, obj, fwhm, aper, bkgann=None, mask=None, nstars=200,
+                           verbose=True):
+    """Measure the mean radial profile of the stars in background subtracted image.
+
+    Individual stars are normalized to their measured fluxes, and then everything is
+    scaled so that the median profile peaks at unity.
+
+    Returns the dict with the median profile (`r` and `profile`), its peak value per
+    unit flux (`peak`, so that `profile*peak*flux` is the expected profile of a star of
+    given flux in original image units), the FWHM estimated from the profile itself
+    (`fwhm`), the number of stars used (`nstars`), and the normalized pixels the profile
+    is built from (`pixels_r` and `pixels_v`). Returns None if the profile may not be
+    measured.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    rmax = get_profile_radius(image, fwhm, aper, bkgann)
+
+    rs,vs,nused = get_stars_profile_pixels(image, obj, fwhm, rmax, mask=mask,
+                                           nstars=nstars, verbose=verbose)
+
+    if not nused:
+        return None
+
+    centers,prof = get_binned_profile(rs, vs, rmax, fwhm)
+
+    # Normalize everything to the peak of the median profile
+    inner = np.isfinite(prof) & (centers < 0.5*fwhm)
+    peak = np.nanmax(prof[inner]) if np.sum(inner) else np.nanmax(prof)
+    if not np.isfinite(peak) or peak <= 0:
+        log("Cannot normalize the radial profile")
+        return None
+
+    vs = vs/peak
+    prof = prof/peak
+
+    log(f"Radial profile measured using {nused} stars")
+
+    # FWHM from the half-maximum crossing of the median profile
+    fwhm_prof = None
+    i_below = np.where(np.isfinite(prof) & (prof < 0.5))[0]
+    if len(i_below):
+        pidx = np.isfinite(prof)
+        pidx[i_below[0]+1:] = False # Keep the profile monotonic up to the crossing
+        if np.sum(pidx) > 1:
+            fwhm_prof = 2*np.interp(0.5, prof[pidx][::-1], centers[pidx][::-1])
+            log(f"FWHM from the radial profile is {fwhm_prof:.2f} pixels")
+
+    return {'r': centers, 'profile': prof, 'peak': peak, 'fwhm': fwhm_prof,
+            'nstars': nused, 'rmax': rmax, 'pixels_r': rs, 'pixels_v': vs}
+
+
+def plot_profile_points(ax, rs, vs, label=None, nmax=100000):
+    """Scatter plot of individual pixels, sub-sampled if there are too many of them."""
+    if len(rs) > nmax:
+        idx = np.random.default_rng(0).choice(len(rs), nmax, replace=False)
+    else:
+        idx = slice(None)
+
+    ax.plot(rs[idx], vs[idx], '.', ms=2, alpha=0.2, color='gray',
+            rasterized=True, label=label)
+
+
+def plot_profile_radii(ax, fwhm, aper, bkgann=None):
+    """Mark the FWHM, aperture radius and background annulus on the radial profile plot."""
+    ax.axvline(0.5*fwhm, ls='--', color='C3', label=f"FWHM/2 = {0.5*fwhm:.2f} pix")
+    ax.axvline(aper, ls='-.', color='C2', label=f"Aperture = {aper:.2f} pix")
+
+    if bkgann is not None:
+        ax.axvspan(bkgann[0], bkgann[1], color='C1', alpha=0.15,
+                   label=f"Background annulus {bkgann[0]:.2f} - {bkgann[1]:.2f} pix")
+
+
+def plot_radial_profile(filename, image, obj, fwhm, aper, bkgann=None, mask=None,
+                        nstars=200, title=None, show=False, verbose=True):
+    """Plot the mean radial profile of the stars as a normalized scatter plot of
+    pixel intensities vs distance from the centroid, along with the FWHM estimate,
+    aperture radius and background annulus.
+
+    Returns the same dict as :func:`measure_radial_profile`, or None if the profile
+    may not be measured.
+    """
+    profile = measure_radial_profile(image, obj, fwhm, aper, bkgann=bkgann, mask=mask,
+                                     nstars=nstars, verbose=verbose)
+
+    if profile is None:
+        return None
+
+    with plots.figure_saver(filename, figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+
+        plot_profile_points(ax, profile['pixels_r'], profile['pixels_v'],
+                            label=f"Pixels of {profile['nstars']} stars")
+        ax.plot(profile['r'], profile['profile'], '-', color='C0', label='Median profile')
+
+        ax.axhline(0.5, ls=':', lw=1, color='gray')
+        plot_profile_radii(ax, fwhm, aper, bkgann)
+
+        ax.set_xlim(0, profile['rmax'])
+        ax.set_ylim(min(-0.05, np.nanpercentile(profile['pixels_v'], 1)), 1.1)
+        # Keep the legend away from the peak of the profile
+        ax.legend(loc='upper right')
+        ax.grid(alpha=0.2)
+        ax.set_xlabel('Radius, pixels')
+        ax.set_ylabel('Normalized intensity')
+
+        if title is None:
+            title = f"Radial profile: {profile['nstars']} stars, FWHM {fwhm:.2f} pix"
+            if profile['fwhm'] is not None:
+                title += f", profile FWHM {profile['fwhm']:.2f} pix"
+        ax.set_title(title)
+
+    return profile
+
+
+def plot_residual_radial_profile(filename, image, obj, fwhm, aper, profile, bkgann=None,
+                                 mask=None, nstars=200, title=None, show=False, verbose=True):
+    """Plot the radial profile of subtraction residuals at the positions of the stars.
+
+    The pixels are taken from the difference image, and normalized to the peak
+    intensities the same stars have in the original image, as given by the mean stellar
+    `profile` measured there. So the plot directly shows the fraction of stellar flux
+    leaking into the difference image.
+
+    Returns the dict with the median residual profile (`r` and `profile`, in per cent),
+    the number of stars used (`nstars`), the residual at the core (`core`), the largest
+    signed one inside the aperture (`worst`), and the fraction of stellar flux leaking
+    inside the aperture (`leak`, also in per cent). Returns None if it may not be
+    measured.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    rmax = get_profile_radius(image, fwhm, aper, bkgann)
+
+    rs,vs,nused = get_stars_profile_pixels(image, obj, fwhm, rmax, mask=mask,
+                                           nstars=nstars, verbose=verbose)
+
+    if not nused:
+        return None
+
+    # Per cent of the peak intensity the stars have in the original image
+    vs = 100*vs/profile['peak']
+
+    centers,prof = get_binned_profile(rs, vs, rmax, fwhm)
+
+    fidx = np.isfinite(prof)
+    if not np.sum(fidx):
+        log("Cannot measure the residual profile")
+        return None
+
+    core = prof[fidx][0]
+
+    # Largest residual inside the aperture, keeping its sign - it is often peaking
+    # slightly off-center, so it is more representative than the innermost bin
+    inside = fidx & (centers <= aper)
+    worst = prof[inside][np.argmax(np.abs(prof[inside]))] if np.sum(inside) else np.nan
+
+    # Integrating the median profile over the aperture area gives the fraction of
+    # stellar flux that is actually leaking into it
+    step = get_profile_step(fwhm)
+    leak = 100*np.sum(prof[inside]/100*profile['peak']*2*np.pi*centers[inside]*step)
+
+    log(f"Subtraction residuals at {nused} stars are {core:+.1f}% of stellar peak "
+        f"intensity at the core, and up to {worst:+.1f}% inside the aperture")
+    log(f"It corresponds to {leak:+.1f}% of stellar flux leaking inside the aperture")
+
+    with plots.figure_saver(filename, figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+
+        plot_profile_points(ax, rs, vs, label=f"Pixels of {nused} stars")
+        ax.plot(centers, prof, '-', color='C0', label='Median residual')
+
+        ax.axhline(0, ls=':', lw=1, color='gray')
+        plot_profile_radii(ax, fwhm, aper, bkgann)
+
+        # Symmetric limits so that positive and negative residuals are comparable,
+        # keeping the median profile well visible among the noise
+        lim = max(1.5*np.nanmax(np.abs(prof[fidx])), 1.5*np.nanpercentile(np.abs(vs), 99.5))
+        ax.set_xlim(0, rmax)
+        ax.set_ylim(-1.1*lim, 1.1*lim)
+        ax.legend(loc='upper right')
+        ax.grid(alpha=0.2)
+        ax.set_xlabel('Radius, pixels')
+        ax.set_ylabel('Residual, per cent of stellar peak intensity')
+
+        ax.set_title(title or
+                     f"Subtraction residuals: {nused} stars, up to {worst:+.1f}% of peak "
+                     f"intensity, {leak:+.1f}% of flux inside the aperture")
+
+    return {'r': centers, 'profile': prof, 'nstars': nused,
+            'core': core, 'worst': worst, 'leak': leak}
+
+
+def plot_target_radial_profile(filename, image, x0, y0, fwhm, aper, bkgann=None, mask=None,
+                               bg_local=0, flux=None, profile=None, title=None,
+                               show=False, verbose=True):
+    """Plot the radial profile of a single target, in original image units.
+
+    The image is expected to be background subtracted, with `bg_local` optionally
+    holding the residual local background used for the photometry of this target.
+
+    No filtering of any kind is applied, so that the neighbours and masked pixels are
+    directly visible. The mean stellar profile, if provided, is overplotted scaled to
+    the measured flux of the target, to see how well the target follows it.
+
+    Returns True if the plot has been created.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    rmax = get_profile_radius(image, fwhm, aper, bkgann)
+
+    r,v,m = get_profile_pixels(image, x0, y0, rmax, mask=mask)
+
+    if not len(r):
+        log("Cannot measure the radial profile at the target position")
+        return False
+
+    if bg_local and np.isfinite(bg_local):
+        v = v - bg_local
+
+    with plots.figure_saver(filename, figsize=(8, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 1, 1)
+
+        ax.plot(r[~m], v[~m], '.', ms=4, color='C0', label=f"Pixels ({np.sum(~m)})")
+        if np.sum(m):
+            ax.plot(r[m], v[m], 'x', ms=4, color='C3', label=f"Masked pixels ({np.sum(m)})")
+
+        # Mean stellar profile scaled to the flux of the target
+        if profile is not None and flux is not None and np.isfinite(flux):
+            ax.plot(profile['r'], profile['profile']*profile['peak']*flux, '-', color='C4',
+                    label="Mean stellar profile, scaled")
+
+        ax.axhline(0, ls=':', lw=1, color='gray')
+        plot_profile_radii(ax, fwhm, aper, bkgann)
+
+        ax.set_xlim(0, rmax)
+        ax.legend()
+        ax.grid(alpha=0.2)
+        ax.set_xlabel('Radius, pixels')
+        ax.set_ylabel('Intensity above background, ADU')
+        ax.set_title(title or "Target radial profile")
+
+    return True
 
 
 def photometry_image(filename, config, verbose=True, show=False):
@@ -236,6 +610,23 @@ def photometry_image(filename, config, verbose=True, show=False):
         ax.set_ylim(0, image.shape[0])
         ax.legend()
         ax.set_title(f"Detected objects: {np.sum(idx)} unmasked, {np.sum(~idx)} masked")
+
+    # Plot mean radial profile of the stars
+    profile = None
+    if config.get('inspect_profile'):
+        full_mask = (mask | custom_mask) if custom_mask is not None else mask
+
+        profile = plot_radial_profile(
+            os.path.join(basepath, 'profile.png'),
+            image - bg, obj, mask=full_mask,
+            fwhm=fwhm,
+            aper=config.get('rel_aper', 1.0)*fwhm,
+            bkgann=[_*fwhm for _ in rel_bkgann] if rel_bkgann else None,
+            show=show, verbose=verbose
+        )
+
+        if os.path.exists(os.path.join(basepath, 'profile.png')):
+            log("Radial profile diagnostic plot stored to file:profile.png")
 
     log("\n---- Initial astrometry ----\n")
 
@@ -682,6 +1073,10 @@ def photometry_image(filename, config, verbose=True, show=False):
         target_obj.write(os.path.join(basepath, 'target.vot'), format='votable', overwrite=True)
         log("Measured targets stored to file:target.vot")
 
+        if config.get('inspect_profile'):
+            profile_image = image - bg
+            profile_mask = (mask | custom_mask) if custom_mask is not None else mask
+
         # Create the cutouts from image based on the targets
         for i,tobj in enumerate(target_obj):
             cutout_name = f"targets/target_{i:04d}.cutout"
@@ -692,6 +1087,31 @@ def photometry_image(filename, config, verbose=True, show=False):
                 tobj['x'] > image.shape[1] or tobj['y'] > image.shape[0]):
                 log(f"{target_title} is outside image, skipping")
                 continue
+
+            try:
+                os.makedirs(os.path.join(basepath, 'targets'))
+            except OSError:
+                pass
+
+            # Radial profile of the target itself, unfiltered
+            if config.get('inspect_profile'):
+                profile_name = f"targets/target_{i:04d}_profile.png"
+
+                if plot_target_radial_profile(
+                        os.path.join(basepath, profile_name),
+                        profile_image, tobj['x'], tobj['y'],
+                        mask=profile_mask,
+                        # Local background, if it was used for the target photometry
+                        bg_local=tobj['bg_local'] if 'bg_local' in target_obj.colnames else 0,
+                        fwhm=fwhm,
+                        aper=config.get('rel_aper', 1.0)*fwhm,
+                        bkgann=[_*fwhm for _ in rel_bkgann] if rel_bkgann else None,
+                        flux=tobj['flux'],
+                        profile=profile,
+                        title=f"{target_title} radial profile",
+                        show=show, verbose=verbose
+                ):
+                    log(f"{target_title} radial profile stored to file:{profile_name}")
 
             cutout = cutouts.get_cutout(
                 image, tobj, config.get('cutout_size', 30),
@@ -706,11 +1126,6 @@ def photometry_image(filename, config, verbose=True, show=False):
                 header=cutout['header'],
                 get_header=False
             )
-
-            try:
-                os.makedirs(os.path.join(basepath, 'targets'))
-            except OSError:
-                pass
 
             cutouts.write_cutout(cutout, os.path.join(basepath, cutout_name))
             log(f"{target_title} cutouts stored to file:{cutout_name}")

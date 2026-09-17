@@ -121,6 +121,7 @@ Parameters used during photometric calibration (`photometry_image()`).
 |-----------|------|---------|-------------|
 | `diagnose_color` | bool | False | Run photometric diagnostics for all available filter combinations. |
 | `inspect_bg` | bool | False | Write background and RMS maps to FITS files. |
+| `inspect_profile` | bool | False | Plot mean radial profile of the stars, and unfiltered radial profiles of the targets, with FWHM, aperture and background annulus. Also plots the target in the difference image, and the subtraction residuals at stellar positions. |
 
 ---
 
