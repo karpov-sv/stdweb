@@ -83,12 +83,104 @@ def test_subtraction_photometry(tmp_path):
     assert res['mag_slope'] == pytest.approx(0.0, abs=0.005)
 
 
-def test_subtraction_photometry_without_stars(tmp_path):
+def test_subtraction_photometry_few_stars(tmp_path):
+    """Too few stars to separate the magnitude and color trends - the magnitude one
+    should still be fitted, marginally."""
+    fwhm = 4.0
+    diff,obj,m = _make_leaking_field(fwhm=fwhm, n=7, leak0=5.0, color_slope=10.0)
+
+    filename = str(tmp_path / 'sub_photometry.png')
+    res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
+                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+
+    assert os.path.exists(filename)
+    assert res['nstars'] == 7
+    assert res['median'] == pytest.approx(0.05, abs=0.03)
+    assert res['mag_slope'] is not None
+    assert res['color_slope'] is None
+
+
+def test_subtraction_photometry_very_few_stars(tmp_path):
+    """Not even enough for a fit - the median should still be reported."""
+    fwhm = 4.0
+    diff,obj,m = _make_leaking_field(fwhm=fwhm, n=4, leak0=5.0, color_slope=10.0)
+
+    filename = str(tmp_path / 'sub_photometry.png')
+    res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
+                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+
+    assert os.path.exists(filename)
+    assert res['nstars'] == 4
+    assert res['median'] == pytest.approx(0.05, abs=0.03)
+    assert res['mag_slope'] is None
+    assert res['color_slope'] is None
+
+
+def test_subtraction_photometry_without_color(tmp_path):
+    """No usable colors - only the magnitude panel, fitted alone."""
+    fwhm = 4.0
+    diff,obj,m = _make_leaking_field(fwhm=fwhm, leak0=5.0, color_slope=0.0)
+    m['color'] = np.full(len(m['color']), np.nan)
+
+    filename = str(tmp_path / 'sub_photometry.png')
+    res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
+                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+
+    assert os.path.exists(filename)
+    assert res['mag_slope'] is not None
+    assert res['color_slope'] is None
+
+
+def test_subtraction_photometry_without_catalogue(tmp_path):
+    """The magnitude panel needs no catalogue at all, and should survive it."""
     diff,obj,m = _make_leaking_field()
 
     # Nothing is matched with the catalogue
     m['oidx'] = np.array([], dtype=int)
     m['color'] = np.array([])
+    m['idx'] = np.array([], dtype=bool)
+
+    filename = str(tmp_path / 'sub_photometry.png')
+    res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
+                                      fwhm=4.0, rel_aper=1.0, verbose=False)
+
+    assert os.path.exists(filename)
+    assert res['nstars'] > 100
+    assert res['ncolor'] == 0
+    assert res['mag_slope'] is not None
+    assert res['color_slope'] is None
+
+
+def test_subtraction_photometry_deeper_than_catalogue(tmp_path):
+    """Only a handful of objects are in the catalogue, the rest are fainter - the
+    magnitude panel should use them all, and the color one just the matched ones."""
+    fwhm = 4.0
+    diff,obj,m = _make_leaking_field(fwhm=fwhm, leak0=5.0, color_slope=10.0)
+
+    # Only the 12 brightest objects are matched with the catalogue
+    bright = np.argsort(obj['mag_calib'])[:12]
+    m['oidx'] = bright
+    m['color'] = m['color'][bright]
+    m['idx'] = np.ones(len(bright), dtype=bool)
+
+    filename = str(tmp_path / 'sub_photometry.png')
+    res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
+                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+
+    assert os.path.exists(filename)
+    assert res['nstars'] > 100
+    assert res['ncolor'] == 12
+    assert res['color_slope'] == pytest.approx(0.1, rel=0.3)
+
+
+def test_subtraction_photometry_without_objects(tmp_path):
+    diff,obj,m = _make_leaking_field()
+
+    # Nothing at all is detected
+    obj = obj[:0]
+    m['oidx'] = np.array([], dtype=int)
+    m['color'] = np.array([])
+    m['idx'] = np.array([], dtype=bool)
 
     filename = str(tmp_path / 'sub_photometry.png')
     assert plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,

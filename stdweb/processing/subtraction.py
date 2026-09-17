@@ -263,45 +263,74 @@ def combine_templates(tmpl1, tmask1, tmpl2, tmask2, obj, m, origin, shape,
 def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel_aper,
                                 rel_bkgann=None, mask=None, err=None, gain=1.0,
                                 bg_size=256, optimal=False, show=False, verbose=True):
-    """Measure the catalogue stars in the difference image and plot what is left of
-    their original fluxes there, versus calibrated magnitude and catalogue color.
+    """Measure the objects in the difference image and plot what is left of their
+    original fluxes there, versus calibrated magnitude and catalogue color.
 
-    The stars are the ones matched with the catalogue during the photometric
-    calibration, as stored in `m`, restricted to the sub-image defined by its `origin`
-    and `shape`. Forced photometry is repeated on the difference image with the same
-    aperture as the original one, so that the ratio of the two fluxes is directly the
-    fraction of stellar flux that failed to subtract.
+    Forced photometry is repeated on the difference image with the same aperture as the
+    original one, so that the ratio of the two fluxes is directly the fraction of flux
+    that failed to subtract. The ratio is kept as a fraction, as close to zero it is
+    directly the magnitude error the imperfect subtraction introduces.
 
-    The ratio is kept as a fraction, as close to zero it is directly the magnitude
-    error the imperfect subtraction introduces.
+    The magnitude panel needs no catalogue - `mag_calib` is known for every detection -
+    so it uses all the unflagged objects inside the sub-image, and stays informative
+    down to the detection limit of the image rather than to the limit of the reference
+    catalogue. The color one is necessarily restricted to the stars matched during the
+    photometric calibration, as stored in `m`, and fits the color dependence jointly
+    with the magnitude one, so that the two correlated trends are not confused. The
+    magnitude trend of the deeper sample is instead a marginal one, and absorbs
+    whatever color dependence there is.
+
+    Sparse fields are handled by degrading the diagnostics instead of dropping them:
+    the median needs just `min_stars` objects, fitting a trend needs `min_stars_mag_fit`
+    of them, and the joint fit of the color one needs `min_stars_fit` catalogue stars.
 
     Returns the dict with the median ratio (`median`), its trends with magnitude
-    (`mag_slope`) and color (`color_slope`), and the number of stars used (`nstars`).
-    Returns None if the diagnostics may not be built.
+    (`mag_slope`) and color (`color_slope`), either of which may be None, the number of
+    objects the former is measured over (`nstars`) and of catalogue stars behind the
+    latter (`ncolor`). Returns None if the diagnostics may not be built.
     """
+    # Objects needed to show the points and the median, to fit a trend, and to fit the
+    # magnitude and color ones jointly
+    min_stars = 3
+    min_stars_mag_fit = 5
+    min_stars_fit = 10
+
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
 
-    if not len(m.get('oidx', [])) or 'mag_calib' not in obj.colnames:
+    if 'mag_calib' not in obj.colnames:
         return None
 
     x0,y0 = origin
-    oidx = np.asarray(m['oidx'])
 
-    xs = np.asarray(obj['x'], dtype=float)[oidx] - x0
-    ys = np.asarray(obj['y'], dtype=float)[oidx] - y0
+    xs = np.asarray(obj['x'], dtype=float) - x0
+    ys = np.asarray(obj['y'], dtype=float) - y0
 
-    flux0 = np.asarray(obj['flux'], dtype=float)[oidx]
-    mag0 = np.asarray(obj['mag_calib'], dtype=float)[oidx]
-    color = np.asarray(m['color'], dtype=float)
+    flux0 = np.asarray(obj['flux'], dtype=float)
+    mag0 = np.asarray(obj['mag_calib'], dtype=float)
+    flags = np.asarray(obj['flags'], dtype=int) if 'flags' in obj.colnames \
+        else np.zeros(len(obj), dtype=int)
 
-    # Stars well inside the sub-image, with usable original photometry
+    # Catalogue color, and the stars actually used for the photometric calibration
+    color = np.full(len(obj), np.nan)
+    iscat = np.zeros(len(obj), dtype=bool)
+    oidx = np.asarray(m.get('oidx', []), dtype=int)
+
+    if len(oidx):
+        color[oidx] = np.asarray(m['color'], dtype=float)
+        iscat[oidx[np.asarray(m['idx'], dtype=bool)]] = True
+
+    # Objects well inside the sub-image, with usable original photometry. The flagged
+    # ones are dropped, except for the calibration stars, that are selected as they
+    # were during the calibration itself.
     margin = 2*rel_aper*fwhm
     idx = (xs > margin) & (ys > margin) & (xs < shape[1] - margin) & (ys < shape[0] - margin)
     idx &= np.isfinite(flux0) & (flux0 > 0) & np.isfinite(mag0)
+    idx &= (flags == 0) | iscat
 
-    if np.sum(idx) < 10:
-        log("Too few catalogue stars in the sub-image for subtraction photometry diagnostics")
+    if np.sum(idx) < min_stars:
+        log(f"Only {np.sum(idx)} objects in the sub-image, too few for "
+            "subtraction photometry diagnostics")
         return None
 
     # Forced photometry in the difference image, with the original aperture
@@ -323,57 +352,90 @@ def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel
     ratio = np.asarray(sobj['flux'], dtype=float)/flux0[idx]
     ratio_err = np.asarray(sobj['fluxerr'], dtype=float)/flux0[idx]
 
-    mag0,color = mag0[idx],color[idx]
-    # The stars actually used for the photometric calibration, and properly measured
-    good = np.asarray(m['idx'])[idx] & (np.asarray(sobj['flags']) == 0)
+    mag0,color,iscat = mag0[idx],color[idx],iscat[idx]
+    unflagged = flags[idx] == 0
+    # Properly measured in the difference image
     flagged = np.asarray(sobj['flags']) != 0
 
-    if np.sum(good) < 10:
-        log("Too few properly measured stars for subtraction photometry diagnostics")
+    # The deep sample behind the magnitude panel, and the catalogue one behind the color
+    good = ~flagged & unflagged
+    cgood = ~flagged & iscat & np.isfinite(color)
+
+    if np.sum(good) < min_stars:
+        log(f"Only {np.sum(good)} properly measured objects, too few for "
+            "subtraction photometry diagnostics")
         return None
 
     median = np.median(ratio[good])
 
-    # Magnitude and color are correlated in most of the fields, so the dependence on
-    # them is fitted jointly, and shown in the plots as partial ones
-    fit = fit_robust_trend(ratio[good], mag0[good], color[good], yerr=ratio_err[good])
-    mag_median,color_median = np.median(mag0[good]),np.median(color[good])
+    has_color = np.sum(cgood) >= min_stars and np.ptp(color[cgood]) > 0
 
-    log(f"Subtraction leaves {median:+.3f} of stellar flux inside the aperture, "
-        f"median over {np.sum(good)} catalogue stars")
+    # Magnitude and color are correlated in most of the fields, so on the catalogue
+    # stars, where both are known, they are fitted jointly and shown in the plots as
+    # partial dependences. The magnitude trend of the deeper sample is a marginal one.
+    fit = fit_robust_trend(ratio[good], mag0[good], yerr=ratio_err[good]) \
+        if np.sum(good) >= min_stars_mag_fit else None
+
+    cfit = fit_robust_trend(ratio[cgood], mag0[cgood], color[cgood], yerr=ratio_err[cgood]) \
+        if has_color and np.sum(cgood) >= min_stars_fit else None
+
+    mag_median = np.median(mag0[cgood]) if has_color else None
+
+    log(f"Subtraction leaves {median:+.3f} of flux inside the aperture, "
+        f"median over {np.sum(good)} objects down to {np.max(mag0[good]):.1f} mag")
     if fit is not None:
-        log(f"It depends on the magnitude as {fit[1]:+.3f} per mag, "
-            f"and on the color as {fit[2]:+.3f} per mag of color")
+        log(f"It depends on the magnitude as {fit[1]:+.3f} per mag"
+            + (", marginally, as the color dependence is folded into it"
+               if cfit is not None else ""))
+    if cfit is not None:
+        log(f"It depends on the color as {cfit[2]:+.3f} per mag of color, "
+            f"over {np.sum(cgood)} catalogue stars")
 
-    with plots.figure_saver(filename, figsize=(8, 6), show=show) as fig:
-        for i,(x,xlabel) in enumerate([
-                (mag0, f"Calibrated {m.get('cat_col_mag', '')} magnitude"),
-                (color,
-                 f"Catalogue {m.get('cat_col_mag1', '')} - {m.get('cat_col_mag2', '')} color")
-        ]):
-            ax = fig.add_subplot(2, 1, i + 1)
+    # Every panel is its values, the sample behind its fit, the fit itself, the mask of
+    # everything worth showing, whether the fit is a partial dependence or a marginal
+    # one, and the labels
+    panels = [(mag0, good, fit, unflagged, False, 'All detections',
+               f"Calibrated {m.get('cat_col_mag', '')} magnitude")]
+    if has_color:
+        panels.append(
+            (color, cgood, cfit, iscat, True, 'All matched stars',
+             f"Catalogue {m.get('cat_col_mag1', '')} - {m.get('cat_col_mag2', '')} color")
+        )
 
-            ax.errorbar(x[~flagged], ratio[~flagged], ratio_err[~flagged], fmt='.',
-                        alpha=0.3, label='All matched stars')
-            ax.plot(x[good], ratio[good], '.', color='red', label='Used for the fit')
+    with plots.figure_saver(filename, figsize=(8, 6 if len(panels) > 1 else 4), show=show) as fig:
+        for i,(x,sel,pfit,base,partial,alllabel,xlabel) in enumerate(panels):
+            ax = fig.add_subplot(len(panels), 1, i + 1)
+
+            shown = ~flagged & base
+
+            # The error bars are drawn for everything shown, but only labelled
+            # separately when there is something beyond the sample behind the fit
+            ax.errorbar(x[shown], ratio[shown], ratio_err[shown], fmt='.', alpha=0.3,
+                        label=alllabel if np.sum(shown & ~sel) else None)
+            ax.plot(x[sel], ratio[sel], '.', color='red',
+                    label='Used for the fit' if pfit is not None else 'Used for the median')
             if np.sum(flagged):
                 ax.plot(x[flagged], ratio[flagged], 'x', color='orange', label='Masked in diff')
 
             ax.axhline(0, ls='--', color='black', alpha=0.3)
 
-            if fit is not None:
-                # Partial dependence, with the other variable kept at its median
-                xx = np.linspace(np.min(x[good]), np.max(x[good]), 100)
-                if not i:
-                    yy = fit[0] + fit[1]*xx + fit[2]*color_median
-                else:
-                    yy = fit[0] + fit[1]*mag_median + fit[2]*xx
+            if pfit is not None:
+                # The partial dependence keeps the magnitude at its median
+                xx = np.linspace(np.nanmin(x[sel]), np.nanmax(x[sel]), 100)
+                yy = pfit[0] + (pfit[1]*mag_median if partial else 0) + pfit[-1]*xx
 
                 ax.plot(xx, yy, '--', color='blue', alpha=0.3,
-                        label=f"{fit[i + 1]:+.3f} per mag")
+                        label=f"{pfit[-1]:+.3f} per mag"
+                        + ("" if partial or cfit is None else ", marginal"))
 
-            # Robust limits, keeping the zero level visible
-            lo,hi = np.percentile(ratio[good], [1, 99])
+            # Robust limits, keeping the zero level visible. The deep sample also holds
+            # the objects that are not in the template at all, and thus stay in the
+            # difference in full - they are for the transient detection to find, and
+            # here they would just squeeze everything else into a line.
+            lo,hi = np.percentile(ratio[sel], [1, 99])
+            center,scale = np.median(ratio[sel]),mad_std(ratio[sel])
+            if np.isfinite(scale) and scale > 0:
+                lo,hi = max(lo, center - 5*scale), min(hi, center + 5*scale)
             pad = 0.2*max(hi - lo, 0.01)
             ax.set_ylim(min(0, lo) - pad, max(0, hi) + pad)
 
@@ -382,13 +444,14 @@ def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel
             ax.set_xlabel(xlabel)
             ax.set_ylabel('Flux left in diff, fraction')
 
-            if not i:
-                ax.set_title(f"Subtraction photometry: {np.sum(good)} stars, "
+            if not partial:
+                ax.set_title(f"Subtraction photometry: {np.sum(good)} objects, "
                              f"{median:+.3f} of flux left in the difference image")
 
-    return {'median': median, 'nstars': int(np.sum(good)),
+    return {'median': median,
+            'nstars': int(np.sum(good)), 'ncolor': int(np.sum(cgood)),
             'mag_slope': fit[1] if fit is not None else None,
-            'color_slope': fit[2] if fit is not None else None}
+            'color_slope': cfit[2] if cfit is not None else None}
 
 
 def subtract_image(filename, config, verbose=True, show=False):
