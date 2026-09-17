@@ -610,7 +610,7 @@
         </div>
       {% endif %}
 
-          <div class="col">
+          <div class="col" style="max-width:520px;">
             <div class="row">
               {% make_list 'image.fits' 'mask.fits' 'image_target.fits' 'custom_mask.fits' 'custom_template.fits' 'custom_template_mask.fits' 'image_bg.fits' 'image_rms.fits' 'fringe_model.fits' as list %}
               {% make_list 'image.fits' 'mask.fits' 'fringe_model.fits' as blink_list %}
@@ -681,7 +681,7 @@
             {% include "task_block_text.html" with file='photometry.log' %}
           </div>
 
-          <div class="col">
+          <div class="col" style="max-width:520px;">
             <div class="row">
               {% make_list 'objects.png' 'segmentation.fits' 'fwhm_mag.png' 'fwhm.png' 'profile.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
               {% for name in list %}
@@ -792,7 +792,7 @@
             {% include "task_block_text.html" with file='transients_simple.log' %}
           </div>
 
-          <div class="col">
+          <div class="col" style="max-width:520px;">
             <div class="row">
               {% make_list '' as list %}
               {% for name in list %}
@@ -906,7 +906,7 @@
             {% include "task_block_text.html" with file='subtraction.log' %}
           </div>
 
-          <div class="col">
+          <div class="col" style="max-width:520px;">
             <div class="row">
               {% make_list 'sub_image.fits' 'sub_mask.fits' 'sub_template.fits' 'sub_template_mask.fits' 'sub_conv.fits' 'sub_diff.fits' 'sub_sdiff.fits' 'sub_scorr.fits' 'sub_template_fwhm_mag.png' 'sub_profile.png' 'sub_photometry.png' as list %}
               {% make_list 'sub_image.fits' 'sub_template.fits' 'sub_diff.fits' as blink_list %}
