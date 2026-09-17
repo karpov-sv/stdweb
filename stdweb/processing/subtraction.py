@@ -16,7 +16,10 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.table import Table, vstack
 from astropy.time import Time
-from astropy.stats import sigma_clip
+from astropy.stats import sigma_clip, mad_std, gaussian_fwhm_to_sigma
+from astropy.convolution import Gaussian2DKernel, convolve_fft
+
+from scipy.optimize import brentq
 
 from stdpipe import astrometry, photometry, cutouts
 from stdpipe import templates, subtraction, plots, pipeline
@@ -27,6 +30,10 @@ from .utils import *
 from .catalogs import *
 from .coverage import *
 from .photometry import *
+
+
+# Plausible range for the coefficient mixing the two template bands
+max_mixing_coeff = 5
 
 
 def fit_robust_trend(y, *args, yerr=None, sigma=5):
@@ -62,6 +69,195 @@ def fit_robust_trend(y, *args, yerr=None, sigma=5):
                        stdfunc='mad_std').mask
 
     return solve(cidx) if np.sum(cidx) < np.sum(idx) else res
+
+
+def measure_template_fwhm(tmpl, mask=None, bg_size=256, gain=10000,
+                          segmentation=False, verbose=True):
+    """Detect the objects in the template image and estimate its median FWHM in pixels.
+
+    Returns the FWHM, the detections, the mask of the ones used for the estimation, and
+    the segmentation map. The latter is only produced when `segmentation` is set, as
+    SExtractor has to write a full sized image for it, and we have to read it back.
+    """
+    res = photometry.get_objects_sextractor(
+        tmpl, mask=mask, sn=5, gain=gain,
+        extra={
+            'BACK_SIZE': bg_size,
+            # 'SATUR_LEVEL': template_saturation,
+        },
+        extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
+        checkimages=['SEGMENTATION'] if segmentation else [],
+        _tmpdir=settings.STDPIPE_TMPDIR,
+        _exe=settings.STDPIPE_SEXTRACTOR
+    )
+
+    tobj,tsegm = res if segmentation else (res, None)
+
+    tidx = tobj['flags'] == 0
+    if len(tobj) > 20:
+        tidx &= artefacts.filter_sextractor_detections(tobj, verbose=verbose)
+
+    return np.median(2.0*tobj['FLUX_RADIUS'][tidx]), tobj, tidx, tsegm
+
+
+def fit_mixing_coefficient(tmpls, tmask, obj, m, origin, shape, fwhm,
+                           min_stars=10, bg_size=256, gain=10000, verbose=True):
+    """Fit the `coeff` of `F_image = F1 + coeff*F2` on the catalogue stars used for the
+    photometric calibration, as stored in `m`, by measuring them on the two PSF matched
+    templates given in `tmpls`.
+
+    Returns the coefficient, or None if it may not be fitted.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    oidx = np.asarray(m.get('oidx', []), dtype=int)
+
+    if not len(oidx):
+        return None
+
+    x0,y0 = origin
+
+    xs = np.asarray(obj['x'], dtype=float)[oidx] - x0
+    ys = np.asarray(obj['y'], dtype=float)[oidx] - y0
+    flux0 = np.asarray(obj['flux'], dtype=float)[oidx]
+
+    margin = 3*fwhm
+    idx = (xs > margin) & (ys > margin) & (xs < shape[1] - margin) & (ys < shape[0] - margin)
+    idx &= np.isfinite(flux0) & (flux0 > 0) & np.asarray(m['idx'])
+
+    if np.sum(idx) < min_stars:
+        log("Too few catalogue stars in the sub-image to fit the mixing coefficient")
+        return None
+
+    # The same aperture on both PSF matched templates, so that the ratio of the two
+    # fluxes is the ratio of the actual stellar fluxes in the two filters
+    fluxes = [
+        photometry.measure_objects(
+            Table({'x': xs[idx], 'y': ys[idx]}), tmpl_, mask=tmask,
+            fwhm=fwhm, aper=2.0, bkgann=[5, 7],
+            sn=0, bg=None, err=None, bg_size=bg_size, gain=gain,
+            verbose=False
+        ) for tmpl_ in tmpls
+    ]
+
+    fidx = np.all([(_['flags'] == 0) & np.isfinite(_['flux']) & (_['flux'] > 0)
+                   for _ in fluxes], axis=0)
+
+    if np.sum(fidx) < min_stars:
+        log("Too few stars measurable on both templates to fit the mixing coefficient")
+        return None
+
+    f0 = flux0[idx][fidx]
+    f1,f2 = [np.asarray(_['flux'], dtype=float)[fidx] for _ in fluxes]
+    color = None
+    if m.get('color') is not None:
+        color = np.asarray(m['color'], dtype=float)[idx][fidx]
+
+    A = np.column_stack([f1, f2])
+    # Equal weight per star in magnitude space
+    w = 1/f0
+    good = np.ones(len(f0), dtype=bool)
+
+    for _ in range(5):
+        c = np.linalg.lstsq(A[good]*w[good,None], f0[good]*w[good], rcond=None)[0]
+        res = 1 - A.dot(c)/f0
+        good1 = good & (np.abs(res) < 3*mad_std(res[good]))
+        if np.all(good1 == good) or np.sum(good1) < min_stars:
+            break
+        good = good1
+
+    if not (c[0] > 0 and 0 < c[1]/c[0] < max_mixing_coeff):
+        log(f"Warning: fitted mixing coefficients {c[0]:.3g} and {c[1]:.3g} "
+            "are not usable")
+        return None
+
+    coeff = c[1]/c[0]
+
+    # The least squares solution above minimizes the scatter of the residuals, while
+    # what the combination is actually for is nulling their dependence on the color.
+    # The latter is monotonically decreasing with the coefficient, so it may just be
+    # solved for.
+    if color is not None and np.all(np.isfinite(color[good])) and np.ptp(color[good]) > 0.1:
+        def color_slope(coeff_):
+            ratio = (f1 + coeff_*f2)/f0
+            return np.polyfit(color[good], (1 - ratio/np.median(ratio[good]))[good], 1)[0]
+
+        if color_slope(0) > 0 > color_slope(max_mixing_coeff):
+            coeff = brentq(color_slope, 0, max_mixing_coeff)
+
+    ratio = (f1 + coeff*f2)/f0
+    scatter = mad_std((1 - ratio/np.median(ratio[good]))[good])
+
+    log(f"Mixing coefficient fitted as {coeff:.3f} on {np.sum(good)} stars, "
+        f"they are reproduced to {scatter*100:.2f}%")
+
+    return coeff
+
+
+def combine_templates(tmpl1, tmask1, tmpl2, tmask2, obj, m, origin, shape,
+                      coeff=None, bg_size=256, gain=10000, verbose=True):
+    """Build a synthetic band template as a linear combination `T1 + coeff*T2` of the
+    templates in the two filters bracketing the filter of the image.
+
+    The combination has to be linear in flux, not in magnitudes, so that it stays
+    additive - only then the blends, the galaxies and the transients on top of them
+    combine the same way the individual stars do.
+
+    The two templates are first brought to a common PSF by blurring the sharper one, as
+    otherwise the combination would have a color dependent PSF. The mixing coefficient
+    is then fitted on the catalogue stars by `fit_mixing_coefficient` below, and then
+    refined so that the color dependence of the residuals is nulled, rather than just
+    their scatter. Fitting it, instead of using the tabulated value, adapts
+    the synthetic band to the actual bandpass of the image, including its color term,
+    and needs no assumptions on the photometric scale of the two templates.
+
+    `coeff`, if provided, is the fallback used when the fit may not be performed.
+
+    Returns the combined template, the union of the two masks, and the coefficient
+    actually used, or None if the combination may not be built at all.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    tmask = tmask1 | tmask2
+
+    # Bring both templates to the same PSF by blurring the sharper one
+    fwhm1 = measure_template_fwhm(tmpl1, mask=tmask1, bg_size=bg_size, gain=gain,
+                                  verbose=False)[0]
+    fwhm2 = measure_template_fwhm(tmpl2, mask=tmask2, bg_size=bg_size, gain=gain,
+                                  verbose=False)[0]
+
+    if not np.isfinite(fwhm1) or not np.isfinite(fwhm2):
+        log("Warning: cannot estimate the FWHM of the templates, not combining them")
+        return None
+
+    fwhm0 = max(fwhm1, fwhm2)
+    log(f"Template FWHM is {fwhm1:.2f} pix and {fwhm2:.2f} pix in the two filters")
+
+    tmpls = []
+    for tmpl_,tmask_,fwhm_ in [(tmpl1, tmask1, fwhm1), (tmpl2, tmask2, fwhm2)]:
+        if fwhm0**2 - fwhm_**2 > 0.01:
+            sigma = gaussian_fwhm_to_sigma*np.sqrt(fwhm0**2 - fwhm_**2)
+            log(f"Blurring the template with sigma {sigma:.2f} pix to match FWHM {fwhm0:.2f} pix")
+            tmpl_ = tmpl_.copy()
+            tmpl_[tmask_] = np.nan
+            tmpl_ = convolve_fft(tmpl_, Gaussian2DKernel(sigma), nan_treatment='interpolate',
+                                 preserve_nan=False, allow_huge=True)
+        tmpls.append(tmpl_)
+
+    fit_coeff = fit_mixing_coefficient(tmpls, tmask, obj, m, origin, shape, fwhm0,
+                                       bg_size=bg_size, gain=gain, verbose=verbose)
+
+    if fit_coeff is not None:
+        coeff = fit_coeff
+    elif coeff is None:
+        log("No mixing coefficient available, not combining the templates")
+        return None
+    else:
+        log(f"Falling back to the tabulated mixing coefficient {coeff:.3f}")
+
+    return tmpls[0] + coeff*tmpls[1], tmask, coeff
 
 
 def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel_aper,
@@ -247,6 +443,11 @@ def subtract_image(filename, config, verbose=True, show=False):
     tname = config.get('template', 'ps1')
     tconf = supported_templates.get(tname)
 
+    # Template filter, and the second one used to synthesize the band closer to the one
+    # of the image. Both stay unset for the custom template.
+    tfilter = None
+    tfilter2,tcoeff = None,None
+
     if tname == 'custom':
         log("Using custom template from file:custom_template.fits")
 
@@ -276,7 +477,6 @@ def subtract_image(filename, config, verbose=True, show=False):
         if tconf is None:
             raise RuntimeError(f"Unsupported template: {tname}")
 
-        tfilter = None
         for _ in filter_mappings[config['filter']]:
             if _ in tconf['filters']:
                 tfilter = _
@@ -286,31 +486,54 @@ def subtract_image(filename, config, verbose=True, show=False):
 
         log(f"Using {tconf['name']} in filter {tfilter} as a template")
 
+        if config.get('template_combine', True):
+            combination = filter_combinations.get(config['filter'])
+
+            if combination and combination[0] == tfilter and combination[1] in tconf['filters']:
+                tfilter2 = combination[1]
+                # Tabulated coefficients are on a common photometric scale, so they are
+                # only meaningful for the surveys whose bands share it
+                tcoeff = combination[2] if tconf.get('common_zp') else None
+
+                log(f"Will combine it with the {tfilter2} band to better match "
+                    f"the {config['filter']} filter of the image")
+
         if tname in ['ps1', 'ls']:
             # Check the survey footprint before doing anything else, so that the
             # user immediately knows that the field is just not covered by it
-            cells = get_survey_cells(tname, wcs, image.shape, band=tfilter)
-            cellname = survey_cell_names.get(tname, 'skycells')
+            for band in [tfilter, tfilter2]:
+                if band is None:
+                    continue
 
-            if cells is not None:
-                ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, shape=image.shape)
+                cells = get_survey_cells(tname, wcs, image.shape, band=band)
+                cellname = survey_cell_names.get(tname, 'skycells')
 
-                if not len(cells):
-                    if has_survey_cells_any_band(tname, wcs, image.shape):
-                        # The tiles are there, they just have no data in this band
+                if cells is not None:
+                    if not len(cells):
+                        ra0,dec0,sr0 = astrometry.get_frame_center(wcs=wcs, shape=image.shape)
+
+                        if band == tfilter2:
+                            # The primary band is still usable on its own
+                            log(f"Warning: the field has no {tfilter2} band data in "
+                                f"{tconf['name']}, will use the {tfilter} band alone")
+                            tfilter2,tcoeff = None,None
+                            continue
+
+                        if has_survey_cells_any_band(tname, wcs, image.shape):
+                            # The tiles are there, they just have no data in this band
+                            raise RuntimeError(
+                                f"The field at RA={ra0:.4f} Dec={dec0:.4f} with radius {sr0:.3f} deg "
+                                f"is covered by {tconf['name']}, but has no data in {band} band there. "
+                                "Please select a different filter or template."
+                            )
+
                         raise RuntimeError(
                             f"The field at RA={ra0:.4f} Dec={dec0:.4f} with radius {sr0:.3f} deg "
-                            f"is covered by {tconf['name']}, but has no data in {tfilter} band there. "
-                            "Please select a different filter or template."
+                            f"is not covered by {tconf['name']} - no survey {cellname} overlap it. "
+                            "Please select a different template."
                         )
 
-                    raise RuntimeError(
-                        f"The field at RA={ra0:.4f} Dec={dec0:.4f} with radius {sr0:.3f} deg "
-                        f"is not covered by {tconf['name']} - no survey {cellname} overlap it. "
-                        "Please select a different template."
-                    )
-
-                log(f"{len(cells)} {tconf['name']} {cellname} overlap the image")
+                    log(f"{len(cells)} {tconf['name']} {cellname} overlap the image in {band} band")
 
     sub_size = config.get('sub_size', 1000)
     sub_overlap = config.get('sub_overlap', 50)
@@ -371,91 +594,125 @@ def subtract_image(filename, config, verbose=True, show=False):
         fits.writeto(os.path.join(basepath, 'sub_image.fits'), image1, header1, overwrite=True)
         fits_write(os.path.join(basepath, 'sub_mask.fits'), mask1.astype(np.uint8), header1, compress=True)
 
-        # Get the template
-        if tname == 'ps1' or tname == 'ls':
-            log(f"Getting the template from original {tconf['name']} archive")
-            tmpl,tmask = templates.get_survey_image_and_mask(
-                tfilter, survey=tname, wcs=wcs1, shape=image1.shape,
-                _cachedir=_cachedir, _cache_downscale = 1 if pixscale*3600 < 0.6 else 2,
-                _tmpdir=settings.STDPIPE_TMPDIR,
-                verbose=sub_verbose)
-            if tmask is not None and tmpl is not None:
-                if tname == 'ps1':
-                    tmask = tmask > 0
-                elif tname == 'ls':
-                    # Bitmask for a given band, as described at https://www.legacysurvey.org/dr11/bitmasks/
-                    imask = 0x0000
-                    imask |= 0x0001 # not primary brick area
-                    # imask |= 0x0002 # bright star nearby
-                    # imask |= 0x0100 # WISE W1 (all masks)
-                    # imask |= 0x0200 # WISE W2 (all masks)
-                    imask |= 0x0400 # Bailed out processing
-                    # imask |= 0x0800 # medium-bright star
-                    # imask |= 0x1000 # SGA large galaxy
-                    # imask |= 0x2000 # Globular cluster
+        # Get the template in a single filter
+        def get_template(band):
+            if tname == 'ps1' or tname == 'ls':
+                log(f"Getting the template from original {tconf['name']} archive in {band} band")
+                tmpl,tmask = templates.get_survey_image_and_mask(
+                    band, survey=tname, wcs=wcs1, shape=image1.shape,
+                    _cachedir=_cachedir, _cache_downscale = 1 if pixscale*3600 < 0.6 else 2,
+                    _tmpdir=settings.STDPIPE_TMPDIR,
+                    verbose=sub_verbose)
+                if tmask is not None and tmpl is not None:
+                    if tname == 'ps1':
+                        tmask = tmask > 0
+                    elif tname == 'ls':
+                        # Bitmask for a given band, as described at https://www.legacysurvey.org/dr11/bitmasks/
+                        imask = 0x0000
+                        imask |= 0x0001 # not primary brick area
+                        # imask |= 0x0002 # bright star nearby
+                        # imask |= 0x0100 # WISE W1 (all masks)
+                        # imask |= 0x0200 # WISE W2 (all masks)
+                        imask |= 0x0400 # Bailed out processing
+                        # imask |= 0x0800 # medium-bright star
+                        # imask |= 0x1000 # SGA large galaxy
+                        # imask |= 0x2000 # Globular cluster
 
-                    if tfilter == 'g':
-                        imask |= 0x0004 # g band saturated
-                        imask |= 0x0020 # any ALLMASK_G bit set
-                    elif tfilter == 'r':
-                        imask |= 0x0008 # r band saturated
-                        imask |= 0x0040 # any ALLMASK_R bit set
-                    elif tfilter == 'i':
-                        imask |= 0x4000 # i band saturated
-                        imask |= 0x8000 # any ALLMASK_I bit set
-                    elif tfilter == 'z':
-                        imask |= 0x0010 # z band saturated
-                        imask |= 0x0080 # any ALLMASK_Z bit set
+                        if band == 'g':
+                            imask |= 0x0004 # g band saturated
+                            imask |= 0x0020 # any ALLMASK_G bit set
+                        elif band == 'r':
+                            imask |= 0x0008 # r band saturated
+                            imask |= 0x0040 # any ALLMASK_R bit set
+                        elif band == 'i':
+                            imask |= 0x4000 # i band saturated
+                            imask |= 0x8000 # any ALLMASK_I bit set
+                        elif band == 'z':
+                            imask |= 0x0010 # z band saturated
+                            imask |= 0x0080 # any ALLMASK_Z bit set
 
-                    tmask = (tmask & imask) > 0
+                        tmask = (tmask & imask) > 0
 
-                tmask |= np.isnan(tmpl)
-            else:
-                cells = get_survey_cells(tname, wcs1, image1.shape, band=tfilter)
-                cellname = survey_cell_names.get(tname, 'skycells')
-
-                if cells is not None and not len(cells):
-                    if has_survey_cells_any_band(tname, wcs1, image1.shape):
-                        # The tiles are there, they just have no data in this band
-                        raise RuntimeError(
-                            f"Sub-image {i} is covered by {tconf['name']}, but has no data in "
-                            f"{tfilter} band there. Please select a different filter or template."
-                        )
-
-                    raise RuntimeError(
-                        f"Sub-image {i} is not covered by {tconf['name']} - "
-                        f"no survey {cellname} overlap it. Please select a different template."
-                    )
-                elif cells is not None:
-                    raise RuntimeError(
-                        f"No {tconf['name']} data available for sub-image {i} in filter {tfilter} - "
-                        f"{len(cells)} {cellname} overlap it, but none of them could be retrieved. "
-                        "The region may not be observed in this filter, or the downloads failed."
-                    )
+                    tmask |= np.isnan(tmpl)
                 else:
-                    raise RuntimeError(f"Error getting the template from {tconf['name']}")
+                    cells = get_survey_cells(tname, wcs1, image1.shape, band=band)
+                    cellname = survey_cell_names.get(tname, 'skycells')
 
-        elif tname == 'custom':
-            log("Re-projecting custom template onto sub-image")
+                    if cells is not None and not len(cells):
+                        if has_survey_cells_any_band(tname, wcs1, image1.shape):
+                            # The tiles are there, they just have no data in this band
+                            raise RuntimeError(
+                                f"Sub-image {i} is covered by {tconf['name']}, but has no data in "
+                                f"{band} band there. Please select a different filter or template."
+                            )
 
-            tmpl,fp = reproject.reproject_adaptive((custom_template, custom_wcs), wcs1, image1.shape)
-            tmask,fp = reproject.reproject_adaptive((custom_mask.astype(np.double), custom_wcs), wcs1, image1.shape)
+                        raise RuntimeError(
+                            f"Sub-image {i} is not covered by {tconf['name']} - "
+                            f"no survey {cellname} overlap it. Please select a different template."
+                        )
+                    elif cells is not None:
+                        raise RuntimeError(
+                            f"No {tconf['name']} data available for sub-image {i} in filter {band} - "
+                            f"{len(cells)} {cellname} overlap it, but none of them could be retrieved. "
+                            "The region may not be observed in this filter, or the downloads failed."
+                        )
+                    else:
+                        raise RuntimeError(f"Error getting the template from {tconf['name']}")
 
-            tmask = tmask > 0.5
-            tmask |= fp < 0.5
+            elif tname == 'custom':
+                log("Re-projecting custom template onto sub-image")
 
-        else:
-            log("Getting the template from HiPS server")
-            tmpl = templates.get_hips_image(tconf['filters'][tfilter], wcs=wcs1, shape=image1.shape,
-                                            get_header=False,
-                                            verbose=sub_verbose)
-            if tmpl is not None:
-                tmask = np.isnan(tmpl)
+                tmpl,fp = reproject.reproject_adaptive((custom_template, custom_wcs), wcs1, image1.shape)
+                tmask,fp = reproject.reproject_adaptive((custom_mask.astype(np.double), custom_wcs), wcs1, image1.shape)
+
+                tmask = tmask > 0.5
+                tmask |= fp < 0.5
+
             else:
-                raise RuntimeError(
-                    f"Error getting the template from {tconf['name']} HiPS server - "
-                    "the field may not be covered by this survey"
+                log(f"Getting the template from HiPS server in {band} band")
+                tmpl = templates.get_hips_image(tconf['filters'][band], wcs=wcs1, shape=image1.shape,
+                                                get_header=False,
+                                                verbose=sub_verbose)
+                if tmpl is not None:
+                    tmask = np.isnan(tmpl)
+                else:
+                    raise RuntimeError(
+                        f"Error getting the template from {tconf['name']} HiPS server - "
+                        "the field may not be covered by this survey"
+                    )
+
+            return tmpl,tmask
+
+        tmpl,tmask = get_template(tfilter)
+
+        if tfilter2 is not None:
+            res = None
+
+            try:
+                # The second band is optional, so we may always fall back to the first
+                # one alone if it is not available here
+                tmpl2,tmask2 = get_template(tfilter2)
+            except RuntimeError as e:
+                log(f"Warning: cannot get the {tfilter2} band template: {e}")
+                tmpl2 = None
+
+            if tmpl2 is not None:
+                log(f"\nCombining {tfilter} and {tfilter2} templates into a synthetic "
+                    f"{config['filter']} band one")
+
+                res = combine_templates(
+                    tmpl, tmask, tmpl2, tmask2, obj, m, (x0, y0), image1.shape,
+                    coeff=tcoeff,
+                    bg_size=config.get('bg_size', 256),
+                    gain=template_gain,
+                    verbose=verbose
                 )
+
+            if res is not None:
+                tmpl,tmask,coeff = res
+                log(f"Template is {tfilter} + {coeff:.3f}*{tfilter2}")
+            else:
+                log(f"Warning: falling back to the {tfilter} band template alone")
 
         # Bail out early if the template does not cover the sub-image, otherwise
         # SExtractor would fail downstream on a fully-masked image
@@ -472,16 +729,12 @@ def subtract_image(filename, config, verbose=True, show=False):
             log(f"Template covers {100*tcoverage:.1f}% of the sub-image")
 
         # Estimate template FWHM
-        tobj,tsegm = photometry.get_objects_sextractor(
-            tmpl, mask=tmask, sn=5, gain=template_gain,
-            extra={
-                'BACK_SIZE': config.get('bg_size', 256),
-                # 'SATUR_LEVEL': template_saturation,
-            },
-            extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
-            checkimages=['SEGMENTATION'],
-            _tmpdir=settings.STDPIPE_TMPDIR,
-            _exe=settings.STDPIPE_SEXTRACTOR
+        template_fwhm,tobj,tidx,tsegm = measure_template_fwhm(
+            tmpl, mask=tmask,
+            bg_size=config.get('bg_size', 256),
+            gain=template_gain,
+            segmentation=True,
+            verbose=verbose
         )
 
         # Mask the footprints of masked objects
@@ -491,11 +744,7 @@ def subtract_image(filename, config, verbose=True, show=False):
         fits.writeto(os.path.join(basepath, 'sub_template.fits'), tmpl, header1, overwrite=True)
         fits_write(os.path.join(basepath, 'sub_template_mask.fits'), tmask.astype(np.uint8), header1, compress=True)
 
-        tidx = tobj['flags'] == 0
-        if len(tobj) > 20:
-            tidx &= artefacts.filter_sextractor_detections(tobj, verbose=verbose)
         fwhm_values = 2.0*tobj['FLUX_RADIUS'] # obj['fwhm']
-        template_fwhm = np.median(fwhm_values[tidx])
 
         if config.get('template_fwhm_override'):
             template_fwhm = config.get('template_fwhm_override')

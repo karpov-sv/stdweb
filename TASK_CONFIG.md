@@ -159,6 +159,7 @@ Parameters for image subtraction and difference imaging (`subtract_image()`).
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `template` | str | 'ps1' | Template source: `ps1`, `ls` (Legacy Survey), `skymapper`, `des`, `decaps`, `ztf`, `custom`. |
+| `template_combine` | bool | true | Synthesize the template band closer to the image filter by linearly combining two template filters. Applies to `V` (`g`+`r`), `R` (`r`+`i`) and `I` (`i`+`z`) images only, and doubles the template downloads. |
 | `template_fwhm_override` | float | None | Override template FWHM measurement (pixels). |
 | `custom_template_gain` | float | 10000 | Assumed gain for custom template images (e-/ADU). |
 | `custom_template_saturation` | float | None | Saturation level for custom template (ADU). |

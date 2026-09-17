@@ -386,6 +386,7 @@ class TaskSubtractionForm(forms.Form):
     form_type = forms.CharField(initial='subtraction', widget=forms.HiddenInput())
     template = forms.ChoiceField(choices=[(_,supported_templates[_]['name']) for _ in supported_templates.keys()],
                                  required=False, label="Template")
+    template_combine = forms.BooleanField(initial=True, required=False, label="Combine template bands")
     hotpants_extra = forms.JSONField(required=False, label="HOTPANTS extra params", widget=forms.TextInput)
     sub_size = forms.IntegerField(min_value=0, required=False, label="Sub-image size")
     sub_overlap = forms.IntegerField(min_value=0, required=False, label="Sub-image overlap")
@@ -455,10 +456,11 @@ class TaskSubtractionForm(forms.Form):
                 id='transients_row',
             ),
             Row(
-                Column(InlineRadios('subtraction_mode', template='crispy_radioselect_inline.html'), css_class='form-group'),
+                Column(InlineRadios('subtraction_mode', template='crispy_radioselect_inline.html'), css_class='form-group col-md-auto'),
+                Column('template_combine', css_class="col-md-auto"),
                 Div(css_class="col-md"),
                 Column('sub_verbose', css_class="col-md-1"),
-                css_class='align-items-end'
+                css_class='align-items-center'
             ),
         )
 
