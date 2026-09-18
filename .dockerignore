@@ -1,0 +1,20 @@
+.git
+.venv
+venv
+env
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+# Local dev DB, task/data trees (data/ can hold a live davfs2 OwnCloud mount --
+# never bake that into an image). The image gets fresh empty dirs instead,
+# see the Dockerfile.
+db.sqlite3
+db.sqlite3-journal
+data/
+tasks/
+# The Dockerfile clones its own copy instead of copying whatever's checked
+# out locally (submodule vs. plain clone, possibly dirty/out of sync).
+stdpipe/
+*.log
+.env
