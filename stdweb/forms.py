@@ -260,6 +260,7 @@ class TaskPhotometryForm(forms.Form):
                                        widget=forms.NumberInput(attrs={'placeholder': 'auto'}))
     psf_size = forms.IntegerField(min_value=5, required=False, label="PSF stamp size, pixels",
                                   widget=forms.NumberInput(attrs={'placeholder': 'auto'}))
+    psf_fit_neighbors = forms.BooleanField(required=False, label="Fit target neighbours")
 
     filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
                                required=False, label="Filter")
@@ -325,6 +326,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('psf_group_radius'),
                 Column('psf_max_stars'),
                 Column('psf_size'),
+                Column('psf_fit_neighbors', css_class="col-md-auto mb-2"),
                 id='psf_params_row',
                 css_class='align-items-end'
             ),

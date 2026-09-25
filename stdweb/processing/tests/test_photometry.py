@@ -7,7 +7,7 @@ import os
 import numpy as np
 import pytest
 
-from astropy.table import Table
+from astropy.table import Table, vstack
 
 from stdpipe import psf as stdpipe_psf
 
@@ -21,7 +21,9 @@ from stdweb.processing.photometry import (plot_radial_profile,
                                           get_psf_model_shape,
                                           plot_psf_model,
                                           plot_psf_grid,
-                                          plot_psf_residuals)
+                                          plot_psf_residuals,
+                                          measure_targets_photometry,
+                                          get_psf_residual_image)
 
 
 def _make_starfield(shape=(512, 512), fwhm=4.0, n=60, seed=1, extra=[]):
@@ -330,3 +332,77 @@ def test_psf_model_max_stars(max_stars):
                     max_stars=max_stars, verbose=lines.append)
     nstars = [int(_.split()[1]) for _ in lines if _.startswith('Extracted')][0]
     assert 0.5*max_stars <= nstars <= max_stars
+
+
+def _make_target_pair(fwhm=4.0, flux=2e4, fratio=5, dist=1.0):
+    """Star field with the target, and a brighter neighbour at `dist` FWHM from it,
+    placed in the empty region. The neighbour is in the object list, the target is not."""
+    image,obj = _make_starfield(fwhm=fwhm, n=60)
+    sigma = fwhm/2.355
+    x0,y0 = 60.3, 160.6
+    yy,xx = np.mgrid[0:image.shape[0], 0:image.shape[1]]
+    for x,y,f in [(x0, y0, flux), (x0 + dist*fwhm, y0, fratio*flux)]:
+        image += f/(2*np.pi*sigma**2)*np.exp(-((xx - x)**2 + (yy - y)**2)/(2*sigma**2))
+
+    psf = build_psf_model(image, obj, np.ones(len(obj), dtype=bool), fwhm, degree=0,
+                          verbose=False)
+
+    obj.add_row({'x': x0 + dist*fwhm, 'y': y0, 'flux': fratio*flux, 'flags': 0, 'magerr': 0.01})
+    target = Table({'ra': [10.0], 'dec': [20.0], 'x': [x0], 'y': [y0]})
+
+    return image, obj, psf, target
+
+
+def test_psf_target_neighbours():
+    fwhm,flux = 4.0,2e4
+    image,obj,psf,target = _make_target_pair(fwhm=fwhm, flux=flux)
+
+    config = {'fwhm': fwhm, 'rel_aper': 1.0, 'bg_size': 128, 'photometry_method': 'psf'}
+
+    # Neighbour flux leaks into the target
+    res,nb = measure_targets_photometry(target, obj, image, config, psf=psf)
+    assert len(nb) == 0
+    assert res['flux'][0]/flux > 1.5
+    # Target columns are kept
+    assert res['ra'][0] == 10.0
+
+    # And it does not when fitted simultaneously
+    config['psf_fit_neighbors'] = True
+    res,nb = measure_targets_photometry(target, obj, image, config, psf=psf)
+    assert len(nb) == 1
+    assert res['flux'][0]/flux == pytest.approx(1.0, abs=0.02)
+    assert nb['flux'][0]/(5*flux) == pytest.approx(1.0, abs=0.02)
+
+    # The detection at the target position is the target itself
+    obj.add_row({'x': target['x'][0] + 0.3, 'y': target['y'][0], 'flux': flux, 'flags': 0, 'magerr': 0.01})
+    res,nb = measure_targets_photometry(target, obj, image, config, psf=psf)
+    assert len(nb) == 1
+    assert res['flux'][0]/flux == pytest.approx(1.0, abs=0.02)
+
+    # No grouping - no neighbours
+    res,nb = measure_targets_photometry(target, obj, image, config | {'psf_group_radius': 0}, psf=psf)
+    assert len(nb) == 0
+
+    # Only for PSF photometry
+    res,nb = measure_targets_photometry(target, obj, image, config | {'photometry_method': 'aperture'})
+    assert len(nb) == 0
+
+
+def test_psf_residual_image():
+    fwhm,flux = 4.0,2e4
+    image,obj,psf,target = _make_target_pair(fwhm=fwhm, flux=flux, dist=2.0)
+    config = {'fwhm': fwhm, 'rel_aper': 1.0, 'bg_size': 128, 'photometry_method': 'psf',
+              'psf_fit_neighbors': True}
+
+    res,nb = measure_targets_photometry(target, obj, image, config, psf=psf)
+    x0,y0 = int(round(target['x'][0])), int(round(target['y'][0]))
+    box = np.s_[y0 - 12:y0 + 13, x0 - 8:x0 + 17]
+    peak = np.max(image[box])
+
+    # Target and neighbour are subtracted down to the noise
+    residual = get_psf_residual_image(image, np.zeros_like(image), psf, vstack([res['x', 'y', 'flux'], nb]))
+    assert np.max(np.abs(residual[box])) < 0.02*peak
+
+    # Neighbour that was not fitted is left
+    residual = get_psf_residual_image(image, np.zeros_like(image), psf, res)
+    assert np.max(residual[box]) > 0.5*peak

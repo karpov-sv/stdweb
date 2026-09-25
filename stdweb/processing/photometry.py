@@ -533,6 +533,68 @@ def measure_photometry(obj, image, config, psf=None, **kwargs):
     return obj
 
 
+def measure_targets_photometry(targets, obj, image, config, psf=None, **kwargs):
+    """Forced photometry of the targets, optionally along with the objects around them.
+
+    With PSF fitting and `psf_fit_neighbors` option set, the detected objects from `obj`
+    close enough to share the fitting groups with the targets are fitted simultaneously
+    with them, so that their flux does not leak into the ones of the targets. The objects
+    closer than half FWHM to the targets are considered to be the targets themselves and
+    ignored. Extra keyword arguments are passed to :func:`measure_photometry`.
+
+    Returns the measured targets, and the table of neighbours measured along with them.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    verbose = kwargs.get('verbose', False)
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    neighbours = Table({'x': np.zeros(0), 'y': np.zeros(0)})
+
+    if get_photometry_method(config) == 'psf' and config.get('psf_fit_neighbors') and len(obj):
+        fwhm = config.get('fwhm')
+        fit_radius = config.get('psf_fit_radius') or config.get('rel_aper', 1.0)
+        group_radius = config.get('psf_group_radius')
+        if group_radius is None:
+            # Default one of STDPipe
+            group_radius = 2*fit_radius
+
+        tidx = np.isfinite(targets['x']) & np.isfinite(targets['y'])
+
+        if group_radius > 0 and np.any(tidx):
+            # Within twice the grouping radius, to also catch the neighbours of neighbours
+            tree = cKDTree(np.column_stack((targets['x'][tidx], targets['y'][tidx])))
+            dist = tree.query(np.column_stack((obj['x'], obj['y'])))[0]
+            idx = (dist < 2*group_radius*fwhm) & (dist > 0.5*fwhm)
+            neighbours = Table({'x': np.asarray(obj['x'][idx], dtype=float),
+                                'y': np.asarray(obj['y'][idx], dtype=float)})
+            log(f"Fitting {len(neighbours)} detected objects around the targets simultaneously with them")
+        elif group_radius <= 0:
+            log("Warning: fitting the neighbours has no effect with grouping disabled")
+
+    # All objects measured together, and no row may be dropped
+    both = Table({'x': np.concatenate([np.asarray(targets['x'], dtype=float), neighbours['x']]),
+                  'y': np.concatenate([np.asarray(targets['y'], dtype=float), neighbours['y']])})
+    res = measure_photometry(both, image, config, psf=psf, **(kwargs | {'sn': 0}))
+
+    targets = targets.copy()
+    for col in res.colnames:
+        targets[col] = res[col][:len(targets)]
+
+    return targets, res[len(targets):]
+
+
+def get_psf_residual_image(image, bg, psf, sources):
+    """Image with the background `bg` and the PSF models of the measured `sources`
+    (with `x`, `y` and `flux` columns) subtracted."""
+    model = np.zeros(image.shape, dtype=float)
+
+    for x,y,flux in zip(sources['x'], sources['y'], sources['flux']):
+        if np.isfinite(x) and np.isfinite(y) and np.isfinite(flux):
+            stdpipe_psf.place_psf_stamp(model, psf, x, y, flux=flux)
+
+    return image - bg - model
+
+
 def get_psf_bg_fluxerr(obj, psf, radius):
     """Background noise of PSF fit flux for the objects, from their per-pixel background
     noise derived from `bg_fluxerr` and `npix_aper` columns, and the PSF model within the
@@ -1543,11 +1605,25 @@ def photometry_image(filename, config, verbose=True, show=False):
 
         log(f"Primary target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
 
-        target_obj = measure_photometry(target_obj, image, config, psf=psf_model,
-                                        mask=mask,
-                                        sn=0,
-                                        centroid_iter=5 if config.get('centroid_targets') else 0,
-                                        verbose=verbose)
+        target_obj,target_neighbours = measure_targets_photometry(
+            target_obj, obj, image, config, psf=psf_model,
+            mask=mask,
+            centroid_iter=5 if config.get('centroid_targets') else 0,
+            verbose=verbose
+        )
+
+        # Image with fitted PSF models subtracted, to see the quality of the fit
+        if psf_model is not None:
+            psf_residual = get_psf_residual_image(
+                image, bg, psf_model,
+                Table({
+                    _: np.concatenate([np.asarray(target_obj[_], dtype=float),
+                                       np.asarray(target_neighbours[_], dtype=float)])
+                    for _ in ['x', 'y', 'flux']
+                })
+            )
+        else:
+            psf_residual = None
 
         target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'],
                                                                    target_obj['y'],
@@ -1626,6 +1702,9 @@ def photometry_image(filename, config, verbose=True, show=False):
                 header=header,
                 time=time,
                 # filtered=fimg if config.get('initial_r0') else None,
+                # Local background, if it was used for the target photometry
+                residual=(psf_residual - (tobj['bg_local'] if 'bg_local' in target_obj.colnames else 0)
+                          if psf_residual is not None else None),
             )
             # Cutout from relevant HiPS survey
             cutout['template'] = templates.get_hips_image(

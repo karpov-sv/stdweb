@@ -657,9 +657,9 @@ def cutout(request, path, width=None, base=settings.DATA_PATH):
         opts['additional_title'] = ' | '.join(title)
 
     if request.GET.get('adjust'):
-        planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'adjusted', 'footprint', 'mask']
+        planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'adjusted', 'residual', 'footprint', 'mask']
     else:
-        planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'footprint', 'mask']
+        planes = ['image', 'template', 'filtered', 'convolved', 'diff', 'residual', 'footprint', 'mask']
 
     planes = [_ for _ in planes if _ in cutout]
 

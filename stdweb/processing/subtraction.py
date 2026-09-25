@@ -1089,12 +1089,22 @@ def subtract_image(filename, config, verbose=True, show=False):
                     log("Target radial profile stored to file:sub_target_profile.png")
 
             # Create the cutout from image based on the candidate
+            # Difference image with the fitted PSF model of the target subtracted, along
+            # with the local background if it was used for the target photometry
+            if psf1 is not None:
+                residual = get_psf_residual_image(diff, 0, psf1, target_obj)
+                if 'bg_local' in target_obj.colnames:
+                    residual -= target_obj['bg_local'][0]
+            else:
+                residual = None
+
             cutout = cutouts.get_cutout(
                 image1, target_obj[0], config.get('cutout_size', 30),
                 mask=fullmask1,
                 header=header1,
                 time=time,
                 diff=diff,
+                residual=residual,
                 template=tmpl,
                 convolved=conv,
                 err=ediff

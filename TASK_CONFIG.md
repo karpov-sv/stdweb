@@ -78,6 +78,7 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `psf_fit_radius` | float | None | Radius, in FWHM units, of the region used for PSF fitting. None = same as `rel_aper`. |
 | `psf_group_radius` | float | None | Radius, in FWHM units, within which the objects are fitted simultaneously with PSF photometry. None = twice the fit radius, 0 = no grouping. |
 | `psf_max_stars` | int | None | Maximal number of stars, spread uniformly over the image, used to build the PSF model. None = up to 25 per cell of 6x6 grid. |
+| `psf_fit_neighbors` | bool | False | Fit the detected objects around the targets simultaneously with them in `psf` photometry, so that their flux does not leak into the targets. The objects closer than half FWHM to the targets are considered to be the targets themselves. |
 | `psf_size` | int | None | Size of the PSF model stamp in pixels. None = selected automatically from the extent of stellar profile, between max(15, 5*FWHM) and 10*FWHM. |
 | `optimal_extraction` | bool | False | Deprecated, equivalent to `photometry_method` = `optimal` when the latter is not set. |
 
