@@ -6,7 +6,10 @@ import os
 
 import numpy as np
 
-import sep
+try:
+    import sep_x as sep
+except ImportError:
+    import sep
 import astroscrappy
 import reproject
 import astroalign

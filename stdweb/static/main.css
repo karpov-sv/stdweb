@@ -98,7 +98,7 @@
 }
 
 .help-popover {
-    --bs-popover-max-width: 500px;
+    --bs-popover-max-width: 800px;
     --bs-popover-border-color: var(--bs-info);
     --bs-popover-header-bg: var(--bs-info);
     --bs-popover-header-color: var(--bs-body-bg);

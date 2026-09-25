@@ -114,6 +114,20 @@
      check_blindmatch_visibility();
    });
 
+   check_psf_visibility = function(){
+     var elem = $('#psf_params_row');
+     if($('#id_photometry_method').val() == 'psf')
+       elem.show();
+     else
+       elem.hide();
+   }
+
+   // Show PSF photometry options only when it is selected
+   $(function(){
+     $('#id_photometry_method').on('change', check_psf_visibility);
+     check_psf_visibility();
+   });
+
    // Make Enter in input fields submit the form using its primary button
    // (not the first submit button, which may be a secondary action)
    $(function(){
@@ -639,13 +653,21 @@
           <!-- Help popover -->
           <span class="span-help-popover float-end" title="Object detection, astrometry and photometry">
             <p>
-              Object detection is controlled by the first row of values. S/N here influences both rejection of detections with too large errors, and magnitude limit estimations.
+              Object detection is controlled by the first row of values - initial aperture and smoothing kernel sizes, background mesh size and minimal object area, all in pixels. S/N here influences both rejection of detections with too large errors, and magnitude limit estimations. <i>Pre-filter detections</i> rejects outliers like cosmic rays or bad blends using simple shape classifier.
             </p>
             <p>
-              Second row controls aperture photometry at the positions of detected objects. The sizes of apertures, and optionally local sky background estimation annuli, are specified in units of average FWHM measured on the detection step. It is also possible to manually override FWHM value by setting it here. <i>Radial profile</i> checkbox enables a diagnostic plot showing normalized intensities of stellar pixels versus the distance from their centroids, along with the FWHM, aperture radius and background annulus.
+              Second row controls the photometry at the positions of detected objects. The sizes of apertures, and optionally local sky background estimation annuli, are specified in units of average FWHM measured on the detection step. It is also possible to manually override FWHM value by setting it here. <i>Photometry method</i> is used for all measurements that rely on photometric calibration - objects and targets in the image, as well as targets and candidates in the difference image:
+              <ul class="mb-1">
+                <li><b>Aperture</b> - plain sum of pixel values inside the aperture</li>
+                <li><b>Optimal extraction</b> - PSF-weighted sum using Gaussian PSF with measured FWHM, improving S/N for faint sources</li>
+                <li><b>PSF fitting</b> - fitting the fluxes at fixed positions using empirical PSF model built from the stars in the image</li>
+              </ul>
             </p>
             <p>
-              Photometric calibration (third row) depends on the selection of primary filter and reference catalogue. The catalogue will be downloaded from Vizier, with optionally limiting it to only have stars brighter than given magnitude. Catalogue should not be much deeper than the image, as it may lead to spurious matches. Photometric solution will use specified polynomial order of zero point spatial dependency, and if requested will use color term relevant for the specified catalogue. Supported catalogues and filters are:
+              For PSF fitting, extra row of parameters is shown. <i>PSF spatial order</i> is the polynomial degree of PSF shape variations over the image, selected automatically if not set; 0 means constant PSF. <i>PSF fit radius</i>, in FWHM units, defines the region used for fitting, and defaults to the aperture. Objects closer than <i>PSF grouping radius</i>, in FWHM units, are fitted simultaneously; it defaults to twice the fit radius, and zero disables the grouping. The model is built from the brightest unflagged stars spread uniformly over the image, up to <i>Max PSF stars</i> of them if set, in stamps of <i>PSF stamp size</i> pixels, by default determined from the extent of the stellar profile. Diagnostic plots show the PSF model and its radial profile compared with the stars, its variations over the image, and the residuals of the fit along with the ratio of aperture fluxes predicted by the model to the measured ones, that should be close to unity everywhere for good model.
+            </p>
+            <p>
+              Photometric calibration depends on the selection of primary filter and reference catalogue. The catalogue will be downloaded from Vizier, with optionally limiting it to only have stars brighter than given magnitude. Catalogue should not be much deeper than the image, as it may lead to spurious matches. Matching radius is automatically determined, but may also be overridden. Photometric solution will use specified polynomial order of zero point spatial dependency, and if requested will use color term relevant for the specified catalogue. <i>Filter catalogue blends</i> merges unresolved catalogue stars and rejects the ones contaminated by neighbours, <i>Non-linearity</i> adds detector non-linearity term to the solution, and <i>Color term diagnostics</i> repeats the calibration for all filter combinations available. Supported catalogues and filters are:
               <ul class="mb-1">
                 {% for cat in supported_catalogs.values %}
                   <li><b>{{ cat.name }}</b> [{{ cat.filters|join:", " }}]</li>
@@ -657,6 +679,9 @@
             </p>
             <p>
               Astrometric refinement uses positions of detected objects and reference catalogue to refine existing astrometric solution from FITS header. The results are stored to the file, and will be re-used on subsequent processing runs. If no initial astrometric solution exist, WCS blind-matching may be initiated. The process may be limited to specific part of the sky, as well as to a range of pixel scales.
+            </p>
+            <p>
+              <i>Centroid targets</i> refines the positions of the targets before measuring them. <i>Inspect background</i> stores background and its RMS maps, and <i>Radial profile</i> enables a diagnostic plot showing normalized intensities of stellar pixels versus the distance from their centroids, along with the FWHM, aperture radius and background annulus.
             </p>
           </span>
         {% endif %}
@@ -683,7 +708,7 @@
 
           <div class="col" style="max-width:520px;">
             <div class="row">
-              {% make_list 'objects.png' 'segmentation.fits' 'fwhm_mag.png' 'fwhm.png' 'profile.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
+              {% make_list 'objects.png' 'segmentation.fits' 'fwhm_mag.png' 'fwhm.png' 'profile.png' 'psf.png' 'psf_grid.png' 'psf_residuals.png' 'photometry.png' 'photometry_unmasked.png' 'photometry_zeropoint.png' 'photometry_model.png' 'photometry_residuals.png' 'astrometry_dist.png' 'limit_hist.png'  'limit_sn.png' as list %}
               {% for name in list %}
                 {% if name in files %}
                   <div class="col" style="max-width: 256px">

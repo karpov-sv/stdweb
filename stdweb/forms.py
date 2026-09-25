@@ -13,6 +13,7 @@ from crispy_forms.bootstrap import InlineField, PrependedText, InlineRadios
 import json
 
 from .processing import supported_filters, supported_catalogs, supported_catalogs_transients, supported_templates
+from .processing import get_photometry_method
 from . import models
 
 
@@ -246,6 +247,19 @@ class TaskPhotometryForm(forms.Form):
     rel_bg1 = forms.FloatField(min_value=0, required=False, label="Sky inner annulus, FWHM")
     rel_bg2 = forms.FloatField(min_value=0, required=False, label="Outer annulus, FWHM")
     fwhm_override = forms.FloatField(min_value=0, required=False, label="FWHM override, pixels")
+    photometry_method = forms.ChoiceField(choices=[('aperture', 'Aperture'),
+                                                   ('optimal', 'Optimal extraction'),
+                                                   ('psf', 'PSF fitting')],
+                                          initial='aperture', required=False, label="Photometry method")
+    psf_degree = forms.IntegerField(min_value=0, max_value=4, required=False,
+                                    label="PSF spatial order",
+                                    widget=forms.NumberInput(attrs={'placeholder': 'auto'}))
+    psf_fit_radius = forms.FloatField(min_value=0, required=False, label="PSF fit radius, FWHM")
+    psf_group_radius = forms.FloatField(min_value=0, required=False, label="PSF grouping radius, FWHM")
+    psf_max_stars = forms.IntegerField(min_value=10, required=False, label="Max PSF stars",
+                                       widget=forms.NumberInput(attrs={'placeholder': 'auto'}))
+    psf_size = forms.IntegerField(min_value=5, required=False, label="PSF stamp size, pixels",
+                                  widget=forms.NumberInput(attrs={'placeholder': 'auto'}))
 
     filter = forms.ChoiceField(choices=[('','')] + [(_,supported_filters[_]['name']) for _ in supported_filters.keys()],
                                required=False, label="Filter")
@@ -265,7 +279,6 @@ class TaskPhotometryForm(forms.Form):
     inspect_bg = forms.BooleanField(required=False, label="Inspect background")
     inspect_profile = forms.BooleanField(required=False, label="Radial profile")
     centroid_targets = forms.BooleanField(required=False, label="Centroid targets")
-    optimal_extraction = forms.BooleanField(required=False, label="Optimal extraction")
     nonlin = forms.BooleanField(required=False, label="Non-linearity")
 
     blind_match_ps_lo = forms.FloatField(initial=0.2, min_value=0, required=False, label="Scale lower limit, arcsec/pix")
@@ -277,6 +290,12 @@ class TaskPhotometryForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Older configs may only have boolean optimal_extraction option
+        if not self.initial.get('photometry_method'):
+            self.initial = dict(self.initial)
+            self.initial['photometry_method'] = get_photometry_method(self.initial)
+
         self.helper = FormHelper()
         self.helper.form_tag = False
         self.helper.disable_csrf = True
@@ -295,8 +314,18 @@ class TaskPhotometryForm(forms.Form):
                 Column('rel_aper'),
                 Column('rel_bg1'),
                 Column('rel_bg2'),
+                Column('photometry_method'),
                 Column('fwhm_override'),
                 Column('sr_override'),
+                css_class='align-items-end'
+            ),
+            Row(
+                Column('psf_degree'),
+                Column('psf_fit_radius'),
+                Column('psf_group_radius'),
+                Column('psf_max_stars'),
+                Column('psf_size'),
+                id='psf_params_row',
                 css_class='align-items-end'
             ),
             Row(
@@ -321,7 +350,6 @@ class TaskPhotometryForm(forms.Form):
                 Column('filter_blends', css_class="col-md-auto"),
                 Column('prefilter_detections', css_class="col-md-auto"),
                 Column('centroid_targets', css_class="col-md-auto"),
-                Column('optimal_extraction', css_class="col-md-auto"),
                 Column('nonlin', css_class="col-md-auto"),
                 Column('diagnose_color', css_class="col-md-auto"),
                 Column('inspect_bg', css_class="col-md-auto"),

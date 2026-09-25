@@ -7,7 +7,10 @@ from functools import partial
 
 import numpy as np
 
-import sep
+try:
+    import sep_x as sep
+except ImportError:
+    import sep
 import reproject
 
 from django.conf import settings
@@ -260,16 +263,16 @@ def combine_templates(tmpl1, tmask1, tmpl2, tmask2, obj, m, origin, shape,
     return tmpls[0] + coeff*tmpls[1], tmask, coeff
 
 
-def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel_aper,
-                                rel_bkgann=None, mask=None, err=None, gain=1.0,
-                                bg_size=256, optimal=False, show=False, verbose=True):
+def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, config, psf=None,
+                                mask=None, err=None, show=False, verbose=True):
     """Measure the objects in the difference image and plot what is left of their
     original fluxes there, versus calibrated magnitude and catalogue color.
 
-    Forced photometry is repeated on the difference image with the same aperture as the
-    original one, so that the ratio of the two fluxes is directly the fraction of flux
-    that failed to subtract. The ratio is kept as a fraction, as close to zero it is
-    directly the magnitude error the imperfect subtraction introduces.
+    Forced photometry is repeated on the difference image in the same way as the original
+    one - with the method and aperture from `config`, and the PSF model `psf` - so that
+    the ratio of the two fluxes is directly the fraction of flux that failed to subtract.
+    The ratio is kept as a fraction, as close to zero it is directly the magnitude error
+    the imperfect subtraction introduces.
 
     The magnitude panel needs no catalogue - `mag_calib` is known for every detection -
     so it uses all the unflagged objects inside the sub-image, and stays informative
@@ -323,7 +326,7 @@ def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel
     # Objects well inside the sub-image, with usable original photometry. The flagged
     # ones are dropped, except for the calibration stars, that are selected as they
     # were during the calibration itself.
-    margin = 2*rel_aper*fwhm
+    margin = 2*config.get('rel_aper', 1.0)*config.get('fwhm', 3.0)
     idx = (xs > margin) & (ys > margin) & (xs < shape[1] - margin) & (ys < shape[0] - margin)
     idx &= np.isfinite(flux0) & (flux0 > 0) & np.isfinite(mag0)
     idx &= (flags == 0) | iscat
@@ -333,19 +336,14 @@ def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, fwhm, rel
             "subtraction photometry diagnostics")
         return None
 
-    # Forced photometry in the difference image, with the original aperture
-    sobj = photometry.measure_objects(
-        Table({'x': xs[idx], 'y': ys[idx]}), diff, mask=mask,
-        fwhm=fwhm,
-        aper=rel_aper,
-        bkgann=rel_bkgann,
-        optimal=optimal,
+    # Forced photometry in the difference image, the same way as the original one
+    sobj = measure_photometry(
+        Table({'x': xs[idx], 'y': ys[idx]}), diff, config, psf=psf,
+        mask=mask,
         sn=0,
         # We assume no background, and known error model
         bg=None,
         err=err,
-        bg_size=bg_size,
-        gain=gain,
         verbose=False
     )
 
@@ -483,6 +481,17 @@ def subtract_image(filename, config, verbose=True, show=False):
 
     # Photometric solution
     m = pickle_from_file(os.path.join(basepath, 'photometry.pickle'))
+
+    # PSF model, for the photometry to be consistent with the one used for calibration
+    psf_model = None
+    if get_photometry_method(config) == 'psf':
+        if not os.path.exists(os.path.join(basepath, 'psf.pickle')):
+            raise RuntimeError('PSF photometry requested, but no PSF model is available - please re-run photometry')
+        psf_model = pickle_from_file(os.path.join(basepath, 'psf.pickle'))
+
+        if subtraction_method != 'sfft' and (config.get('hotpants_extra') or {}).get('c', 't') != 't':
+            log("Warning: HOTPANTS is set to not convolve the template, "
+                "the difference image PSF will not match the PSF model")
 
     # Objects
     obj = Table.read(os.path.join(basepath, 'objects.parquet'))
@@ -942,18 +951,16 @@ def subtract_image(filename, config, verbose=True, show=False):
         else:
             rel_bkgann = None
 
+        # PSF model in the coordinates of the sub-image
+        psf1 = shift_psf_model(psf_model, x0, y0)
+
         # How well the stars actually subtracted
         if plot_subtraction_photometry(
             os.path.join(basepath, 'sub_photometry.png'),
-            diff, obj, m, (x0, y0), image1.shape,
+            diff, obj, m, (x0, y0), image1.shape, config,
+            psf=psf1,
             mask=fullmask1,
             err=ediff,
-            fwhm=config.get('fwhm'),
-            rel_aper=config.get('rel_aper', 1.0),
-            rel_bkgann=rel_bkgann,
-            optimal=config.get('optimal_extraction', False),
-            bg_size=config.get('bg_size', 256),
-            gain=config.get('gain', 1.0),
             show=show, verbose=verbose
         ):
             log("Subtraction photometry diagnostics stored to file:sub_photometry.png")
@@ -973,20 +980,15 @@ def subtract_image(filename, config, verbose=True, show=False):
                 f" -> "
                 f"{target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
 
-            target_obj = photometry.measure_objects(
-                target_obj, diff, mask=fullmask1,
-                # FWHM should match the one used for calibration
-                fwhm=config.get('fwhm'),
-                aper=config.get('rel_aper', 1.0),
-                bkgann=rel_bkgann,
-                optimal=config.get('optimal_extraction', False),
+            # Photometry parameters should match the ones used for calibration
+            target_obj = measure_photometry(
+                target_obj, diff, config, psf=psf1,
+                mask=fullmask1,
                 sn=0,
                 # We assume no background
                 bg=None,
-                bg_size=config.get('bg_size', 256),
                 # ..and known error model
                 err=ediff,
-                gain=config.get('gain', 1.0),
                 centroid_iter=5 if config.get('centroid_targets') else 0,
                 verbose=sub_verbose
             )
@@ -1133,19 +1135,14 @@ def subtract_image(filename, config, verbose=True, show=False):
                 _exe=settings.STDPIPE_SEXTRACTOR
             )
 
-            sobj = photometry.measure_objects(
-                sobj, diff, mask=fullmask1,
-                # FWHM should match the one used for calibration
-                fwhm=config.get('fwhm'),
-                aper=config.get('rel_aper', 1.0),
-                bkgann=rel_bkgann,
-                optimal=config.get('optimal_extraction', False),
-                sn=config.get('sn', 5.0),
+            # Photometry parameters should match the ones used for calibration
+            sobj = measure_photometry(
+                sobj, diff, config, psf=psf1,
+                mask=fullmask1,
                 # We assume no background
                 bg=None,
                 # ..and known error model
                 err=ediff,
-                gain=config.get('gain', 1.0),
                 verbose=sub_verbose
             )
 

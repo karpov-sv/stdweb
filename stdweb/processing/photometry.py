@@ -8,6 +8,7 @@ import numpy as np
 
 from scipy.spatial import cKDTree
 from scipy.stats import binned_statistic
+from scipy.ndimage import zoom
 
 from django.conf import settings
 
@@ -15,9 +16,11 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.table import Table
 from astropy.time import Time
+from astropy.stats import mad_std
 
 from stdpipe import astrometry, photometry, catalogs, cutouts
 from stdpipe import templates, plots, pipeline, artefacts
+from stdpipe import psf as stdpipe_psf
 
 from .constants import *
 from .utils import *
@@ -147,6 +150,19 @@ def get_binned_profile(rs, vs, rmax, fwhm):
     return 0.5*(edges[1:] + edges[:-1]), prof
 
 
+def get_profile_fwhm(centers, prof):
+    """FWHM from the half-maximum crossing of the binned profile normalized to unit peak.
+    Returns None if the profile never drops below half maximum."""
+    i_below = np.where(np.isfinite(prof) & (prof < 0.5))[0]
+    if len(i_below):
+        pidx = np.isfinite(prof)
+        pidx[i_below[0]+1:] = False # Keep the profile monotonic up to the crossing
+        if np.sum(pidx) > 1:
+            return 2*np.interp(0.5, prof[pidx][::-1], centers[pidx][::-1])
+
+    return None
+
+
 def measure_radial_profile(image, obj, fwhm, aper, bkgann=None, mask=None, nstars=200,
                            verbose=True):
     """Measure the mean radial profile of the stars in background subtracted image.
@@ -186,15 +202,9 @@ def measure_radial_profile(image, obj, fwhm, aper, bkgann=None, mask=None, nstar
 
     log(f"Radial profile measured using {nused} stars")
 
-    # FWHM from the half-maximum crossing of the median profile
-    fwhm_prof = None
-    i_below = np.where(np.isfinite(prof) & (prof < 0.5))[0]
-    if len(i_below):
-        pidx = np.isfinite(prof)
-        pidx[i_below[0]+1:] = False # Keep the profile monotonic up to the crossing
-        if np.sum(pidx) > 1:
-            fwhm_prof = 2*np.interp(0.5, prof[pidx][::-1], centers[pidx][::-1])
-            log(f"FWHM from the radial profile is {fwhm_prof:.2f} pixels")
+    fwhm_prof = get_profile_fwhm(centers, prof)
+    if fwhm_prof is not None:
+        log(f"FWHM from the radial profile is {fwhm_prof:.2f} pixels")
 
     return {'r': centers, 'profile': prof, 'peak': peak, 'fwhm': fwhm_prof,
             'nstars': nused, 'rmax': rmax, 'pixels_r': rs, 'pixels_v': vs}
@@ -395,6 +405,458 @@ def plot_target_radial_profile(filename, image, x0, y0, fwhm, aper, bkgann=None,
     return True
 
 
+def get_photometry_method(config):
+    """Photometry method selected in the config: 'aperture', 'optimal' or 'psf'."""
+    method = config.get('photometry_method')
+    if not method:
+        # Backward compatibility with the older boolean option
+        method = 'optimal' if config.get('optimal_extraction') else 'aperture'
+    return method
+
+
+def build_psf_model(image, obj, idx, fwhm, mask=None, degree='auto', size=None,
+                    max_stars=None, verbose=True):
+    """Build the PSF model from the good stars `obj[idx]` in background subtracted `image`.
+
+    The stars are selected uniformly over the image, up to `max_stars` of them if set. The
+    polynomial `degree` of the spatial variations is selected by cross-validation if set
+    to 'auto', or reduced if there are too few stars to reliably constrain it otherwise.
+    `size` is the model stamp size in pixels, automatically selected if not set.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    # Bright stars spread uniformly over the image, away from the edges. Their number
+    # is limited by using coarser grid and fewer stars per its cell
+    grid,max_per_tile = 6,25
+    if max_stars:
+        grid = max(1, min(grid, int(np.sqrt(max_stars))))
+        max_per_tile = max(1, int(max_stars)//grid**2)
+    seeds = stdpipe_psf.select_psf_seeds(
+        obj[idx], image.shape, edge=int(np.ceil(3*fwhm)), grid=grid,
+        max_per_tile=max_per_tile
+    )
+
+    if degree != 'auto':
+        # Enough stars per polynomial coefficient for the fit to be stable. Every node of
+        # oversampled model, as automatically selected by STDPipe for undersampled PSF,
+        # only gets a fraction of star samples
+        min_stars_per_coeff = 5
+        oversampling = 1 if fwhm >= 2.5 else 2
+        degree0 = degree
+        while (degree > 0 and
+               len(seeds)/oversampling**2 < min_stars_per_coeff*(degree + 1)*(degree + 2)//2):
+            degree -= 1
+        if degree != degree0:
+            log(f"Only {len(seeds)} stars for the PSF model, reducing its spatial order "
+                f"from {degree0} to {degree}")
+
+    psf = stdpipe_psf.create_psf_model(
+        image, seeds, fwhm=fwhm, mask=mask, degree=degree,
+        size=int(size) if size else None,
+        # Neighbours are modelled using all detections, not only the seeds
+        neighbors_obj=obj,
+        verbose=verbose
+    )
+
+    if degree == 'auto':
+        log(f"Automatically selected PSF model spatial order is {psf['degree']}")
+
+    return psf
+
+
+def shift_psf_model(psf, x0, y0):
+    """PSF model for the sub-image with origin at `(x0, y0)` of the original image."""
+    if psf is None:
+        return None
+
+    psf = psf.copy()
+    psf['x0'] = psf.get('x0', 0) - x0
+    psf['y0'] = psf.get('y0', 0) - y0
+
+    return psf
+
+
+def measure_photometry(obj, image, config, psf=None, **kwargs):
+    """Forced photometry of the objects using the method and parameters from the config.
+
+    All measurements calibrated with the same photometric solution should go through
+    this routine, so that they share the same definition of the flux. Extra keyword
+    arguments are passed to :func:`stdpipe.photometry.measure_objects` and override
+    the defaults derived from the config. `psf` is the PSF model, required for 'psf'
+    method.
+    """
+    method = get_photometry_method(config)
+
+    if config.get('rel_bg1') and config.get('rel_bg2'):
+        rel_bkgann = [config['rel_bg1'], config['rel_bg2']]
+    else:
+        rel_bkgann = None
+
+    params = dict(
+        fwhm=config.get('fwhm'),
+        aper=config.get('rel_aper', 1.0),
+        bkgann=rel_bkgann,
+        sn=config.get('sn', 5.0),
+        bg_size=config.get('bg_size', 256),
+        gain=config.get('gain', 1.0),
+    )
+
+    if method == 'psf':
+        if psf is None:
+            raise RuntimeError("PSF photometry requested, but no PSF model is available")
+        # PSF fitting at fixed positions, with the PSF model instead of a Gaussian
+        params.update(optimal=True, psf=psf)
+        # The fit uses the pixels within the aperture, so it defines the fitting radius
+        if config.get('psf_fit_radius'):
+            params['aper'] = config['psf_fit_radius']
+        # Nearby objects are fitted simultaneously, zero radius disables it
+        if config.get('psf_group_radius') is not None:
+            if config['psf_group_radius'] > 0:
+                params['grouper_radius'] = config['psf_group_radius']*config.get('fwhm')
+            else:
+                params['group_sources'] = False
+    elif method == 'optimal':
+        params.update(optimal=True)
+    elif method != 'aperture':
+        raise ValueError(f"Unknown photometry method: {method}")
+
+    params.update(kwargs)
+
+    obj = photometry.measure_objects(obj, image, **params)
+
+    if method == 'psf' and len(obj) and 'bg_fluxerr' in obj.colnames:
+        # STDPipe reports the background noise summed inside the aperture, which here is
+        # just the fitting region, while the one of PSF fit is sigma/sqrt(sum(P^2))
+        obj['bg_fluxerr'] = get_psf_bg_fluxerr(obj, psf, params['aper']*params['fwhm'])
+
+    return obj
+
+
+def get_psf_bg_fluxerr(obj, psf, radius):
+    """Background noise of PSF fit flux for the objects, from their per-pixel background
+    noise derived from `bg_fluxerr` and `npix_aper` columns, and the PSF model within the
+    fitting `radius` in pixels."""
+    bg_fluxerr = np.full(len(obj), np.nan)
+
+    for i,(x,y,fluxerr,npix) in enumerate(zip(obj['x'], obj['y'], obj['bg_fluxerr'], obj['npix_aper'])):
+        if not np.isfinite(x) or not np.isfinite(y) or not npix > 0:
+            continue
+
+        stamp = stdpipe_psf.get_psf_stamp(psf, x, y, normalize=True)
+        h,w = stamp.shape
+        r = np.hypot(np.arange(w)[None,:] - w//2 - (x - np.round(x)),
+                     np.arange(h)[:,None] - h//2 - (y - np.round(y)))
+        sum2 = np.sum(stamp[r <= radius]**2)
+
+        if sum2 > 0:
+            bg_fluxerr[i] = fluxerr/np.sqrt(npix*sum2)
+
+    return bg_fluxerr
+
+
+def get_psf_model_profile(psf, x, y, rmax, nsub=5):
+    """Radii and values, per unit flux, of the pixels of the PSF model evaluated at `(x, y)`.
+
+    The model is shifted over a grid of sub-pixel offsets, so that its pixels sample the
+    profile the same way the pixels of real stars do.
+    """
+    rs,vs = [],[]
+
+    for dy in (np.arange(nsub) + 0.5)/nsub - 0.5:
+        for dx in (np.arange(nsub) + 0.5)/nsub - 0.5:
+            stamp = stdpipe_psf.get_psf_stamp(psf, x, y, dx=dx, dy=dy, normalize=True)
+            h,w = stamp.shape
+            r = np.hypot(np.arange(w)[None,:] - w//2 - dx, np.arange(h)[:,None] - h//2 - dy)
+            idx = r <= rmax
+            rs.append(r[idx])
+            vs.append(stamp[idx])
+
+    return np.concatenate(rs), np.concatenate(vs)
+
+
+def get_psf_model_shape(psf, x, y, upsample=4):
+    """FWHM, in pixels, and ellipticity of the PSF model evaluated at `(x, y)`.
+
+    The FWHM is the diameter of the circle having the same area as the region above half
+    maximum, so it is meaningful for arbitrary PSF shapes. The ellipticity is derived from
+    the second moments of the same region, that preserve the axis ratio of elliptical
+    profiles.
+    """
+    stamp = stdpipe_psf.get_supersampled_psf_stamp(psf, x, y, normalize=True)
+    # Model pixel size, in image pixels
+    scale = psf['sampling']
+
+    # Interpolate onto a finer grid so that the area above half maximum is not too coarse
+    factor = max(1, int(np.round(upsample*scale)))
+    if factor > 1:
+        stamp = zoom(stamp, factor, order=3)
+        scale /= factor
+
+    idx = stamp > 0.5*np.max(stamp)
+    fwhm = 2*np.sqrt(np.sum(idx)/np.pi)*scale
+
+    yy,xx = np.nonzero(idx)
+    w = stamp[idx]
+    xx = xx - np.average(xx, weights=w)
+    yy = yy - np.average(yy, weights=w)
+    cov = np.cov(np.vstack([xx, yy]), aweights=w)
+    l2,l1 = np.linalg.eigvalsh(cov)
+    ell = 1 - np.sqrt(max(l2, 0)/l1) if l1 > 0 else 0
+
+    return fwhm, ell
+
+
+def plot_psf_model(filename, psf, image, obj, fwhm, aper, bkgann=None, mask=None,
+                   show=False, verbose=True):
+    """Plot the PSF model evaluated at the center of the image, and its radial profile
+    compared with the mean profile of the actual stars and with the Gaussian of the same
+    FWHM.
+
+    The `image` is expected to be background subtracted. Everything is shown per unit flux,
+    normalized to the peak of the stellar profile, so that the model and the stars are
+    directly comparable.
+
+    Returns the FWHM of the model radial profile, or None if it may not be measured.
+    """
+    x0,y0 = image.shape[1]/2, image.shape[0]/2
+    rmax = get_profile_radius(image, fwhm, aper, bkgann)
+
+    rs,vs = get_psf_model_profile(psf, x0, y0, rmax)
+    centers,prof = get_binned_profile(rs, vs, rmax, fwhm)
+    model_peak = np.nanmax(prof)
+    fwhm_model = get_profile_fwhm(centers, prof/model_peak)
+
+    profile = measure_radial_profile(image, obj, fwhm, aper, bkgann=bkgann, mask=mask,
+                                     verbose=False)
+    # Common normalization, to the peak of the stellar profile if available
+    peak = profile['peak'] if profile is not None else model_peak
+
+    with plots.figure_saver(filename, figsize=(14, 6), show=show) as fig:
+        ax = fig.add_subplot(1, 2, 1)
+
+        stamp = stdpipe_psf.get_psf_stamp(psf, x0, y0, dx=0, dy=0, normalize=True)
+        h,w = stamp.shape
+        im = ax.imshow(np.log10(np.maximum(stamp/np.max(stamp), 1e-4)), origin='lower',
+                       interpolation='nearest', cmap='viridis',
+                       extent=[-w/2, w/2, -h/2, h/2])
+        plots.colorbar(im, ax=ax)
+        ax.set_xlabel('dx, pixels')
+        ax.set_ylabel('dy, pixels')
+        ax.set_title("PSF model at the image center, log10(intensity/peak)")
+
+        ax = fig.add_subplot(1, 2, 2)
+
+        if profile is not None:
+            plot_profile_points(ax, profile['pixels_r'], profile['pixels_v'],
+                                label=f"Pixels of {profile['nstars']} stars")
+            ax.plot(profile['r'], profile['profile'], '-', color='C0',
+                    label='Median stellar profile')
+
+        ax.plot(centers, prof/peak, '-', lw=2, color='C4', label='PSF model')
+
+        sigma = fwhm/2.355
+        rr = np.linspace(0, rmax, 200)
+        ax.plot(rr, np.exp(-rr**2/2/sigma**2)/(2*np.pi*sigma**2)/peak, ':', lw=2,
+                color='C5', label=f"Gaussian with FWHM {fwhm:.2f} pix")
+
+        ax.axhline(0, ls=':', lw=1, color='gray')
+        plot_profile_radii(ax, fwhm, aper, bkgann)
+
+        ax.set_xlim(0, rmax)
+        ax.set_ylim(-0.05, 1.1*max(1, np.nanmax(prof/peak)))
+        ax.legend(loc='upper right')
+        ax.grid(alpha=0.2)
+        ax.set_xlabel('Radius, pixels')
+        ax.set_ylabel('Normalized intensity')
+
+        title = "PSF model radial profile"
+        if fwhm_model is not None:
+            title += f": FWHM {fwhm_model:.2f} pix"
+        ax.set_title(title)
+
+    return fwhm_model
+
+
+def plot_psf_grid(filename, psf, shape, fwhm=None, ngrid=3, nmap=16, show=False):
+    """Plot the PSF model evaluated over the grid of positions across the image, the
+    difference of every grid stamp from the central one, and the maps of the model FWHM
+    and ellipticity.
+
+    Returns the ranges of the model FWHM and ellipticity over the image.
+    """
+    xs = shape[1]*(np.arange(ngrid) + 0.5)/ngrid
+    ys = shape[0]*(np.arange(ngrid) + 0.5)/ngrid
+
+    center = stdpipe_psf.get_psf_stamp(psf, shape[1]/2, shape[0]/2, dx=0, dy=0)
+    vmax = np.max(center)
+
+    stamps = [[stdpipe_psf.get_psf_stamp(psf, x, y, dx=0, dy=0) for x in xs] for y in ys]
+    dmax = max(np.max(np.abs(_ - center)) for row in stamps for _ in row)
+    dmax = max(dmax, 1e-3*vmax)
+
+    # Model shape over the finer grid
+    mxs = shape[1]*(np.arange(nmap) + 0.5)/nmap
+    mys = shape[0]*(np.arange(nmap) + 0.5)/nmap
+    shapes = np.array([[get_psf_model_shape(psf, x, y) for x in mxs] for y in mys])
+    fwhms,ells = shapes[:,:,0],shapes[:,:,1]
+
+    with plots.figure_saver(filename, figsize=(12, 12), show=show, tight_layout=False) as fig:
+        # Stamp grids on top, sized so that their cells are nearly square, and maps below
+        gs = fig.add_gridspec(2, 1, height_ratios=[1, 1], hspace=0.1,
+                              left=0.05, right=0.95, top=0.95, bottom=0.03)
+        gs_top = gs[0].subgridspec(1, 2, wspace=0.08)
+        gs_stamps = gs_top[0].subgridspec(ngrid, ngrid, wspace=0.05, hspace=0.15)
+        gs_diffs = gs_top[1].subgridspec(ngrid, ngrid, wspace=0.05, hspace=0.15)
+
+        for i in range(ngrid):
+            for j in range(ngrid):
+                # Top row of the plot is the top of the image
+                row = ngrid - 1 - i
+
+                ax = fig.add_subplot(gs_stamps[row, j])
+                ax.imshow(stamps[i][j], origin='lower', interpolation='nearest',
+                          cmap='viridis', vmin=0, vmax=vmax)
+                ax.set_axis_off()
+                ax.set_title(f"{xs[j]:.0f}, {ys[i]:.0f}", fontsize=8)
+
+                ax = fig.add_subplot(gs_diffs[row, j])
+                ax.imshow(stamps[i][j] - center, origin='lower', interpolation='nearest',
+                          cmap='RdBu_r', vmin=-dmax, vmax=dmax)
+                ax.set_axis_off()
+
+        fig.text(0.27, 0.985, "PSF model across the image", ha='center', va='top')
+        fig.text(0.73, 0.985, f"Difference from the center, up to {dmax/vmax:.1%} of the peak",
+                 ha='center', va='top')
+
+        gs_maps = gs[1].subgridspec(1, 2, wspace=0.2)
+
+        extent = [0, shape[1], 0, shape[0]]
+
+        for k,(data,title) in enumerate([
+                (fwhms, f"Model FWHM: {np.min(fwhms):.2f} - {np.max(fwhms):.2f} pix" +
+                 (f", photometry FWHM {fwhm:.2f}" if fwhm else "")),
+                (ells, f"Model ellipticity: {np.min(ells):.2f} - {np.max(ells):.2f}"),
+        ]):
+            ax = fig.add_subplot(gs_maps[k])
+            im = ax.imshow(data, origin='lower', interpolation='nearest', extent=extent,
+                           aspect='equal')
+            plots.colorbar(im, ax=ax)
+            ax.set_title(title)
+
+    return (np.min(fwhms), np.max(fwhms)), (np.min(ells), np.max(ells))
+
+
+def plot_psf_residuals(filename, psf, image, bg, obj, config, mask=None, nstars=200,
+                       show=False, verbose=True):
+    """Plot how well the PSF model fits the stars.
+
+    The panels show the median residual of the PSF fit for the bright unflagged stars
+    in `obj`, as measured with `measure_photometry`, normalized to the model peak; the
+    reduced chi2 of the fit versus instrumental magnitude; and the map of the ratio of
+    the flux within the aperture predicted by the PSF fit, using the model enclosed
+    flux fraction, to the one measured directly by aperture photometry. The latter
+    should be unity everywhere if the model properly describes the stars.
+
+    The `image` is the original one, and `bg` its background. Returns the dict with the
+    median (`median`) and robust scatter (`rms`) of the flux ratio, and the number of
+    stars used (`nstars`), or None if there are no suitable stars.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    fwhm = config.get('fwhm')
+    aper = config.get('rel_aper', 1.0)*fwhm
+
+    # Bright unflagged stars, well inside the image
+    stamp0 = stdpipe_psf.get_psf_stamp(psf, image.shape[1]/2, image.shape[0]/2, dx=0, dy=0)
+    size = stamp0.shape[0]//2
+    idx = (obj['flags'] == 0) & (obj['magerr'] < 1/20) & (obj['flux'] > 0)
+    idx &= (obj['x'] > size + 1) & (obj['x'] < image.shape[1] - size - 2)
+    idx &= (obj['y'] > size + 1) & (obj['y'] < image.shape[0] - size - 2)
+    sidx = np.where(idx)[0]
+    sidx = sidx[np.argsort(np.asarray(obj['magerr'])[sidx])][:nstars]
+
+    if len(sidx) < 3:
+        log("Too few stars for PSF residuals diagnostics")
+        return None
+
+    image1 = image - bg
+
+    # Median residual of the fit, relative to the model peak
+    residuals = []
+    for i in sidx:
+        x,y,flux = obj['x'][i], obj['y'][i], obj['flux'][i]
+        bg_local = obj['bg_local'][i] if 'bg_local' in obj.colnames else 0
+        model = stdpipe_psf.get_psf_stamp(psf, x, y, normalize=True)
+        xi,yi = int(np.round(x)), int(np.round(y))
+        cut = np.s_[yi - size:yi + size + 1, xi - size:xi + size + 1]
+
+        res = (image1[cut] - bg_local - flux*model)/flux/np.max(model)
+        if mask is not None:
+            res[mask[cut]] = np.nan
+        residuals.append(res)
+
+    residual = np.nanmedian(residuals, axis=0)
+
+    # Flux within the aperture, measured directly, and predicted from the PSF fit
+    aobj = measure_photometry(obj[sidx]['x', 'y'], image,
+                              config | {'photometry_method': 'aperture'},
+                              mask=mask, sn=0, verbose=False)
+    frac = np.array([stdpipe_psf.enclosed_psf_fraction(psf, x, y, radius=aper)
+                     for x,y in zip(obj['x'][sidx], obj['y'][sidx])])
+    ratio = np.asarray(obj['flux'][sidx])*frac/np.asarray(aobj['flux'])
+
+    good = np.isfinite(ratio) & (aobj['flags'] == 0)
+    if np.sum(good) < 3:
+        log("Too few stars with proper aperture photometry for PSF residuals diagnostics")
+        return None
+
+    median = np.median(ratio[good])
+    rms = mad_std(ratio[good])
+
+    with plots.figure_saver(filename, figsize=(18, 5.5), show=show) as fig:
+        ax = fig.add_subplot(1, 3, 1)
+        vmax = max(np.nanmax(np.abs(residual)), 1e-3)
+        im = ax.imshow(residual, origin='lower', interpolation='nearest', cmap='RdBu_r',
+                       vmin=-vmax, vmax=vmax, extent=[-size - 0.5, size + 0.5, -size - 0.5, size + 0.5])
+        plots.colorbar(im, ax=ax)
+        ax.set_xlabel('dx, pixels')
+        ax.set_ylabel('dy, pixels')
+        ax.set_title(f"Median fit residual of {len(sidx)} stars, fraction of peak")
+
+        ax = fig.add_subplot(1, 3, 2)
+        if 'chi2_optimal' in obj.colnames:
+            fidx = obj['flags'] == 0
+            ax.plot(obj['mag'][~fidx], obj['chi2_optimal'][~fidx], '.', color='C1',
+                    alpha=0.5, label='Flagged')
+            ax.plot(obj['mag'][fidx], obj['chi2_optimal'][fidx], '.', color='C0',
+                    alpha=0.5, label='Unflagged')
+            ax.plot(obj['mag'][sidx], obj['chi2_optimal'][sidx], 'o', mfc='none',
+                    color='C3', label='Used for residuals')
+            ax.axhline(1, ls='--', color='gray')
+            ax.set_yscale('log')
+            ax.legend()
+        ax.grid(alpha=0.2)
+        ax.set_xlabel('Instrumental magnitude')
+        ax.set_ylabel('Reduced chi2 of PSF fit')
+        ax.set_title("PSF fit quality")
+
+        ax = fig.add_subplot(1, 3, 3)
+        plots.binned_map(
+            obj['x'][sidx][good], obj['y'][sidx][good], ratio[good],
+            range=[[0, image.shape[1]], [0, image.shape[0]]],
+            bins=8, statistic='median',
+            show_dots=True, ax=ax
+        )
+        ax.set_aspect(1)
+        ax.set_xlim(0, image.shape[1])
+        ax.set_ylim(0, image.shape[0])
+        ax.set_title(f"PSF predicted / measured aperture flux: {median:.3f} +/- {rms:.3f}")
+
+    return {'median': median, 'rms': rms, 'nstars': int(np.sum(good))}
+
+
 def photometry_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -581,16 +1043,28 @@ def photometry_image(filename, config, verbose=True, show=False):
     else:
         rel_bkgann = None
 
+    # PSF model, built from the same stars used for FWHM estimation
+    psf_model = None
+    if get_photometry_method(config) == 'psf':
+        log("\n---- PSF model ----\n")
+
+        psf_model = build_psf_model(
+            image - bg, obj, idx, fwhm,
+            mask=(mask | custom_mask) if custom_mask is not None else mask,
+            # Empty value means automatic selection
+            degree=config.get('psf_degree') if config.get('psf_degree') not in [None, ''] else 'auto',
+            size=config.get('psf_size'),
+            max_stars=config.get('psf_max_stars'),
+            verbose=verbose
+        )
+
+        pickle_to_file(os.path.join(basepath, 'psf.pickle'), psf_model)
+        log("PSF model stored to psf.pickle")
+
     # Forced photometry at objects positions
-    obj = photometry.measure_objects(obj, image, mask=mask,
-                                     fwhm=fwhm,
-                                     aper=config.get('rel_aper', 1.0),
-                                     bkgann=rel_bkgann,
-                                     optimal=config.get('optimal_extraction', False),
-                                     sn=config.get('sn', 5.0),
-                                     bg_size=config.get('bg_size', 256),
-                                     gain=config.get('gain', 1.0),
-                                     verbose=verbose)
+    obj = measure_photometry(obj, image, config, psf=psf_model,
+                             mask=mask,
+                             verbose=verbose)
 
     log(f"{len(obj)} objects properly measured, {np.sum(obj['flags'] == 0)} unflagged")
     if np.sum(obj['flags'] == 0) < 0.5*len(obj):
@@ -598,6 +1072,44 @@ def photometry_image(filename, config, verbose=True, show=False):
 
     obj.write(os.path.join(basepath, 'objects.parquet'), overwrite=True)
     log("Measured objects stored to file:objects.parquet")
+
+    # PSF model diagnostics
+    if psf_model is not None:
+        full_mask = (mask | custom_mask) if custom_mask is not None else mask
+
+        fwhm_model = plot_psf_model(
+            os.path.join(basepath, 'psf.png'),
+            psf_model, image - bg, obj,
+            fwhm=fwhm,
+            aper=config.get('rel_aper', 1.0)*fwhm,
+            bkgann=[_*fwhm for _ in rel_bkgann] if rel_bkgann else None,
+            mask=full_mask,
+            show=show, verbose=verbose
+        )
+        if fwhm_model is not None:
+            log(f"PSF model FWHM is {fwhm_model:.2f} pixels")
+        log("PSF model plot stored to file:psf.png")
+
+        if psf_model.get('degree', 0) > 0:
+            (fwhm1, fwhm2), (ell1, ell2) = plot_psf_grid(
+                os.path.join(basepath, 'psf_grid.png'),
+                psf_model, image.shape, fwhm=fwhm,
+                show=show
+            )
+            log(f"PSF model FWHM varies over the image from {fwhm1:.2f} to {fwhm2:.2f} pixels, "
+                f"ellipticity from {ell1:.2f} to {ell2:.2f}")
+            log("PSF model variations plot stored to file:psf_grid.png")
+
+        res = plot_psf_residuals(
+            os.path.join(basepath, 'psf_residuals.png'),
+            psf_model, image, bg, obj, config,
+            mask=full_mask,
+            show=show, verbose=verbose
+        )
+        if res is not None:
+            log(f"PSF predicted to measured aperture flux ratio is {res['median']:.3f} "
+                f"+/- {res['rms']:.3f} over {res['nstars']} stars")
+            log("PSF residuals plot stored to file:psf_residuals.png")
 
     # Plot detected objects
     with plots.figure_saver(os.path.join(basepath, 'objects.png'), figsize=(8, 6), show=show,) as fig:
@@ -1031,16 +1543,11 @@ def photometry_image(filename, config, verbose=True, show=False):
 
         log(f"Primary target position is {target_obj['ra'][0]:.3f} {target_obj['dec'][0]:.3f} -> {target_obj['x'][0]:.1f} {target_obj['y'][0]:.1f}")
 
-        target_obj = photometry.measure_objects(target_obj, image, mask=mask,
-                                                fwhm=fwhm,
-                                                aper=config.get('rel_aper', 1.0),
-                                                bkgann=rel_bkgann,
-                                                optimal=config.get('optimal_extraction', False),
-                                                sn=0,
-                                                bg_size=config.get('bg_size', 256),
-                                                gain=config.get('gain', 1.0),
-                                                centroid_iter=5 if config.get('centroid_targets') else 0,
-                                                verbose=verbose)
+        target_obj = measure_photometry(target_obj, image, config, psf=psf_model,
+                                        mask=mask,
+                                        sn=0,
+                                        centroid_iter=5 if config.get('centroid_targets') else 0,
+                                        verbose=verbose)
 
         target_obj['mag_calib'] = target_obj['mag'] + m['zero_fn'](target_obj['x'],
                                                                    target_obj['y'],

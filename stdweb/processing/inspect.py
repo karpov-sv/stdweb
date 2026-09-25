@@ -17,7 +17,10 @@ from .utils import *
 
 
 import astroscrappy
-import sep
+try:
+    import sep_x as sep
+except ImportError:
+    import sep
 
 def mask_cosmics(
     image, mask,

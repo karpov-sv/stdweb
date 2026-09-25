@@ -66,14 +66,20 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `fwhm_override` | float | None | Override auto-measured FWHM with fixed value (pixels). |
 | `prefilter_detections` | bool | True | Apply isolation forest outlier detection to filter spurious detections. |
 
-### Aperture Photometry
+### Object Photometry
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `rel_aper` | float | 1.0 | Photometry aperture radius in FWHM units. |
 | `rel_bg1` | float | 5.0 | Inner background annulus radius in FWHM units. |
 | `rel_bg2` | float | 7.0 | Outer background annulus radius in FWHM units. |
-| `optimal_extraction` | bool | False | Use optimal (PSF-weighted) extraction instead of plain aperture sums, improving S/N for faint sources. |
+| `photometry_method` | str | `aperture` | Photometry method used for all measurements calibrated with the photometric solution - objects and targets in the image, and targets and candidates in the difference image: `aperture` for plain aperture sums, `optimal` for optimal (PSF-weighted) extraction with Gaussian PSF, improving S/N for faint sources, or `psf` for PSF fitting at fixed positions with the empirical PSF model built from the image stars. |
+| `psf_degree` | int | None | Polynomial degree of the spatial variations of the PSF model for `psf` photometry method. 0 = constant PSF. None or `auto` = selected automatically, up to 3, by spatial cross-validation. Explicit value is reduced if there are fewer than 5 stars per polynomial coefficient. |
+| `psf_fit_radius` | float | None | Radius, in FWHM units, of the region used for PSF fitting. None = same as `rel_aper`. |
+| `psf_group_radius` | float | None | Radius, in FWHM units, within which the objects are fitted simultaneously with PSF photometry. None = twice the fit radius, 0 = no grouping. |
+| `psf_max_stars` | int | None | Maximal number of stars, spread uniformly over the image, used to build the PSF model. None = up to 25 per cell of 6x6 grid. |
+| `psf_size` | int | None | Size of the PSF model stamp in pixels. None = selected automatically from the extent of stellar profile, between max(15, 5*FWHM) and 10*FWHM. |
+| `optimal_extraction` | bool | False | Deprecated, equivalent to `photometry_method` = `optimal` when the latter is not set. |
 
 ### Photometric Calibration
 

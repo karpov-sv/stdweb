@@ -74,7 +74,7 @@ def test_subtraction_photometry(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+                                      {'fwhm': fwhm, 'rel_aper': 1.0}, verbose=False)
 
     assert os.path.exists(filename)
     assert res['nstars'] > 100
@@ -91,7 +91,7 @@ def test_subtraction_photometry_few_stars(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+                                      {'fwhm': fwhm, 'rel_aper': 1.0}, verbose=False)
 
     assert os.path.exists(filename)
     assert res['nstars'] == 7
@@ -107,7 +107,7 @@ def test_subtraction_photometry_very_few_stars(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+                                      {'fwhm': fwhm, 'rel_aper': 1.0}, verbose=False)
 
     assert os.path.exists(filename)
     assert res['nstars'] == 4
@@ -124,7 +124,7 @@ def test_subtraction_photometry_without_color(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+                                      {'fwhm': fwhm, 'rel_aper': 1.0}, verbose=False)
 
     assert os.path.exists(filename)
     assert res['mag_slope'] is not None
@@ -142,7 +142,7 @@ def test_subtraction_photometry_without_catalogue(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                      fwhm=4.0, rel_aper=1.0, verbose=False)
+                                      {'fwhm': 4.0, 'rel_aper': 1.0}, verbose=False)
 
     assert os.path.exists(filename)
     assert res['nstars'] > 100
@@ -165,7 +165,7 @@ def test_subtraction_photometry_deeper_than_catalogue(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     res = plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                      fwhm=fwhm, rel_aper=1.0, verbose=False)
+                                      {'fwhm': fwhm, 'rel_aper': 1.0}, verbose=False)
 
     assert os.path.exists(filename)
     assert res['nstars'] > 100
@@ -184,5 +184,5 @@ def test_subtraction_photometry_without_objects(tmp_path):
 
     filename = str(tmp_path / 'sub_photometry.png')
     assert plot_subtraction_photometry(filename, diff, obj, m, (0, 0), diff.shape,
-                                       fwhm=4.0, rel_aper=1.0, verbose=False) is None
+                                       {'fwhm': 4.0, 'rel_aper': 1.0}, verbose=False) is None
     assert not os.path.exists(filename)

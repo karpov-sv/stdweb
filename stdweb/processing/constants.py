@@ -182,7 +182,7 @@ filter_ab_offset = {
 
 # Object flags set by SExtractor and STDPipe during the photometry, and by the
 # pre-filtering step. Note that 0x800 is also used by STDPipe optimal extraction to
-# report a failure, so it is only unambiguous when optimal extraction is disabled.
+# report a failure, so it is only unambiguous with plain aperture photometry.
 object_flags = {
     0x0001: 'bad pixels',
     0x0002: 'deblended',
@@ -231,6 +231,7 @@ files_photometry = [
     'photometry_zeropoint.png', 'photometry_model.png',
     'photometry_residuals.png', 'astrometry_dist.png',
     'photometry.pickle',
+    'psf.pickle', 'psf.png', 'psf_grid.png', 'psf_residuals.png',
     'objects.parquet', 'cat.parquet',
     'limit_hist.png', 'limit_sn.png',
     'target.vot', 'target.cutout', 'targets'
