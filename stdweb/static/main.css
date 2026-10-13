@@ -297,3 +297,51 @@ span.asteriskField {
     display: block;
   }
 }
+
+/* A plot the reader may make taller or shorter. The box carries the height,
+   the plot fills whatever the grip along its bottom edge leaves of it */
+.plotly-resizable {
+    position: relative;
+    width: 100%;
+    min-height: 150px;
+    overflow: hidden;
+}
+
+.plotly-resizable > .plotly-chart {
+    width: 100%;
+    height: calc(100% - 12px);
+}
+
+.plot-resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 12px;
+    cursor: ns-resize;
+    /* The browser's own touch gestures would take the drag away from us */
+    touch-action: none;
+}
+
+/* Two lines of a grip, as the hint that the edge may be dragged at all */
+.plot-resize-handle::before {
+    content: "";
+    display: block;
+    width: 2rem;
+    height: 4px;
+    margin: 3px auto 0;
+    border-top: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.plot-resize-handle:hover::before {
+    border-color: var(--bs-secondary-color);
+}
+
+/* While dragging, the pointer stays what it is over the whole page, and the
+   text it passes over is not to be selected by the way */
+.plot-resizing,
+.plot-resizing * {
+    user-select: none !important;
+    cursor: ns-resize !important;
+}

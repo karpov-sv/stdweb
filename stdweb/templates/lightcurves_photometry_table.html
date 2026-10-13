@@ -23,7 +23,15 @@
       </thead>
       <tbody>
         {% for obj in measurements %}
-          <tr>
+          <tr class="lc-point"
+              data-task-id="{{ task_id }}"
+              data-source="{{ metadata.filename }}"
+              data-time="{{ metadata.time|default:'' }}"
+              data-mjd="{% if metadata.mjd is not None %}{{ metadata.mjd|stringformat:'.6f' }}{% endif %}"
+              data-mag="{{ obj.mag_calib|stringformat:'.4f' }}"
+              data-magerr="{{ obj.mag_calib_err|stringformat:'.4f' }}"
+              data-band="{{ obj.band|default:'' }}"
+              data-filter="{{ obj.mag_filter_name|default:'' }}">
             <td>{{ metadata.time|default:'--' }}</td>
             <td>{% if metadata.mjd is not None %}{{ metadata.mjd|floatformat:5 }}{% else %}--{% endif %}</td>
             <td>{{ obj.distance_arcsec|floatformat:2 }}"</td>

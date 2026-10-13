@@ -3,11 +3,15 @@
 {% load el_pagination_tags %}
 {% load crispy_forms_tags %}
 {% load filters %}
+{% load static %}
 
 {% block ptitle %}Lightcurves : STDWeb{% endblock %}
 
 {% block head %}
   {% include "popup_image.html" %}
+  <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js" charset="utf-8"></script>
+  <script src="{% static 'plot_theme.js' %}"></script>
+  <script src="{% static 'plot_resize.js' %}"></script>
 {% endblock %}
 
 {% block title %}Search around sky position{% endblock %}
@@ -19,6 +23,12 @@
   </div>
 
   {% if tasks %}
+
+    {# Lightcurve plot, shown once some photometry is loaded #}
+    <div id="lightcurve-plot-container" class="plotly-resizable mb-4 d-none" style="height: 400px;">
+      <div id="lightcurve-plot" class="plotly-chart"></div>
+      <div class="plot-resize-handle" role="separator" title="Drag to resize the plot"></div>
+    </div>
 
     <div class="mb-3 d-flex justify-content-between align-items-center">
       <div>
@@ -176,6 +186,125 @@
   <script>
    $(document).ready(function() {
 
+     onThemeChange(function(){ plotlyRetheme('lightcurve-plot'); });
+     plotlyResizable('lightcurve-plot');
+
+     // Collect all loaded measurements and (re)draw the lightcurve
+     // Time axis of the plot, either 'date' (UT) or 'mjd'
+     var timeAxisMode = 'date';
+
+     // MJD 0 is 1858-11-17 00:00 UT, 40587 days before the Unix epoch.
+     // Returned as a UT string, as Plotly would shift a Date object to the
+     // browser's local time zone
+     function mjdToDate(mjd) {
+       return new Date((mjd - 40587.0) * 86400000).toISOString().replace('T', ' ').replace('Z', '');
+     }
+
+     // Modebar icons for the time axis toggle, on a 1000x1000 grid
+     var timeAxisIcons = {
+       // Calendar page with two rings and a couple of days marked
+       date: 'M100 150H900V900H100Z M200 350V800H800V350Z M250 50H350V250H250Z M650 50H750V250H650Z ' +
+             'M300 450H450V600H300Z M550 450H700V600H550Z',
+       // Hash sign, for the plain number
+       mjd: 'M300 100H400V900H300Z M600 100H700V900H600Z M100 300H900V400H100Z M100 600H900V700H100Z',
+     };
+
+     // Switching the time axis changes its type, which Plotly.react does not
+     // pick up on an existing plot, so it is drawn anew
+     function switchTimeAxis(mode) {
+       if (mode === timeAxisMode)
+         return;
+
+       timeAxisMode = mode;
+
+       Plotly.purge('lightcurve-plot');
+       updateLightcurve();
+     }
+
+     // Plotly shows the button pressed while its attr has its val in the
+     // layout, so the one of the current time axis stays pressed by itself
+     function timeAxisButton(mode, title) {
+       return {
+         name: 'time-axis-' + mode,
+         title: title,
+         icon: {width: 1000, height: 1000, path: timeAxisIcons[mode]},
+         attr: 'xaxis.type',
+         val: mode === 'date' ? 'date' : 'linear',
+         click: function() { switchTimeAxis(mode); },
+       };
+     }
+
+     function updateLightcurve() {
+       var traces = {};
+       var isDate = timeAxisMode === 'date';
+       var count = 0;
+
+       $('.lc-point').each(function() {
+         var $row = $(this);
+         var mjd = parseFloat($row.data('mjd'));
+         var mag = parseFloat($row.data('mag'));
+         var magerr = parseFloat($row.data('magerr'));
+
+         if (!isFinite(mjd) || !isFinite(mag))
+           return;
+
+         var band = $row.data('band') || '?';
+         var filter = $row.data('filter') || band;
+         var source = $row.data('source');
+         var key = filter + ' : ' + source;
+
+         if (!(key in traces)) {
+           traces[key] = {
+             x: [], y: [], text: [], customdata: [],
+             error_y: {type: 'data', array: [], visible: true, thickness: 1, width: 0},
+             mode: 'markers', type: 'scatter', name: key,
+             marker: {
+               size: 7,
+               symbol: {'target.vot': 'square', 'sub_target.vot': 'diamond'}[source] || 'circle',
+             },
+             hovertemplate: '%{text}<br>MJD %{customdata:.5f}<br>%{y:.3f} ± %{error_y.array:.3f}<extra>%{fullData.name}</extra>',
+           };
+         }
+
+         traces[key].x.push(isDate ? mjdToDate(mjd) : mjd);
+         traces[key].customdata.push(mjd);
+         traces[key].y.push(mag);
+         traces[key].error_y.array.push(isFinite(magerr) ? magerr : 0);
+         traces[key].text.push('Task ' + $row.data('task-id') + ': ' + $row.data('time') + '<br>' + band);
+         count++;
+       });
+
+       if (!count)
+         return;
+
+       // The colours of the page the plot is drawn on, light or dark
+       var theme = plotlyTheme();
+
+       $('#lightcurve-plot-container').removeClass('d-none');
+
+       Plotly.react('lightcurve-plot', Object.values(traces), {
+         margin: {l: 60, r: 20, t: 20, b: 50},
+         paper_bgcolor: theme.paper_bgcolor,
+         plot_bgcolor: theme.plot_bgcolor,
+         font: theme.font,
+         xaxis: {
+           title: {text: isDate ? 'Universal Time (UT)' : 'Modified Julian Date (MJD)'},
+           type: isDate ? 'date' : 'linear',
+           gridcolor: theme.gridcolor, zeroline: false, exponentformat: 'none',
+         },
+         yaxis: {title: {text: 'Magnitude'}, gridcolor: theme.gridcolor, zeroline: false, autorange: 'reversed'},
+         legend: {orientation: 'h', y: -0.2},
+         hovermode: 'closest',
+       }, {
+         responsive: true,
+         displaylogo: false,
+         modeBarButtonsToAdd: [
+           timeAxisButton('date', 'Time axis: calendar date, UT'),
+           timeAxisButton('mjd', 'Time axis: Modified Julian Date'),
+         ],
+       });
+     }
+
      // Handle "Load All Photometry" button click
      $('#load-all-photometry').on('click', function() {
        var $loadAllBtn = $(this);
@@ -234,6 +363,7 @@
            success: function(html) {
              $data.html(html);
              $loading.addClass('d-none');
+             updateLightcurve();
              loadedCount++;
              $loadAllBtn.html('<i class="fa fa-spinner fa-spin"></i> Loading ' + loadedCount + '/' + totalButtons);
              // Load next item
@@ -290,6 +420,7 @@
            // Directly insert pre-rendered HTML
            $data.html(html);
            $loading.addClass('d-none');
+           updateLightcurve();
          },
 
          error: function(xhr, status, error) {

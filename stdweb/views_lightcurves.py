@@ -296,6 +296,7 @@ def task_photometry_html(request, id):
             html += render_to_string('lightcurves_photometry_table.html', {
                 'measurements': obj,
                 'metadata': metadata,
+                'task_id': task.id,
             })
 
     if not html:
