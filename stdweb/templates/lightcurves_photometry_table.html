@@ -11,6 +11,8 @@
     <table class="table table-sm table-hover" >
       <thead class="table-light" style="position: sticky; top: 0">
         <tr>
+          <th>Time</th>
+          <th>MJD</th>
           <th>Dist</th>
           <th>RA</th>
           <th>Dec</th>
@@ -22,6 +24,8 @@
       <tbody>
         {% for obj in measurements %}
           <tr>
+            <td>{{ metadata.time|default:'--' }}</td>
+            <td>{% if metadata.mjd is not None %}{{ metadata.mjd|floatformat:5 }}{% else %}--{% endif %}</td>
             <td>{{ obj.distance_arcsec|floatformat:2 }}"</td>
             <td>{{ obj.ra|floatformat:5 }}</td>
             <td>{{ obj.dec|floatformat:5 }}</td>

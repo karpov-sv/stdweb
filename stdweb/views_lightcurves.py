@@ -13,6 +13,7 @@ import numpy as np
 
 from astropy.table import Table, vstack
 from astropy.coordinates import SkyCoord
+from astropy.time import Time
 
 from mocpy import MOC
 
@@ -173,6 +174,17 @@ def lightcurves(request):
     return TemplateResponse(request, 'lightcurves.html', context=context)
 
 
+def _get_task_mjd(task):
+    """Return MJD of the task observation time, or None if not set or unparseable."""
+    time = task.config.get('time')
+    if not time:
+        return None
+    try:
+        return Time(time).mjd
+    except Exception:
+        return None
+
+
 def _get_photometry_data(task, ra0, dec0, radius_arcsec, filename='objects.parquet'):
     """
     Load and filter photometric measurements for a task.
@@ -205,6 +217,7 @@ def _get_photometry_data(task, ra0, dec0, radius_arcsec, filename='objects.parqu
             'filename': filename,
             'filter': task.config.get('filter'),
             'time': task.config.get('time'),
+            'mjd': _get_task_mjd(task),
             'count': len(obj_filtered),
             'radius_arcsec': radius_arcsec,
         }
@@ -353,6 +366,8 @@ def download_votable(request):
             out['original_name'] = [task.original_name or ''] * len(obj)
             out['source_file'] = [filename] * len(obj)
             out['time'] = [task.config.get('time') or ''] * len(obj)
+            mjd = metadata.get('mjd')
+            out['mjd'] = np.full(len(obj), mjd if mjd is not None else np.nan)
             out['filter'] = [task.config.get('filter') or ''] * len(obj)
             out['distance_arcsec'] = obj['distance_arcsec']
             out['ra'] = obj['ra']
