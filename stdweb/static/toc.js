@@ -123,6 +123,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // that clears the sticky state bar is scroll-margin-top, in the stylesheet.
     event.preventDefault();
     section.scrollIntoView({behavior: 'smooth', block: 'start'});
+
+    // And it is the one marked, whatever the scrolling ends up showing
+    chosen = link;
+    scheduleMark();
   });
 
   document.addEventListener('keydown', function(event) {
@@ -137,10 +141,61 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   };
 
-  // Marks whichever section is currently on screen. The bottom margin keeps
-  // the highlight on the section being read rather than the one below it.
-  new bootstrap.ScrollSpy(document.body, {
-    target: '#toc',
-    rootMargin: '0px 0px -60%',
+  // Marks the section being read: the last one whose heading has passed the
+  // upper part of the window. Not Bootstrap's ScrollSpy, which only marks a
+  // section while its heading itself is in view, and so loses it as soon as
+  // the reading goes past the form into the results below.
+  var links = nav.querySelectorAll('.nav-link');
+  var pending = false;
+
+  // The entry just followed, kept marked until the reader scrolls by hand. A
+  // section near the end of the page may not be scrollable up to the line, or
+  // even to the top - the page ends first - and would otherwise show as the
+  // one next to it.
+  var chosen = null;
+
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function(type) {
+    window.addEventListener(type, function(event) {
+      // Not a click on the rail itself, which is what set it
+      if (chosen && !(event.target instanceof Node && nav.contains(event.target))) {
+        chosen = null;
+        scheduleMark();
+      }
+    }, {passive: true});
   });
+
+  function markCurrent() {
+    pending = false;
+
+    // The last sections may never get their heading up to the line, as the
+    // page ends before they could. So over the last stretch of scrolling the
+    // line slides down to the bottom of the window, passing their headings in
+    // turn and reaching the very last one as the page ends.
+    var height = window.innerHeight;
+    var left = document.documentElement.scrollHeight - window.scrollY - height;
+    var line = height * 0.4 + Math.max(0, height * 0.6 - left);
+    var current = -1;
+
+    headings.forEach(function(heading, i) {
+      if (heading.getBoundingClientRect().top <= line)
+        current = i;
+    });
+
+    links.forEach(function(link, i) {
+      link.classList.toggle('active', chosen ? link === chosen : i === current);
+    });
+  }
+
+  function scheduleMark() {
+    if (!pending) {
+      pending = true;
+      window.requestAnimationFrame(markCurrent);
+    }
+  }
+
+  window.addEventListener('scroll', scheduleMark, {passive: true});
+  window.addEventListener('resize', scheduleMark);
+  // A log opened or closed moves the sections without any scrolling
+  new ResizeObserver(scheduleMark).observe(document.body);
+  markCurrent();
 });
