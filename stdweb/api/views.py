@@ -515,7 +515,7 @@ def task_skyportal_upload(request, pk):
         return Response(serializer.errors, status=400)
     data = serializer.validated_data
 
-    instrument_id = views_skyportal.skyportal_get_instrument_by_name(data['instrument_name'])
+    instrument_id = views_skyportal.skyportal_get_instrument_id_by_name(data['instrument_name'])
     if instrument_id is None:
         return Response({'error': f"No SkyPortal instrument named \"{data['instrument_name']}\""}, status=400)
 
