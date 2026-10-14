@@ -17,6 +17,7 @@ from .views import (
     task_fix,
     task_crop,
     task_destripe,
+    task_skyportal_upload,
     task_files_list,
     task_file,
     task_preview,
@@ -56,6 +57,7 @@ urlpatterns = [
     path('tasks/<int:pk>/fix/', task_fix, name='api-task-fix'),
     path('tasks/<int:pk>/crop/', task_crop, name='api-task-crop'),
     path('tasks/<int:pk>/destripe/', task_destripe, name='api-task-destripe'),
+    path('tasks/<int:pk>/skyportal/', task_skyportal_upload, name='api-task-skyportal-upload'),
 
     # Task file operations
     path('tasks/<int:pk>/files/', task_files_list, name='api-task-files'),

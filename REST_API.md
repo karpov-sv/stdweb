@@ -404,6 +404,51 @@ POST /api/tasks/{id}/destripe/
 
 Options: `horizontal`, `vertical`, `both`
 
+#### Upload Photometry to SkyPortal
+```
+POST /api/tasks/{id}/skyportal/
+```
+
+Push the task's primary-target forced-photometry result (`target.vot` /
+`sub_target.vot`, written by the `photometry`/`subtraction` steps) to a
+SkyPortal source. Requires the `stdweb.skyportal_upload` permission.
+
+**Request:**
+```json
+{
+  "source_id": "ZTF21aaqjmps",
+  "instrument_name": "TAROT-TCA",
+  "types": "best",
+  "limit_only": false,
+  "ra": 194.5,
+  "dec": 12.3
+}
+```
+- `source_id`, `instrument_name`: required.
+- `types`: `best` (template-subtracted if available; default), `direct`, or `subtracted`.
+- `limit_only`: upload only the limiting magnitude, even if a detection was measured (default `false`).
+- `ra`, `dec`: optional, attached to the photometry point for provenance.
+
+**Response:**
+```json
+{
+  "status": "success",
+  "skyportal_photometry_ids": [456],
+  "mjd": 60310.5,
+  "filter": "sdssr",
+  "magsys": "ab",
+  "mag": 19.8,
+  "magerr": 0.12,
+  "limiting_mag": 21.5,
+  "is_diff": false
+}
+```
+
+Returns `400` if the instrument name doesn't resolve to a SkyPortal
+instrument, or if the task has no usable target measurement (e.g. photometry
+hasn't run yet). Returns `502` if SkyPortal itself rejects the upload (e.g.
+unknown `source_id`).
+
 ---
 
 ### Task Files
