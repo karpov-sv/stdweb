@@ -376,7 +376,22 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Time
     if not config.get('time'):
-        time = utils.get_obs_time(header=header, verbose=verbose)
+        time = None
+
+        # DATE-AVG (FITS standard mean epoch, written e.g. by Siril and N.I.N.A.)
+        # is the exposure midpoint, or the mean epoch of a stack, while DATE-OBS
+        # is usually the start of the (first) exposure
+        if header.get('DATE-AVG'):
+            try:
+                time = utils.get_obs_time(string=str(header['DATE-AVG']), verbose=verbose)
+            except Exception:
+                time = None
+
+            if time is not None:
+                log(f"Using DATE-AVG {header['DATE-AVG']} as observation time")
+
+        if time is None:
+            time = utils.get_obs_time(header=header, verbose=verbose)
 
         if time is not None:
             config['time'] = time.iso
