@@ -60,6 +60,25 @@ def skyportal_get_instruments(api_token=settings.SKYPORTAL_TOKEN):
     return []
 
 
+def skyportal_get_instrument_id_by_name(name, api_token=settings.SKYPORTAL_TOKEN):
+    if api_token is not None:
+        headers = {'Authorization': f'token {api_token}'}
+    else:
+        headers = None
+
+    try:
+        res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/instrument', params={'name': name}, headers=headers)
+
+        if res:
+            json = res.json()
+            if json['status'] == 'success' and json['data']:
+                return json['data'][0]['id']
+    except:
+        pass
+
+    return None
+
+
 def skyportal_upload_photometry(
         sid,
         *,
@@ -137,6 +156,89 @@ def skyportal_resolve_task(task):
     return ra, dec, sid
 
 
+# filter name -> SkyPortal filter name.
+SKYPORTAL_FILTER_MAP = {
+    'Umag': 'bessellu',
+    'Bmag': 'bessellb',
+    'Vmag': 'bessellv',
+    'Rmag': 'bessellr',
+    'Imag': 'besselli',
+    'umag': 'sdssu',
+    'gmag': 'sdssg',
+    'rmag': 'sdssr',
+    'imag': 'sdssi',
+    'zmag': 'sdssz',
+    'Jmag': '2massj',
+    'Hmag': '2massh',
+    'Ksmag': '2massks',
+    'Gmag': 'gaia::g',
+    'BPmag': 'gaia::grp',
+    'RPmag': 'gaia::gbp',
+}
+SKYPORTAL_VEGA_FILTERS = ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag']
+
+
+def skyportal_prepare_photometry(task, types='best', limit_only=False):
+    """
+    Get information for uploading photometry to skyportal.
+
+    `types`: 'direct' / 'subtracted' / 'best' (prefer subtracted if available)
+    """
+    sfiles = []
+    if types == 'subtracted' or types == 'best':
+        sfiles.append('sub_target.vot')
+    if types == 'direct' or types == 'best':
+        sfiles.append('target.vot')
+
+    filename = None
+    is_diff = False
+    for sname in sfiles:
+        candidate = os.path.join(task.path(), sname)
+        if os.path.exists(candidate):
+            filename = candidate
+            is_diff = (sname == 'sub_target.vot')
+            break
+
+    try:
+        if filename is not None:
+            tobj = Table.read(filename)
+            row = tobj[0]
+            fname = row['mag_filter_name']
+
+            if row['mag_calib_err'] < 1/3 and not limit_only:
+                mag = row['mag_calib']
+                magerr = row['mag_calib_err']
+            else:
+                mag = None
+                magerr = None
+            mag_limit = row['mag_limit']
+        else:
+            fname = task.config['cat_col_mag']
+            mag = None
+            magerr = None
+            mag_limit = task.config['mag_limit']
+    except (KeyError, IndexError):
+        raise RuntimeError('Cannot load target measurements')
+
+    magsys = 'vega' if fname in SKYPORTAL_VEGA_FILTERS else 'ab'
+    fname = SKYPORTAL_FILTER_MAP.get(fname, fname)
+
+    if 'time' in task.config and task.config['time']:
+        time = Time(task.config['time'])
+    else:
+        raise RuntimeError('Cannot get image time')
+
+    return {
+        'mjd': time.mjd,
+        'filter': fname,
+        'magsys': magsys,
+        'mag': mag,
+        'magerr': magerr,
+        'limit': mag_limit,
+        'is_diff': is_diff,
+    }
+
+
 @login_required
 def skyportal(request):
     context = {}
@@ -184,75 +286,15 @@ def skyportal(request):
                     ctask['title'] = task.title
                     ctask['ra'], ctask['dec'], ctask['sid'] = skyportal_resolve_task(task)
 
-                    try:
-                        sfiles = []
-                        if types == 'subtracted' or types == 'best':
-                            sfiles.append('sub_target.vot')
-                        if types == 'direct' or types == 'best':
-                            sfiles.append('target.vot')
+                    phot = skyportal_prepare_photometry(task, types=types, limit_only=limit_only)
 
-                        for sname in sfiles:
-                            filename = f"tasks/{id}/{sname}"
-                            if os.path.exists(filename):
-                                if sname == 'sub_target.vot':
-                                    ctask['is_diff'] = True
-                                else:
-                                    ctask['is_diff'] = False
-
-                                break
-
-                        if os.path.exists(filename):
-                            tobj = Table.read(filename)
-                            row = tobj[0]
-                            fname = row['mag_filter_name']
-
-                            if row['mag_calib_err'] < 1/3 and not limit_only:
-                                mag = row['mag_calib']
-                                magerr = row['mag_calib_err']
-                            else:
-                                mag = None
-                                magerr = None
-                            mag_limit = row['mag_limit']
-                        else:
-                            fname = task.config['cat_col_mag']
-                            mag = None
-                            magerr = None
-                            mag_limit = task.config['mag_limit']
-                    except:
-                        raise RuntimeError('Cannot load target measurements')
-
-                    magsys = 'vega' if fname in ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag'] else 'ab'
-                    fname = {
-                        'Umag': 'bessellu',
-                        'Bmag': 'bessellb',
-                        'Vmag': 'bessellv',
-                        'Rmag': 'bessellr',
-                        'Imag': 'besselli',
-                        'umag': 'sdssu',
-                        'gmag': 'sdssg',
-                        'rmag': 'sdssr',
-                        'imag': 'sdssi',
-                        'zmag': 'sdssz',
-                        'Jmag': '2massj',
-                        'Hmag': '2massh',
-                        'Ksmag': '2massks',
-                        'Gmag': 'gaia::g',
-                        'BPmag': 'gaia::grp',
-                        'RPmag': 'gaia::gbp',
-                    }.get(fname, fname)
-
-                    if 'time' in task.config and task.config['time']:
-                        time = Time(task.config['time'])
-                    else:
-                        raise RuntimeError('Cannot get image time')
-
-                    ctask['mjd'] = time.mjd
-                    ctask['filter'] = fname
-                    ctask['magsys'] = magsys
-                    ctask['mag'] = mag
-                    ctask['magerr'] = magerr
-                    ctask['limit'] = mag_limit
-
+                    ctask['is_diff'] = phot['is_diff']
+                    ctask['mjd'] = phot['mjd']
+                    ctask['filter'] = phot['filter']
+                    ctask['magsys'] = phot['magsys']
+                    ctask['mag'] = phot['mag']
+                    ctask['magerr'] = phot['magerr']
+                    ctask['limit'] = phot['limit']
                     if action == 'upload':
                         res = skyportal_upload_photometry(
                             # 'test_source_stdpipe',

@@ -248,6 +248,16 @@ class TaskStateSerializer(serializers.Serializer):
     celery_id = serializers.CharField(allow_null=True)
 
 
+class SkyPortalUploadSerializer(serializers.Serializer):
+    """Serializer for POST /api/tasks/<pk>/skyportal/ requests."""
+    source_id = serializers.CharField()
+    instrument_name = serializers.CharField()
+    types = serializers.ChoiceField(choices=['best', 'direct', 'subtracted'], default='best')
+    limit_only = serializers.BooleanField(default=False)
+    ra = serializers.FloatField(required=False, allow_null=True, default=None)
+    dec = serializers.FloatField(required=False, allow_null=True, default=None)
+
+
 class PresetSerializer(serializers.ModelSerializer):
     """Serializer for Preset model."""
 

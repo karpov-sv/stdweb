@@ -34,12 +34,14 @@ from stdweb.processing import (
     preprocess_image,
 )
 from stdweb.views_celery import revoke_task_chain, find_task_by_chain_id
+from stdweb import views_skyportal
 
 from .serializers import (
     TaskSerializer,
     TaskCreateSerializer,
     TaskListSerializer,
     TaskStateSerializer,
+    SkyPortalUploadSerializer,
     PresetSerializer,
     CropRequestSerializer,
     DestripeRequestSerializer,
@@ -490,6 +492,72 @@ def task_destripe(request, pk):
         verbose=False,
     )
     return Response({'id': task.id, 'status': 'destriped'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def task_skyportal_upload(request, pk):
+    """Upload primary-target forced-photometry result.
+    Requires source_id and instrument_name."""
+    task = get_object_or_404(Task, pk=pk)
+
+    if not check_task_permission(request, task):
+        return Response({'error': 'Permission denied'}, status=403)
+
+    if not request.user.has_perm('stdweb.skyportal_upload'):
+        return Response({'error': 'Permission denied'}, status=403)
+
+    if not settings.SKYPORTAL_TOKEN:
+        return Response({'error': 'SKYPORTAL_TOKEN is not configured on this STDWeb instance'}, status=400)
+
+    serializer = SkyPortalUploadSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=400)
+    data = serializer.validated_data
+
+    instrument_id = views_skyportal.skyportal_get_instrument_id_by_name(data['instrument_name'])
+    if instrument_id is None:
+        return Response({'error': f"No SkyPortal instrument named \"{data['instrument_name']}\""}, status=400)
+
+    try:
+        phot = views_skyportal.skyportal_prepare_photometry(
+            task, types=data['types'], limit_only=data['limit_only'],
+        )
+    except RuntimeError as e:
+        return Response({'error': str(e)}, status=400)
+
+    res = views_skyportal.skyportal_upload_photometry(
+        data['source_id'],
+        instrument=instrument_id,
+        mjd=phot['mjd'],
+        mag=phot['mag'],
+        magerr=phot['magerr'],
+        limit=phot['limit'],
+        filter=phot['filter'],
+        magsys=phot['magsys'],
+        ra=data['ra'],
+        dec=data['dec'],
+        origin=f'stdweb:{task.id}',
+        altdata={'stdweb_task_id': task.id},
+    )
+
+    if res.get('status') != 'success':
+        return Response({'error': res.get('message', 'Unknown SkyPortal error')}, status=502)
+
+    log_action('task_skyportal_upload', task=task, request=request,
+               details={'source_id': data['source_id'], 'instrument_name': data['instrument_name']})
+
+    return Response({
+        'status': 'success',
+        'skyportal_photometry_ids': res.get('data', {}).get('ids', []),
+        'mjd': phot['mjd'],
+        'filter': phot['filter'],
+        'magsys': phot['magsys'],
+        'mag': phot['mag'],
+        'magerr': phot['magerr'],
+        'limiting_mag': phot['limit'],
+        'is_diff': phot['is_diff'],
+    })
 
 
 # =============================================================================
