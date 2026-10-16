@@ -446,8 +446,9 @@ SkyPortal source. Requires the `stdweb.skyportal_upload` permission.
 
 Returns `400` if the instrument name doesn't resolve to a SkyPortal
 instrument, or if the task has no usable target measurement (e.g. photometry
-hasn't run yet). Returns `502` if SkyPortal itself rejects the upload (e.g.
-unknown `source_id`).
+hasn't run yet, or `types` is `subtracted` and no template-subtracted
+measurement exists). Returns `502` if SkyPortal is unreachable or rejects the
+upload (e.g. unknown `source_id`).
 
 ---
 

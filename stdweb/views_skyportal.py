@@ -24,13 +24,16 @@ from . import models
 from . import forms
 from . import processing
 
+# Timeout for requests to SkyPortal, in seconds
+SKYPORTAL_TIMEOUT = 60
+
 def skyportal_resolve_source(ra, dec, sr=30/3600, api_token=settings.SKYPORTAL_TOKEN):
     if api_token is not None:
         headers = {'Authorization': f'token {api_token}'}
     else:
         headers = None
 
-    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources?ra={ra}&dec={dec}&radius={sr}&group_ids={settings.SKYPORTAL_GROUP_ID}', headers=headers)
+    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources?ra={ra}&dec={dec}&radius={sr}&group_ids={settings.SKYPORTAL_GROUP_ID}', headers=headers, timeout=SKYPORTAL_TIMEOUT)
 
     if res:
         json = res.json()
@@ -48,7 +51,7 @@ def skyportal_get_instruments(api_token=settings.SKYPORTAL_TOKEN):
         headers = None
 
     try:
-        res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/instrument', headers=headers)
+        res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/instrument', headers=headers, timeout=SKYPORTAL_TIMEOUT)
 
         if res:
             json = res.json()
@@ -66,15 +69,13 @@ def skyportal_get_instrument_id_by_name(name, api_token=settings.SKYPORTAL_TOKEN
     else:
         headers = None
 
-    try:
-        res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/instrument', params={'name': name}, headers=headers)
+    # Network errors propagate so that the caller may tell them from an unknown name
+    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/instrument', params={'name': name}, headers=headers, timeout=SKYPORTAL_TIMEOUT)
 
-        if res:
-            json = res.json()
-            if json['status'] == 'success' and json['data']:
-                return json['data'][0]['id']
-    except:
-        pass
+    if res:
+        json = res.json()
+        if json.get('status') == 'success' and json.get('data'):
+            return json['data'][0]['id']
 
     return None
 
@@ -117,7 +118,7 @@ def skyportal_upload_photometry(
         'group_ids': group_ids,
     }
 
-    res = requests.put(f'{settings.SKYPORTAL_BASE_URL}/api/photometry', headers=headers, json=payload)
+    res = requests.put(f'{settings.SKYPORTAL_BASE_URL}/api/photometry', headers=headers, json=payload, timeout=SKYPORTAL_TIMEOUT)
 
     return res.json()
 
@@ -172,8 +173,8 @@ SKYPORTAL_FILTER_MAP = {
     'Hmag': '2massh',
     'Ksmag': '2massks',
     'Gmag': 'gaia::g',
-    'BPmag': 'gaia::grp',
-    'RPmag': 'gaia::gbp',
+    'BPmag': 'gaia::gbp',
+    'RPmag': 'gaia::grp',
 }
 SKYPORTAL_VEGA_FILTERS = ['Umag', 'Bmag', 'Vmag', 'Rmag', 'Imag', 'Jmag', 'Hmag', 'Ksmag']
 
@@ -199,6 +200,9 @@ def skyportal_prepare_photometry(task, types='best', limit_only=False):
             is_diff = (sname == 'sub_target.vot')
             break
 
+    if filename is None and types == 'subtracted':
+        raise RuntimeError('No template-subtracted target measurement')
+
     try:
         if filename is not None:
             tobj = Table.read(filename)
@@ -217,7 +221,7 @@ def skyportal_prepare_photometry(task, types='best', limit_only=False):
             mag = None
             magerr = None
             mag_limit = task.config['mag_limit']
-    except (KeyError, IndexError):
+    except Exception:
         raise RuntimeError('Cannot load target measurements')
 
     magsys = 'vega' if fname in SKYPORTAL_VEGA_FILTERS else 'ab'

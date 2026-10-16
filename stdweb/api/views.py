@@ -6,6 +6,7 @@ import os
 import io
 import json
 import shutil
+import requests
 from datetime import datetime
 
 from django.conf import settings
@@ -515,7 +516,10 @@ def task_skyportal_upload(request, pk):
         return Response(serializer.errors, status=400)
     data = serializer.validated_data
 
-    instrument_id = views_skyportal.skyportal_get_instrument_id_by_name(data['instrument_name'])
+    try:
+        instrument_id = views_skyportal.skyportal_get_instrument_id_by_name(data['instrument_name'])
+    except (requests.RequestException, ValueError) as e:
+        return Response({'error': f'Cannot query SkyPortal instruments: {e}'}, status=502)
     if instrument_id is None:
         return Response({'error': f"No SkyPortal instrument named \"{data['instrument_name']}\""}, status=400)
 
@@ -526,20 +530,23 @@ def task_skyportal_upload(request, pk):
     except RuntimeError as e:
         return Response({'error': str(e)}, status=400)
 
-    res = views_skyportal.skyportal_upload_photometry(
-        data['source_id'],
-        instrument=instrument_id,
-        mjd=phot['mjd'],
-        mag=phot['mag'],
-        magerr=phot['magerr'],
-        limit=phot['limit'],
-        filter=phot['filter'],
-        magsys=phot['magsys'],
-        ra=data['ra'],
-        dec=data['dec'],
-        origin=f'stdweb:{task.id}',
-        altdata={'stdweb_task_id': task.id},
-    )
+    try:
+        res = views_skyportal.skyportal_upload_photometry(
+            data['source_id'],
+            instrument=instrument_id,
+            mjd=phot['mjd'],
+            mag=phot['mag'],
+            magerr=phot['magerr'],
+            limit=phot['limit'],
+            filter=phot['filter'],
+            magsys=phot['magsys'],
+            ra=data['ra'],
+            dec=data['dec'],
+            origin=f'stdweb:{task.id}',
+            altdata={'stdweb_task_id': task.id},
+        )
+    except (requests.RequestException, ValueError) as e:
+        return Response({'error': f'Cannot upload to SkyPortal: {e}'}, status=502)
 
     if res.get('status') != 'success':
         return Response({'error': res.get('message', 'Unknown SkyPortal error')}, status=502)

@@ -144,6 +144,7 @@ class ActionLog(models.Model):
         ('processing_complete', 'Processing Completed'),
         ('processing_failed', 'Processing Failed'),
         ('processing_cancel', 'Processing Cancelled'),
+        ('task_skyportal_upload', 'Uploaded to SkyPortal'),
         ('file_upload', 'File Uploaded'),
         ('config_change', 'Config Changed'),
     ]
