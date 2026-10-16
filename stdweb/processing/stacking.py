@@ -17,6 +17,10 @@ import astroalign
 from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
+from astropy.time import Time
+from astropy import units as u
+
+from stdpipe.utils import get_obs_time
 
 from django.conf import settings
 
@@ -43,6 +47,38 @@ def validate_under_data_path(filenames):
             raise RuntimeError(f"Stacking input path is outside of DATA_PATH: {filename}")
 
 
+def get_time_range(header):
+    """Get the start and end times of a frame exposure from its header.
+
+    The exposure is centered on DATE-AVG when present, otherwise starts at
+    the time from the usual keywords. Its duration is taken from EXPTIME or
+    EXPOSURE, and is assumed to be zero if not known.
+
+    Returns (start, end) tuple of Time objects, or None if no time is found.
+    """
+    exptime = 0
+    for key in ['EXPTIME', 'EXPOSURE']:
+        try:
+            exptime = float(header[key])
+            break
+        except Exception:
+            pass
+
+    if header.get('DATE-AVG'):
+        try:
+            mid = Time(header['DATE-AVG'])
+            return mid - 0.5*exptime*u.s, mid + 0.5*exptime*u.s
+        except Exception:
+            pass
+
+    start = get_obs_time(header=header, verbose=False)
+
+    if start is not None:
+        return start, start + exptime*u.s
+
+    return None
+
+
 def stack_images(filenames, outname, config, verbose=True):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -61,6 +97,7 @@ def stack_images(filenames, outname, config, verbose=True):
     header0 = None
 
     images = []
+    times = []
 
     if config.get('stack_mask_cosmics', False):
         log('Will mask cosmics in individual images while stacking')
@@ -71,6 +108,12 @@ def stack_images(filenames, outname, config, verbose=True):
         image,header = fits.getdata(filename, header=True)
 
         mask = ~np.isfinite(image)
+
+        time_range = get_time_range(header)
+        if time_range is not None:
+            times.extend(time_range)
+        else:
+            log(f"({i+1}/{len(filenames)}) {filename} has no usable observation time")
 
         # Cosmics
         if config.get('stack_mask_cosmics', False):
@@ -155,6 +198,13 @@ def stack_images(filenames, outname, config, verbose=True):
 
     else:
         raise RuntimeError('Unsupported stacking method: ' + stack_method)
+
+    # Mid-point of the stack time span, replacing the one inherited from the first frame
+    if times:
+        times = Time(times)
+        header0['DATE-AVG'] = ((times.min() + 0.5*(times.max() - times.min())).isot,
+                               'Mid-point of stacked frames')
+        log(f"Mid-point of {len(times)//2} frames is {header0['DATE-AVG']}")
 
     fits.writeto(outname, coadd, header0, overwrite=True)
 
