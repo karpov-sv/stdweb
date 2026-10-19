@@ -155,7 +155,7 @@
                   true, 'stdview-image', {'data-stretch':1,
                   'data-mark-ra':'{{ search_ra }}',
                   'data-mark-dec':'{{ search_dec }}',
-                  'data-mark-radius': '{{ search_sr0|divide:3600|divide:task.config.pixscale }}',
+                  {% if task.config.pixscale %}'data-mark-radius': '{{ search_sr0|divide:3600|divide:task.config.pixscale }}',{% endif %}
                   'data-grid':1, 'data-zoom':1, 'data-obj':1, 'data-smooth':1})"
                   {# Placeholder for loading error #}
                   onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNDUlIiBmb250LWZhbWlseT0iQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSI0OCIgZmlsbD0iI2FkYjViZCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+TtzwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2Yzc1N2QiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkN1dG91dCBVbmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4='; this.style.cursor='default'; this.onclick=null;"
