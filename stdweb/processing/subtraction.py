@@ -743,7 +743,7 @@ def subtract_image(filename, config, verbose=True, show=False):
             else:
                 log(f"Getting the template from HiPS server in {band} band")
                 tmpl = templates.get_hips_image(tconf['filters'][band], wcs=wcs1, shape=image1.shape,
-                                                get_header=False,
+                                                get_header=False, cache=False,
                                                 verbose=sub_verbose)
                 if tmpl is not None:
                     tmask = np.isnan(tmpl)
