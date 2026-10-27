@@ -53,6 +53,34 @@ def parse_kw(kw=None):
     return config
 
 
+# key=value, key!=value, key<value etc, with value either a single word or a quoted string
+_KEYWORD_RE = re.compile(r"""(?<!\S)([A-Za-z][A-Za-z0-9_]*)(<=|>=|!=|=|<|>)("[^"]*"|'[^']*'|\S+)(?!\S)""")
+
+
+def parse_keyword_query(string):
+    """
+    Split the query string into keyword criteria and remaining free text.
+
+    Returns (text, criteria), where criteria is a list of (key, op, value) tuples.
+    Unquoted values are typed like in parse_kw(), quoted ones are kept as strings.
+    """
+    criteria = []
+
+    for m in _KEYWORD_RE.finditer(string):
+        key, op, value = m[1], m[2], m[3]
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        else:
+            value = parse_kw({key: value})[key]
+
+        criteria.append((key, op, value))
+
+    text = " ".join(_KEYWORD_RE.sub(" ", string).split())
+
+    return text, criteria
+
+
 def resolve_coordinates(string):
     ra,dec,sr = None, None, None
 

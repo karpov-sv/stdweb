@@ -44,9 +44,19 @@ Returns the list of tasks the current user can access: their own tasks plus any
 tasks shared with a group they belong to (staff users see all tasks).
 
 **Query Parameters (all optional):**
-- `query` - Free-text search; every whitespace-separated token must match the
-  original filename, title, owner username/first/last name, or a shared group
-  name (case-insensitive substring match, same as the web UI task list)
+- `query` - Search string, handled the same way as in the web UI task list:
+  - `key<op>value` terms filter by task config keywords, with `<op>` one of
+    `=`, `!=`, `<`, `<=`, `>`, `>=`, and value either a single word or a quoted
+    string (e.g. `filter=R gain>=1.5 target="SN 2024abc"`). Unquoted values are
+    typed as booleans (`true`/`false`) or numbers where possible, quoted ones are
+    always strings. `=`/`!=` match strings case-insensitively; range comparisons
+    only match values of the same type (numbers numerically, strings
+    lexicographically). All criteria require the key to be present.
+  - The rest is either a coordinate query (`RA Dec [radius]` in decimal degrees or
+    sexagesimal) selecting tasks whose field covers the point, or lies within the
+    radius from it - or a free-text search, where every whitespace-separated
+    token must match the original filename, title, owner username/first/last
+    name, or a shared group name (case-insensitive substring match)
 - `state` - Filter by exact task state (e.g. `photometry_done`)
 - `user` - Filter by exact owner username
 - `limit` / `offset` - Paginate the results (see below)

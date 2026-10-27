@@ -149,7 +149,7 @@ class UploadFileForm(forms.Form):
 
 
 class TasksFilterForm(forms.Form):
-    query = forms.CharField(max_length=100, required=False, label="Filter Tasks")
+    query = forms.CharField(max_length=250, required=False, label="Filter Tasks")
     show_all = forms.BooleanField(initial=False, required=False, label="Show all")
 
     def __init__(self, *args, show_all=True, **kwargs):
@@ -162,7 +162,7 @@ class TasksFilterForm(forms.Form):
             Row(
                 Column(
                     InlineField(
-                        PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames, or specify field center (and optionally radius) for positional search.'),
+                        PrependedText('query', 'Filter:', placeholder='Search tasks by filenames or titles or usernames, or specify field center (and optionally radius) for positional search. Use key=value, key!=value, key<value, key>=value etc to filter by task config keywords.'),
                     ),
                     css_class="col-md"
                 ),

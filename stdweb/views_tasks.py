@@ -1,7 +1,9 @@
 from django.http import HttpResponse, FileResponse, HttpResponseRedirect, JsonResponse, HttpResponseForbidden
 from django.template.response import TemplateResponse
 from django.urls import reverse
-from django.db.models import Q
+from django.db import NotSupportedError
+from django.db.models import Q, F, Func, CharField
+from django.db.models.fields.json import KeyTransform
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
@@ -31,6 +33,117 @@ from . import utils
 from .action_logging import log_action
 
 
+class JSONKeyType(Func):
+    """Type of the value of a top-level key in JSON field, as reported by the database."""
+    output_field = CharField()
+
+    # Type names for every supported backend: SQLite, PostgreSQL, MySQL
+    NUMBER = ['integer', 'real', 'number', 'INTEGER', 'DOUBLE', 'DECIMAL']
+    STRING = ['text', 'string', 'STRING']
+
+    def __init__(self, field, key, **extra):
+        super().__init__(F(field), **extra)
+        self.key = key
+
+    def _compile_lhs(self, compiler):
+        return compiler.compile(self.source_expressions[0])
+
+    def as_sql(self, compiler, connection, **extra):
+        raise NotSupportedError(f"JSON key type is not supported on {connection.vendor}")
+
+    def as_sqlite(self, compiler, connection, **extra):
+        lhs, params = self._compile_lhs(compiler)
+        return f"JSON_TYPE({lhs}, %s)", (*params, f'$."{self.key}"')
+
+    def as_mysql(self, compiler, connection, **extra):
+        lhs, params = self._compile_lhs(compiler)
+        return f"JSON_TYPE(JSON_EXTRACT({lhs}, %s))", (*params, f'$."{self.key}"')
+
+    def as_postgresql(self, compiler, connection, **extra):
+        lhs, params = self._compile_lhs(compiler)
+        return f"JSONB_TYPEOF({lhs} -> %s)", (*params, self.key)
+
+
+_KEYWORD_LOOKUPS = {'<': 'lt', '<=': 'lte', '>': 'gt', '>=': 'gte'}
+
+
+def _filter_tasks_by_keywords(tasks, criteria):
+    """Filter tasks by (key, op, value) criteria imposed on task config keywords."""
+    for i, (key, op, value) in enumerate(criteria):
+        name = f"_kw{i}"
+        tasks = tasks.annotate(**{name: KeyTransform(key, 'config')})
+
+        if op in ('=', '!='):
+            # Strings are matched case-insensitively, typed values also exactly
+            cond = Q(**{f"{name}__iexact": str(value)})
+            if not isinstance(value, str):
+                cond |= Q(**{name: value})
+
+            if op == '!=':
+                cond = Q(**{f"{name}__isnull": False}) & ~cond
+        else:
+            # Range comparisons only between values of the same JSON type
+            tname = f"_kwt{i}"
+            tasks = tasks.annotate(**{tname: JSONKeyType('config', key)})
+
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                cond = Q(**{f"{tname}__in": JSONKeyType.NUMBER})
+            else:
+                value = str(value)
+                cond = Q(**{f"{tname}__in": JSONKeyType.STRING})
+
+            cond &= Q(**{f"{name}__{_KEYWORD_LOOKUPS[op]}": value})
+
+        tasks = tasks.filter(cond)
+
+    return tasks
+
+
+def filter_tasks_by_query(tasks, query):
+    """
+    Filter tasks by the query string, used both by the web UI and REST API.
+
+    key=value style criteria are imposed on task config keywords, and the rest
+    is either a coordinate query or a plain text search.
+    """
+    # key=value criteria on task config keywords
+    query, criteria = utils.parse_keyword_query(query or '')
+    if criteria:
+        tasks = _filter_tasks_by_keywords(tasks, criteria)
+
+    if query:
+        # Coordinate query?..
+        ra0, dec0, sr0 = utils.resolve_coordinates(query)
+
+        if ra0 is not None and dec0 is not None:
+            pks = []
+            for task in tasks:
+                if task.ra is not None and task.dec is not None and task.radius is not None:
+                    dist = astrometry.spherical_distance(task.ra, task.dec, ra0, dec0)
+
+                    if sr0 is not None and dist < sr0:
+                        pks.append(task.pk)
+                    elif sr0 is None and dist < task.radius:
+                        pks.append(task.pk)
+
+            tasks = tasks.filter(pk__in=pks)
+        else:
+            # Otherwise plain text search
+            for token in query.split():
+                tasks = tasks.filter(
+                    Q(original_name__icontains=token) |
+                    Q(title__icontains=token) |
+                    Q(user__username__icontains=token) |
+                    Q(user__first_name__icontains=token) |
+                    Q(user__last_name__icontains=token) |
+                    Q(groups__name__icontains=token)
+                )
+            # M2M join can yield duplicate rows
+            tasks = tasks.distinct()
+
+    return tasks
+
+
 def _get_filtered_tasks(request):
     """Extract shared task filtering logic. Returns (queryset, form)."""
     tasks = models.Task.objects.all()
@@ -51,36 +164,7 @@ def _get_filtered_tasks(request):
                 Q(user=request.user) | Q(groups__user=request.user)
             ).distinct()
 
-        query = form.cleaned_data.get('query')
-        if query:
-            # Coordinate query?..
-            ra0, dec0, sr0 = utils.resolve_coordinates(query)
-
-            if ra0 is not None and dec0 is not None:
-                pks = []
-                for task in tasks:
-                    if task.ra is not None and task.dec is not None and task.radius is not None:
-                        dist = astrometry.spherical_distance(task.ra, task.dec, ra0, dec0)
-
-                        if sr0 is not None and dist < sr0:
-                            pks.append(task.pk)
-                        elif sr0 is None and dist < sr:
-                            pks.append(task.pk)
-
-                tasks = tasks.filter(pk__in=pks)
-            else:
-                # Otherwise plain text search
-                for token in query.split():
-                    tasks = tasks.filter(
-                        Q(original_name__icontains=token) |
-                        Q(title__icontains=token) |
-                        Q(user__username__icontains=token) |
-                        Q(user__first_name__icontains=token) |
-                        Q(user__last_name__icontains=token) |
-                        Q(groups__name__icontains=token)
-                    )
-                # M2M join can yield duplicate rows
-                tasks = tasks.distinct()
+        tasks = filter_tasks_by_query(tasks, form.cleaned_data.get('query'))
 
     return tasks, form
 
@@ -347,7 +431,7 @@ def tasks(request, id=None):
         context['form'] = form
 
         if request.method == 'GET' and form.is_valid():
-            query = form.cleaned_data.get('query')
+            query, _ = utils.parse_keyword_query(form.cleaned_data.get('query') or '')
             if query:
                 ra0, dec0, sr0 = utils.resolve_coordinates(query)
                 if ra0 is not None and dec0 is not None:

@@ -20,7 +20,6 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 
-from django.db.models import Q
 
 from stdweb.models import Task, Preset
 from stdweb import celery_tasks
@@ -36,6 +35,7 @@ from stdweb.processing import (
 )
 from stdweb.views_celery import revoke_task_chain, find_task_by_chain_id
 from stdweb import views_skyportal
+from stdweb.views_tasks import filter_tasks_by_query
 
 from .serializers import (
     TaskSerializer,
@@ -200,20 +200,8 @@ def task_list(request):
     if request.method == 'GET':
         tasks = Task.accessible_to(request.user).order_by('-created')
 
-        # Free-text search over the same fields as the web UI task list
-        query = request.query_params.get('query')
-        if query:
-            for token in query.split():
-                tasks = tasks.filter(
-                    Q(original_name__icontains=token) |
-                    Q(title__icontains=token) |
-                    Q(user__username__icontains=token) |
-                    Q(user__first_name__icontains=token) |
-                    Q(user__last_name__icontains=token) |
-                    Q(groups__name__icontains=token)
-                )
-            # M2M join can yield duplicate rows
-            tasks = tasks.distinct()
+        # Same query handling as the web UI task list
+        tasks = filter_tasks_by_query(tasks, request.query_params.get('query'))
 
         state = request.query_params.get('state')
         if state:
