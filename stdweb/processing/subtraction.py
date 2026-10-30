@@ -1128,21 +1128,16 @@ def subtract_image(filename, config, verbose=True, show=False):
             # Transient detection mode
             log(f"Starting transient detection using edge size {sub_overlap}")
 
-            sobj,segm = photometry.get_objects_sextractor(
-                diff,
+            # Detection parameters should match the ones used for photometry, as
+            # pre-filtering classifier is trained on its detections
+            sobj,segm = detect_objects(
+                diff, config,
                 mask=fullmask1,
                 err=ediff,
                 wcs=wcs1, edge=sub_overlap,
-                aper=config.get('initial_aper', 3.0),
-                gain=config.get('gain', 1.0),
                 sn=config.get('sn', 5.0),
-                minarea=config.get('minarea', 3),
-                extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
-                extra={'BACK_SIZE': config.get('bg_size', 256)},
                 checkimages=['SEGMENTATION'],
                 verbose=sub_verbose,
-                _tmpdir=settings.STDPIPE_TMPDIR,
-                _exe=settings.STDPIPE_SEXTRACTOR
             )
 
             # Photometry parameters should match the ones used for calibration

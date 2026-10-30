@@ -477,6 +477,55 @@ def shift_psf_model(psf, x0, y0):
     return psf
 
 
+def detect_objects(image, config, matched=None, **kwargs):
+    """Detection of the objects using SExtractor with the parameters from the config.
+
+    All detections that are classified with the pre-filtering model trained on the
+    photometry ones should go through this routine, so that they share the same
+    definition of the shape parameters. With `matched` set, the detection uses the
+    smoothing kernel matched to the FWHM, and the threshold defined in terms of
+    filtered image noise, to better detect faint objects with wide PSF. By default,
+    it is enabled if `adaptive_detection` option is set and the FWHM is already known.
+    Extra keyword arguments are passed to :func:`stdpipe.photometry.get_objects_sextractor`
+    and override the defaults derived from the config.
+    """
+    if matched is None:
+        matched = bool(config.get('adaptive_detection') and config.get('fwhm'))
+
+    if matched:
+        fwhm = config['fwhm']
+        params = dict(
+            # Kernel size is capped to keep it acceptable for SExtractor
+            r0=min(0.75 * fwhm / 2.355, 7.0),
+            # Aperture close to optimal for Gaussian PSF, used for initial S/N cut
+            aper=0.7 * fwhm,
+            # For such kernel the filtered image peak significance is close to the
+            # optimal S/N of the object, so we may directly use S/N cut as a threshold
+            thresh=config.get('sn') or 5.0,
+            filter_type='matched',
+        )
+    else:
+        params = dict(
+            r0=config.get('initial_r0', 0.0),
+            aper=config.get('initial_aper', 3.0),
+            thresh=2.0,
+            filter_type='conv',
+        )
+
+    params.update(
+        gain=config.get('gain', 1.0),
+        minarea=config.get('minarea', 3),
+        extra={'BACK_SIZE': config.get('bg_size', 256)},
+        extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
+        _tmpdir=settings.STDPIPE_TMPDIR,
+        _exe=settings.STDPIPE_SEXTRACTOR,
+    )
+
+    params.update(kwargs)
+
+    return photometry.get_objects_sextractor(image, **params)
+
+
 def measure_photometry(obj, image, config, psf=None, **kwargs):
     """Forced photometry of the objects using the method and parameters from the config.
 
@@ -497,6 +546,8 @@ def measure_photometry(obj, image, config, psf=None, **kwargs):
         fwhm=config.get('fwhm'),
         aper=config.get('rel_aper', 1.0),
         bkgann=rel_bkgann,
+        # Mode is robust to neighbours, mean is unbiased for low sky levels
+        bg_estimator=config.get('bg_estimator') or 'mode',
         sn=config.get('sn', 5.0),
         bg_size=config.get('bg_size', 256),
         gain=config.get('gain', 1.0),
@@ -959,113 +1010,121 @@ def photometry_image(filename, config, verbose=True, show=False):
     else:
         image_masked = image
 
-    # Extract objects and get segmentation map
-    obj,segm,fimg,bg,bgrms = photometry.get_objects_sextractor(
-        image_masked, mask=mask,
-        aper=config.get('initial_aper', 3.0),
-        gain=config.get('gain', 1.0),
-        extra={
-            'BACK_SIZE': config.get('bg_size', 256),
-            'SATUR_LEVEL': config.get('saturation')
-        },
-        extra_params=['NUMBER', 'MAG_AUTO', 'ISOAREA_IMAGE', 'FLUX_MAX', 'FLUX_AUTO'],
-        checkimages=['SEGMENTATION', 'FILTERED', 'BACKGROUND', 'BACKGROUND_RMS'],
-        minarea=config.get('minarea', 3),
-        r0=config.get('initial_r0', 0.0),
-        verbose=verbose,
-        _tmpdir=settings.STDPIPE_TMPDIR,
-        _exe=settings.STDPIPE_SEXTRACTOR
-    )
+    detect_matched = False
 
-    # FIXME: Filter some problematic detections
-    obj = obj[obj['MAG_AUTO'] < 90]
-    obj = obj[obj['fwhm'] > 0]
-    obj = obj[obj['ISOAREA_IMAGE'] > config.get('minarea', 3)]
-
-    # Ignore "deblended" flag from SExtractor, for now
-    # obj['flags'] &= 0xfffd
-
-    log(f"{len(obj)} objects found")
-
-    fits_write(os.path.join(basepath, 'segmentation.fits'), segm, header, compress=True)
-    log("Segmemtation map written to file:segmentation.fits")
-
-    # SExtractor fills masked (NaN input) pixels in the FILTERED checkimage
-    # with its internal -BIG sentinel (-1e30); convert these back to NaN
-    fimg = fimg.astype(np.float32)
-    fimg[fimg < -1e29] = np.nan
-
-    fits_write(os.path.join(basepath, 'filtered.fits'), fimg, header, compress=True)
-    log("Filtered image written to file:filtered.fits")
-
-    if config.get('inspect_bg'):
-        fits_write(os.path.join(basepath, 'image_bg.fits'), bg, header, compress=True)
-        log("Background map written to file:image_bg.fits")
-
-        fits_write(os.path.join(basepath, 'image_rms.fits'), bgrms, header, compress=True)
-        log("Background RMS map written to file:image_rms.fits")
-
-    if not len(obj):
-        raise RuntimeError('Cannot detect objects in the image')
-
-    log("\n---- Object measurement ----\n")
-
-    # FWHM
-    idx = obj['flags'] == 0
-    idx &= obj['magerr'] < 1/20
-
-    if config.get('prefilter_detections', True):
-        log("Pre-filtering SExtractor detections with simple shape classifier")
-        fidx = artefacts.filter_sextractor_detections(obj, verbose=verbose)
-        idx &= fidx
-        # Also store it in the flags to exclude from photometric match later
-        obj['flags'][~fidx] |= 0x800
-
-    if not len(obj[idx]):
-        raise RuntimeError("No suitable stars with S/N > 20 in the image!")
-
-    fwhm_values = 2.0*obj['FLUX_RADIUS'] # obj['fwhm']
-
-    fwhm = np.median(fwhm_values[idx]) # TODO: make it position-dependent
-    log(f"FWHM is {fwhm:.2f} pixels")
-
-    if config.get('fwhm_override'):
-        fwhm = config.get('fwhm_override')
-        log(f"Overriding with user-specified FWHM value of {fwhm:.2f} pixels")
-
-    config['fwhm'] = fwhm
-
-    # Plot FWHM map
-    with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
-        ax = fig.add_subplot(1, 1, 1)
-        plots.binned_map(
-            obj[idx]['x'], obj[idx]['y'], fwhm_values[idx],
-            range=[[0, image.shape[1]], [0, image.shape[0]]],
-            bins=8, statistic='median',
-            show_dots=True, ax=ax
+    while True:
+        # Extract objects and get segmentation map
+        obj,segm,fimg,bg,bgrms = detect_objects(
+            image_masked, config, matched=detect_matched,
+            mask=mask,
+            extra={
+                'BACK_SIZE': config.get('bg_size', 256),
+                'SATUR_LEVEL': config.get('saturation')
+            },
+            checkimages=['SEGMENTATION', 'FILTERED', 'BACKGROUND', 'BACKGROUND_RMS'],
+            verbose=verbose,
         )
-        ax.set_aspect(1)
-        ax.set_xlim(0, image.shape[1])
-        ax.set_ylim(0, image.shape[0])
-        # ax.legend()
-        ax.set_title(f"FWHM: median {np.median(fwhm_values[idx]):.2f} pix RMS {np.std(fwhm_values[idx]):.2f} pix")
 
-    # Plot FWHM vs instrumental
-    with plots.figure_saver(os.path.join(basepath, 'fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
-        ax = fig.add_subplot(1, 1, 1)
-        ax.plot(fwhm_values, obj['mag'], '.', label='All objects')
-        ax.plot(fwhm_values[idx], obj['mag'][idx], '.', label='Used for FWHM')
+        # FIXME: Filter some problematic detections
+        obj = obj[obj['MAG_AUTO'] < 90]
+        obj = obj[obj['fwhm'] > 0]
+        obj = obj[obj['ISOAREA_IMAGE'] > config.get('minarea', 3)]
 
-        ax.axvline(fwhm, ls='--', color='red')
-        ax.invert_yaxis()
-        ax.legend()
-        ax.grid(alpha=0.2)
-        ax.set_title(f"FWHM: median {np.median(fwhm_values[idx]):.2f} pix RMS {np.std(fwhm_values[idx]):.2f} pix")
-        ax.set_xlabel('FWHM, pixels')
-        ax.set_ylabel('Instrumental magnitude')
-        ax.set_xlim(0, np.percentile(fwhm_values, 98))
+        # Ignore "deblended" flag from SExtractor, for now
+        # obj['flags'] &= 0xfffd
 
-    log(f"FWHM diagnostic plot stored to file:fwhm_mag.png")
+        log(f"{len(obj)} objects found")
+
+        fits_write(os.path.join(basepath, 'segmentation.fits'), segm, header, compress=True)
+        log("Segmemtation map written to file:segmentation.fits")
+
+        # SExtractor fills masked (NaN input) pixels in the FILTERED checkimage
+        # with its internal -BIG sentinel (-1e30); convert these back to NaN
+        fimg = fimg.astype(np.float32)
+        fimg[fimg < -1e29] = np.nan
+
+        fits_write(os.path.join(basepath, 'filtered.fits'), fimg, header, compress=True)
+        log("Filtered image written to file:filtered.fits")
+
+        if config.get('inspect_bg'):
+            fits_write(os.path.join(basepath, 'image_bg.fits'), bg, header, compress=True)
+            log("Background map written to file:image_bg.fits")
+
+            fits_write(os.path.join(basepath, 'image_rms.fits'), bgrms, header, compress=True)
+            log("Background RMS map written to file:image_rms.fits")
+
+        if not len(obj):
+            raise RuntimeError('Cannot detect objects in the image')
+
+        log("\n---- Object measurement ----\n")
+
+        # FWHM
+        idx = obj['flags'] == 0
+        idx &= obj['magerr'] < 1/20
+
+        if config.get('prefilter_detections', True):
+            log("Pre-filtering SExtractor detections with simple shape classifier")
+            fidx = artefacts.filter_sextractor_detections(obj, verbose=verbose)
+            idx &= fidx
+            # Also store it in the flags to exclude from photometric match later
+            obj['flags'][~fidx] |= 0x800
+
+        if not len(obj[idx]):
+            raise RuntimeError("No suitable stars with S/N > 20 in the image!")
+
+        # FWHM is measured on the initial detections only, as FLUX_RADIUS is biased
+        # by the size of isophotes and thus depends on the smoothing kernel
+        if not detect_matched:
+            fwhm_values = 2.0*obj['FLUX_RADIUS'] # obj['fwhm']
+
+            fwhm = np.median(fwhm_values[idx]) # TODO: make it position-dependent
+            log(f"FWHM is {fwhm:.2f} pixels")
+
+            if config.get('fwhm_override'):
+                fwhm = config.get('fwhm_override')
+                log(f"Overriding with user-specified FWHM value of {fwhm:.2f} pixels")
+
+            config['fwhm'] = fwhm
+
+            # Plot FWHM map
+            with plots.figure_saver(os.path.join(basepath, 'fwhm.png'), figsize=(8, 6), show=show) as fig:
+                ax = fig.add_subplot(1, 1, 1)
+                plots.binned_map(
+                    obj[idx]['x'], obj[idx]['y'], fwhm_values[idx],
+                    range=[[0, image.shape[1]], [0, image.shape[0]]],
+                    bins=8, statistic='median',
+                    show_dots=True, ax=ax
+                )
+                ax.set_aspect(1)
+                ax.set_xlim(0, image.shape[1])
+                ax.set_ylim(0, image.shape[0])
+                # ax.legend()
+                ax.set_title(f"FWHM: median {np.median(fwhm_values[idx]):.2f} pix RMS {np.std(fwhm_values[idx]):.2f} pix")
+
+            # Plot FWHM vs instrumental
+            with plots.figure_saver(os.path.join(basepath, 'fwhm_mag.png'), figsize=(8, 6), show=show) as fig:
+                ax = fig.add_subplot(1, 1, 1)
+                ax.plot(fwhm_values, obj['mag'], '.', label='All objects')
+                ax.plot(fwhm_values[idx], obj['mag'][idx], '.', label='Used for FWHM')
+
+                ax.axvline(fwhm, ls='--', color='red')
+                ax.invert_yaxis()
+                ax.legend()
+                ax.grid(alpha=0.2)
+                ax.set_title(f"FWHM: median {np.median(fwhm_values[idx]):.2f} pix RMS {np.std(fwhm_values[idx]):.2f} pix")
+                ax.set_xlabel('FWHM, pixels')
+                ax.set_ylabel('Instrumental magnitude')
+                ax.set_xlim(0, np.percentile(fwhm_values, 98))
+
+            log(f"FWHM diagnostic plot stored to file:fwhm_mag.png")
+
+        if not config.get('adaptive_detection') or detect_matched:
+            break
+
+        # Re-detect with the kernel matched to the PSF, now that we know it
+        detect_matched = True
+
+        log(f"\nRe-running detection with smoothing kernel matched to {fwhm:.1f} pixels FWHM\n")
 
     # Plot pre-filtering diagnostics
     if config.get('prefilter_detections', True):

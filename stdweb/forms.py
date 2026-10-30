@@ -247,6 +247,10 @@ class TaskPhotometryForm(forms.Form):
     rel_bg1 = forms.FloatField(min_value=0, required=False, label="Sky inner annulus, FWHM")
     rel_bg2 = forms.FloatField(min_value=0, required=False, label="Outer annulus, FWHM")
     fwhm_override = forms.FloatField(min_value=0, required=False, label="FWHM override, pixels")
+    bg_estimator = forms.ChoiceField(choices=[('mode', 'Mode'),
+                                               ('median', 'Median'),
+                                               ('mean', 'Mean')],
+                                      initial='mode', required=False, label="Local background")
     photometry_method = forms.ChoiceField(choices=[('aperture', 'Aperture'),
                                                    ('optimal', 'Optimal extraction'),
                                                    ('psf', 'PSF fitting')],
@@ -273,6 +277,7 @@ class TaskPhotometryForm(forms.Form):
     sr_override = forms.FloatField(min_value=0, required=False, label="Matching radius, arcsec")
 
     prefilter_detections = forms.BooleanField(initial=True, required=False, label="Pre-filter detections")
+    adaptive_detection = forms.BooleanField(initial=False, required=False, label="Adaptive detection")
     filter_blends = forms.BooleanField(initial=True, required=False, label="Filter catalogue blends")
     diagnose_color = forms.BooleanField(initial=False, required=False, label="Color term diagnostics")
     refine_wcs = forms.BooleanField(required=False, label="Refine astrometry")
@@ -315,6 +320,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('rel_aper'),
                 Column('rel_bg1'),
                 Column('rel_bg2'),
+                Column('bg_estimator'),
                 Column('photometry_method'),
                 Column('fwhm_override'),
                 Column('sr_override'),
@@ -351,6 +357,7 @@ class TaskPhotometryForm(forms.Form):
                 Column('blind_match_wcs', css_class="col-md-auto"),
                 Column('filter_blends', css_class="col-md-auto"),
                 Column('prefilter_detections', css_class="col-md-auto"),
+                Column('adaptive_detection', css_class="col-md-auto"),
                 Column('centroid_targets', css_class="col-md-auto"),
                 Column('nonlin', css_class="col-md-auto"),
                 Column('diagnose_color', css_class="col-md-auto"),
