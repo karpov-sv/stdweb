@@ -1284,7 +1284,7 @@ def subtract_image(filename, config, verbose=True, show=False):
 
             write_ds9_regions(
                 os.path.join(basepath, 'candidates.reg'),
-                candidates,
+                all_candidates,
                 radius=config.get('rel_aper', 1.0)*pixscale*config.get('fwhm')
             )
             log("Candidates written to file:candidates.reg as DS9 regions")
