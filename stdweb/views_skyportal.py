@@ -27,13 +27,17 @@ from . import processing
 # Timeout for requests to SkyPortal, in seconds
 SKYPORTAL_TIMEOUT = 60
 
-def skyportal_resolve_source(ra, dec, sr=30/3600, api_token=settings.SKYPORTAL_TOKEN):
+def skyportal_resolve_source(ra, dec, sr=30/3600, all_groups=False, api_token=settings.SKYPORTAL_TOKEN):
     if api_token is not None:
         headers = {'Authorization': f'token {api_token}'}
     else:
         headers = None
 
-    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources?ra={ra}&dec={dec}&radius={sr}&group_ids={settings.SKYPORTAL_GROUP_ID}', headers=headers, timeout=SKYPORTAL_TIMEOUT)
+    params = {'ra': ra, 'dec': dec, 'radius': sr}
+    if not all_groups:
+        params['group_ids'] = settings.SKYPORTAL_GROUP_ID
+
+    res = requests.get(f'{settings.SKYPORTAL_BASE_URL}/api/sources', params=params, headers=headers, timeout=SKYPORTAL_TIMEOUT)
 
     if res:
         json = res.json()
@@ -123,7 +127,7 @@ def skyportal_upload_photometry(
     return res.json()
 
 
-def skyportal_resolve_task(task):
+def skyportal_resolve_task(task, all_groups=False):
     # Guess some coordinates relevant for the task
     if 'target_ra' in task.config and 'target_dec' in task.config:
         ra = task.config.get('target_ra')
@@ -147,7 +151,7 @@ def skyportal_resolve_task(task):
 
     # Try resolving using increasing cone search radius
     for sr in [10/3600, 30/3600, 1/60, 10/60, 30/60]:
-        sid = skyportal_resolve_source(ra, dec, sr=sr)
+        sid = skyportal_resolve_source(ra, dec, sr=sr, all_groups=all_groups)
         if sid is not None:
             break
 
@@ -263,6 +267,7 @@ def skyportal(request):
             action = request.POST.get('action')
             types = request.POST.get('types', 'best')
             limit_only = request.POST.get('limit_only', False)
+            all_groups = form.cleaned_data.get('all_groups', False)
             context['action'] = action
 
             instrument = form.cleaned_data.get('instrument')
@@ -288,7 +293,7 @@ def skyportal(request):
 
                     ctask['name'] = task.original_name
                     ctask['title'] = task.title
-                    ctask['ra'], ctask['dec'], ctask['sid'] = skyportal_resolve_task(task)
+                    ctask['ra'], ctask['dec'], ctask['sid'] = skyportal_resolve_task(task, all_groups=all_groups)
 
                     phot = skyportal_prepare_photometry(task, types=types, limit_only=limit_only)
 

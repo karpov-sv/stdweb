@@ -512,6 +512,7 @@ class SkyPortalUploadForm(forms.Form):
     ],  initial='best', required=False, label="Photometry type")
     instrument = forms.ChoiceField(choices=[], initial=None, required=False, label="Instrument")
     limit_only = forms.BooleanField(initial=False, required=False, label="Upload upper limit only")
+    all_groups = forms.BooleanField(initial=False, required=False, label="Search sources in all groups, not only GRANDMA")
 
     def __init__(self, *args, **kwargs):
         instruments = kwargs.pop('instruments')
@@ -541,7 +542,8 @@ class SkyPortalUploadForm(forms.Form):
                 css_class='align-items-end',
             ),
             Row(
-                Column('limit_only', css_class="col-md"),
+                Column('limit_only', css_class="col-md-auto"),
+                Column('all_groups', css_class="col-md"),
                 css_class='align-items-end',
             ),
         )
