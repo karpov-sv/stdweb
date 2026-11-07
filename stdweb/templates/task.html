@@ -15,10 +15,112 @@
   <script src="{% static 'queue.js' %}"></script>
 
   <script language="javascript">
+   // Where the page goes after a reload made while a chain runs: back to the
+   // section that was being read, its heading where it stood in the window.
+   // The browser's own restoring keeps the distance from the top of the page,
+   // and the sections above have often grown by then with what the run
+   // produced. Only that once - a reload by hand is left to the browser.
+   var scroll_key = 'stdweb-scroll-to-{{ task.id }}';
+
+   // Noted with the time, as a form whose answer goes elsewhere - deleting
+   // the task - would otherwise leave it to surprise the next visit
+   var position_saved = false;
+   var save_position = function(heading){
+     try {
+       sessionStorage.setItem(scroll_key, JSON.stringify({
+         id: heading.id, offset: heading.getBoundingClientRect().top, time: Date.now()}));
+       // Or the browser would put the page back where it was, after us
+       history.scrollRestoration = 'manual';
+       position_saved = true;
+     } catch(e) {}
+   };
+
+   // And for any other way of leaving - a reload by hand above all - the
+   // browser's own restoring, which a page restored by us had to turn off.
+   // Here rather than on load, which may be held off for long by images.
+   window.addEventListener('pagehide', function(){
+     if(!position_saved)
+       history.scrollRestoration = 'auto';
+   });
+
+   // A section's form, sent, comes back as the page from the top - so it
+   // returns to the section it was sent from, as it stood. The section is the
+   // last one whose heading comes before the form.
+   document.addEventListener('submit', function(event){
+     var form = event.target;
+
+     if(event.defaultPrevented || (form.target && form.target !== '_self'))
+       return;
+
+     var heading = null;
+     document.querySelectorAll('[data-toc][id]').forEach(function(candidate){
+       if(candidate.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING)
+         heading = candidate;
+     });
+
+     if(heading)
+       save_position(heading);
+   });
+
+   (function(){
+     var position = null;
+     try {
+       position = JSON.parse(sessionStorage.getItem(scroll_key));
+       sessionStorage.removeItem(scroll_key);
+     } catch(e) {}
+
+     if(!position || !position.id || !(Date.now() - position.time < 120000))
+       return;
+
+     // Not once the reader has moved on by hand, which the images settling
+     // below should not undo
+     var moved = false;
+     ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function(type){
+       window.addEventListener(type, function(){ moved = true; }, {passive: true});
+     });
+
+     var go = function(){
+       var heading = document.getElementById(position.id);
+       if(heading && !moved)
+         window.scrollTo({top: heading.getBoundingClientRect().top + window.scrollY - position.offset,
+                          behavior: 'instant'});
+     };
+
+     // Once the structure is there, and again as the images above it load and
+     // push it down - for the first few seconds, as the page's load event may
+     // be long in coming
+     document.addEventListener('DOMContentLoaded', function(){
+       go();
+       var settling = new ResizeObserver(go);
+       settling.observe(document.body);
+       setTimeout(function(){ settling.disconnect(); }, 5000);
+     });
+   })();
+
    {% if task.celery_id %}
 
    var update_timer = 0;
    var update_timeout = 3000;
+
+   // The heading of the section being read: the one the contents rail marks,
+   // or where there is none, the last heading past the upper part of the
+   // window, as the rail would choose.
+   var reading_position = function(){
+     var heading = null;
+     var link = document.querySelector('#toc .nav-link.active');
+
+     if(link)
+       heading = document.getElementById(link.getAttribute('href').slice(1));
+
+     if(!heading){
+       document.querySelectorAll('[data-toc][id]').forEach(function(candidate){
+         if(!heading || candidate.getBoundingClientRect().top <= window.innerHeight*0.4)
+           heading = candidate;
+       });
+     }
+
+     return heading;
+   };
 
    // The page is reloaded once, when there is something new to render.
    // Everything else is updated in place, so that the view does not jump
@@ -27,6 +129,9 @@
    var reload_once = function(){
      if(!reloading){
        reloading = true;
+       var heading = reading_position();
+       if(heading)
+         save_position(heading);
        location.reload();
      }
    }
