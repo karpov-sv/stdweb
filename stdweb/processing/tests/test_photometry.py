@@ -23,7 +23,9 @@ from stdweb.processing.photometry import (plot_radial_profile,
                                           plot_psf_grid,
                                           plot_psf_residuals,
                                           measure_targets_photometry,
-                                          get_psf_residual_image)
+                                          get_psf_residual_image,
+                                          get_noise_excess,
+                                          get_objects_mask)
 
 
 def _make_starfield(shape=(512, 512), fwhm=4.0, n=60, seed=1, extra=[]):
@@ -293,6 +295,16 @@ def test_psf_bg_fluxerr():
                                  psf=psf, sn=0)
         assert np.median(res['bg_fluxerr']) == pytest.approx(expected, rel=0.05)
 
+    # With local background annulus, it should include its noise as the errors of the fit
+    # do, so match the flux errors at empty positions, without source noise
+    config = config | {'rel_bg1': 2, 'rel_bg2': 3, 'bg_estimator': 'mode', 'gain': None}
+    yy,xx = [_.ravel() + 0.3 for _ in np.mgrid[20:500:24, 20:500:24]]
+    empty = ~get_objects_mask(image.shape, obj['x'], obj['y'], 4*fwhm)[yy.astype(int), xx.astype(int)]
+    res = measure_photometry(Table({'x': xx[empty], 'y': yy[empty]}), image, config, psf=psf, sn=0)
+    assert np.median(res['bg_local_err']) > 0
+    assert np.median(res['bg_fluxerr']) > 1.1*expected
+    assert np.median(res['bg_fluxerr']) == pytest.approx(np.median(res['fluxerr']), rel=0.03)
+
 
 def test_psf_model_auto_degree():
     # Constant PSF should get constant model
@@ -406,3 +418,66 @@ def test_psf_residual_image():
     # Neighbour that was not fitted is left
     residual = get_psf_residual_image(image, np.zeros_like(image), psf, res)
     assert np.max(residual[box]) > 0.5*peak
+
+
+def test_objects_mask():
+    mask = get_objects_mask((100, 100), [50, 0, np.nan, 500], [50, 0, 10, 500], 5.0)
+    # Full disk in the center, a quarter of it in the corner, nothing for others
+    assert np.sum(mask[30:70, 30:70]) == np.sum(np.hypot(*np.mgrid[-5:6, -5:6]) <= 5)
+    assert mask[0, 0] and mask[5, 0] and mask[0, 5] and not mask[5, 5]
+    assert np.sum(mask) == np.sum(mask[30:70, 30:70]) + np.sum(mask[:10, :10])
+
+
+@pytest.mark.parametrize('method', ['aperture', 'optimal', 'psf'])
+def test_noise_excess(method):
+    """Excess is ~1 for uncorrelated noise, and corrects the noise of the photometry of
+    the correlated one, along with the background noise used for the limits"""
+    from scipy.ndimage import gaussian_filter
+
+    fwhm = 4.0
+    image,obj = _make_starfield(fwhm=fwhm, n=40)
+    psf = build_psf_model(image, obj, np.ones(len(obj), dtype=bool), fwhm, verbose=False)
+    # No source Poisson noise, as with unit gain it is comparable to the unit background noise
+    config = {'fwhm': fwhm, 'rel_aper': 1.0, 'bg_size': 128, 'photometry_method': method,
+              'gain': None}
+
+    mask = get_objects_mask(image.shape, obj['x'], obj['y'], 4*fwhm)
+    excess = get_noise_excess(image, config, noise_mask=mask, psf=psf, bg_err=1.0)
+    assert excess == pytest.approx(1.0, abs=0.06)
+
+    # Narrow local background annulus with mode estimator adds a lot of noise, that the
+    # photometry errors already include, so there is no extra excess
+    excess_ann = get_noise_excess(image, config | {'rel_bg1': 2, 'rel_bg2': 3, 'bg_estimator': 'mode'},
+                                  noise_mask=mask, psf=psf, bg_err=1.0)
+    assert excess_ann == pytest.approx(excess, abs=0.06)
+
+    # Correlated noise on top of the white one, with its per-pixel RMS
+    rng = np.random.default_rng(5)
+    noise = gaussian_filter(rng.normal(0, 3.0, image.shape), 1.0)
+    rms = np.hypot(1.0, np.std(noise))
+    excess = get_noise_excess(image + noise, config, noise_mask=mask, psf=psf, bg_err=rms)
+    assert excess > 1.5
+
+    res0 = measure_photometry(obj['x', 'y'], image + noise, config, psf=psf, sn=0,
+                              bg_err=rms)
+    res = measure_photometry(obj['x', 'y'], image + noise, config, psf=psf, sn=0,
+                             bg_err=excess*rms)
+    assert np.median(res['bg_fluxerr']/res0['bg_fluxerr']) == pytest.approx(excess, rel=1e-3)
+    assert np.all(res['fluxerr'] > res0['fluxerr'])
+
+    # Cannot be estimated
+    assert get_noise_excess(image, config, noise_mask=np.ones(image.shape, bool), psf=psf,
+                            bg_err=1.0) == 1.0
+
+
+def test_noise_excess_floor(monkeypatch):
+    """Low excess is accepted down to 0.9, and clamped below it"""
+    from stdpipe import photometry_background
+
+    image = np.zeros((64, 64))
+    config = {'fwhm': 3.0, 'photometry_method': 'aperture'}
+
+    for value,expected in [(0.93, 0.93), (0.5, 0.9), (1.2, 1.2), (np.nan, 1.0)]:
+        monkeypatch.setattr(photometry_background, 'estimate_noise_excess',
+                            lambda *args, **kwargs: value)
+        assert get_noise_excess(image, config) == pytest.approx(expected)

@@ -341,7 +341,7 @@ def plot_subtraction_photometry(filename, diff, obj, m, origin, shape, config, p
         Table({'x': xs[idx], 'y': ys[idx]}), diff, config, psf=psf,
         mask=mask,
         sn=0,
-        # We assume no background, and known error model
+        # Residual global background is estimated and removed, and error model is known
         bg=None,
         err=err,
         verbose=False
@@ -954,13 +954,28 @@ def subtract_image(filename, config, verbose=True, show=False):
         # PSF model in the coordinates of the sub-image
         psf1 = shift_psf_model(psf_model, x0, y0)
 
+        # Noise model of the photometry on the difference image, corrected for its excess
+        # over the predicted one due to noise correlation introduced by the convolution.
+        # It is measured in the empty sky, away from the residuals of the objects detected
+        # in the original image and from the target.
+        noise_mask = fullmask1 | get_objects_mask(diff.shape, obj['x'] - x0, obj['y'] - y0,
+                                                  3*fwhm)
+        if config.get('target_ra') is not None and config.get('target_dec') is not None:
+            tx,ty = wcs1.all_world2pix(config['target_ra'], config['target_dec'], 0)
+            noise_mask |= get_objects_mask(diff.shape, [tx], [ty], 3*fwhm)
+        noise_excess = get_noise_excess(diff, config, noise_mask=noise_mask, psf=psf1,
+                                        mask=fullmask1, bg=None, err=ediff, bg_err=ediff,
+                                        verbose=sub_verbose)
+        log(f"Noise excess of the photometry on the difference image over the predicted one is {noise_excess:.2f}")
+        ediff_phot = noise_excess*ediff
+
         # How well the stars actually subtracted
         if plot_subtraction_photometry(
             os.path.join(basepath, 'sub_photometry.png'),
             diff, obj, m, (x0, y0), image1.shape, config,
             psf=psf1,
             mask=fullmask1,
-            err=ediff,
+            err=ediff_phot,
             show=show, verbose=verbose
         ):
             log("Subtraction photometry diagnostics stored to file:sub_photometry.png")
@@ -985,10 +1000,11 @@ def subtract_image(filename, config, verbose=True, show=False):
                 target_obj, diff, config, psf=psf1,
                 mask=fullmask1,
                 sn=0,
-                # We assume no background
+                # Residual global background left after the subtraction is estimated and removed
                 bg=None,
-                # ..and known error model
-                err=ediff,
+                # ..and known error model, also defining the background noise for the limits
+                err=ediff_phot,
+                bg_err=ediff_phot,
                 centroid_iter=5 if config.get('centroid_targets') else 0,
                 verbose=sub_verbose
             )
@@ -1144,10 +1160,11 @@ def subtract_image(filename, config, verbose=True, show=False):
             sobj = measure_photometry(
                 sobj, diff, config, psf=psf1,
                 mask=fullmask1,
-                # We assume no background
+                # Residual global background left after the subtraction is estimated and removed
                 bg=None,
-                # ..and known error model
-                err=ediff,
+                # ..and known error model, also defining the background noise for the limits
+                err=ediff_phot,
+                bg_err=ediff_phot,
                 verbose=sub_verbose
             )
 

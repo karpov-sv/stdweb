@@ -19,7 +19,7 @@ from astropy.time import Time
 from astropy.stats import mad_std
 
 from stdpipe import astrometry, photometry, catalogs, cutouts
-from stdpipe import templates, plots, pipeline, artefacts
+from stdpipe import templates, plots, pipeline, artefacts, photometry_background
 from stdpipe import psf as stdpipe_psf
 
 from .constants import *
@@ -584,6 +584,77 @@ def measure_photometry(obj, image, config, psf=None, **kwargs):
     return obj
 
 
+def get_noise_excess(image, config, noise_mask=None, psf=None, verbose=False, **kwargs):
+    """Excess of the actual noise of the forced photometry over the one predicted from the
+    noise maps, due to e.g. correlated noise of resampled or difference images, or to the
+    noise of the local background estimate.
+
+    It is measured by running :func:`measure_photometry` with the same `config`, `psf`
+    and extra keyword arguments (e.g. `mask`, `bg`, `err`, `bg_err`) as the actual
+    photometry, on a grid of empty positions avoiding `noise_mask`, that should therefore
+    cover all the objects. The noise maps passed to :func:`measure_photometry` should be
+    multiplied by it. It is never below 0.9, so the errors are never decreased by more
+    than 10%, and is 1 if it cannot be estimated.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    fwhm = config.get('fwhm')
+    aper = config.get('rel_aper', 1.0)
+    if get_photometry_method(config) == 'psf' and config.get('psf_fit_radius'):
+        aper = config['psf_fit_radius']
+
+    # Positions should be farther apart than the grouping radius of PSF fitting or grouped
+    # optimal extraction, so that they are measured independently
+    group_radius = config.get('psf_group_radius')
+    group_radius = 2*aper if group_radius is None else max(group_radius, 0)
+    spacing = max(3*max(aper, 1.0), 1.5*group_radius)*fwhm + 1
+
+    def measure(obj):
+        # No S/N cut, so that all the positions are kept
+        return measure_photometry(obj, image, config, psf=psf, **(kwargs | {'sn': 0, 'verbose': False}))
+
+    excess = photometry_background.estimate_noise_excess(
+        image, mask=noise_mask, aper=aper, fwhm=fwhm,
+        measure=measure, spacing=spacing,
+        verbose=verbose,
+    )
+
+    if not np.isfinite(excess):
+        log("Cannot estimate the noise excess, assuming no excess")
+        excess = 1.0
+    elif excess < 0.9:
+        # Do not decrease the errors too much, the estimate is probably wrong
+        log(f"Warning: noise excess {excess:.2f} is too low, the noise map is probably overestimated, using 0.9")
+        excess = 0.9
+    elif excess < 0.95:
+        # Slightly below 1 is expected for aperture photometry, as photutils overestimates
+        # the noise of the pixels on the aperture edge
+        log(f"Warning: noise excess {excess:.2f} is below 1, the noise map is probably overestimated")
+
+    return float(excess)
+
+
+def get_objects_mask(shape, x, y, radius):
+    """Mask of circles with given `radius` around the positions `x`, `y`."""
+    mask = np.zeros(shape, dtype=bool)
+    r = int(np.ceil(radius))
+    dy,dx = np.mgrid[-r:r+1, -r:r+1]
+    disk = dx**2 + dy**2 <= radius**2
+
+    for xi,yi in zip(np.round(np.asarray(x, dtype=float)), np.round(np.asarray(y, dtype=float))):
+        if not np.isfinite(xi) or not np.isfinite(yi):
+            continue
+        xi,yi = int(xi), int(yi)
+        x1,x2 = max(xi - r, 0), min(xi + r + 1, shape[1])
+        y1,y2 = max(yi - r, 0), min(yi + r + 1, shape[0])
+        if x1 >= x2 or y1 >= y2:
+            continue
+        mask[y1:y2, x1:x2] |= disk[y1 - yi + r:y2 - yi + r, x1 - xi + r:x2 - xi + r]
+
+    return mask
+
+
 def measure_targets_photometry(targets, obj, image, config, psf=None, **kwargs):
     """Forced photometry of the targets, optionally along with the objects around them.
 
@@ -649,10 +720,20 @@ def get_psf_residual_image(image, bg, psf, sources):
 def get_psf_bg_fluxerr(obj, psf, radius):
     """Background noise of PSF fit flux for the objects, from their per-pixel background
     noise derived from `bg_fluxerr` and `npix_aper` columns, and the PSF model within the
-    fitting `radius` in pixels."""
+    fitting `radius` in pixels.
+
+    The noise of the local background level `bg_local_err`, if any, that `bg_fluxerr`
+    includes as `npix_aper*bg_local_err`, is propagated separately into the PSF flux, as
+    for the subtraction of the local background from the fit of an isolated source."""
     bg_fluxerr = np.full(len(obj), np.nan)
 
-    for i,(x,y,fluxerr,npix) in enumerate(zip(obj['x'], obj['y'], obj['bg_fluxerr'], obj['npix_aper'])):
+    if 'bg_local_err' in obj.colnames:
+        bg_local_err = np.nan_to_num(np.asarray(obj['bg_local_err'], dtype=float))
+    else:
+        bg_local_err = np.zeros(len(obj))
+
+    for i,(x,y,fluxerr,npix,sb) in enumerate(zip(obj['x'], obj['y'], obj['bg_fluxerr'],
+                                                obj['npix_aper'], bg_local_err)):
         if not np.isfinite(x) or not np.isfinite(y) or not npix > 0:
             continue
 
@@ -660,10 +741,13 @@ def get_psf_bg_fluxerr(obj, psf, radius):
         h,w = stamp.shape
         r = np.hypot(np.arange(w)[None,:] - w//2 - (x - np.round(x)),
                      np.arange(h)[:,None] - h//2 - (y - np.round(y)))
+        sum1 = np.sum(stamp[r <= radius])
         sum2 = np.sum(stamp[r <= radius]**2)
 
         if sum2 > 0:
-            bg_fluxerr[i] = fluxerr/np.sqrt(npix*sum2)
+            # Per-pixel background noise, without the noise of the local background level
+            sigma = np.sqrt(max(fluxerr**2 - (npix*sb)**2, 0)/npix)
+            bg_fluxerr[i] = np.hypot(sigma/np.sqrt(sum2), sum1/sum2*sb)
 
     return bg_fluxerr
 
@@ -1182,9 +1266,23 @@ def photometry_image(filename, config, verbose=True, show=False):
         pickle_to_file(os.path.join(basepath, 'psf.pickle'), psf_model)
         log("PSF model stored to psf.pickle")
 
+    # Background noise of the photometry, corrected for its excess over the background
+    # RMS map, e.g. due to correlated noise of resampled images or the noise of the local
+    # background estimate. It is measured with the photometry itself in the empty sky,
+    # away from the detected objects and their wings.
+    noise_mask = mask | photometry.dilate(segm > 0, np.ones([int(np.ceil(fwhm))]*2))
+    if custom_mask is not None:
+        noise_mask |= custom_mask
+    noise_excess = get_noise_excess(image, config, noise_mask=noise_mask, psf=psf_model,
+                                    mask=mask, bg_err=bgrms, verbose=verbose)
+    log(f"Noise excess of the photometry over the one predicted from background RMS is {noise_excess:.2f}")
+    config['noise_excess'] = noise_excess
+    bg_err = noise_excess*bgrms
+
     # Forced photometry at objects positions
     obj = measure_photometry(obj, image, config, psf=psf_model,
                              mask=mask,
+                             bg_err=bg_err,
                              verbose=verbose)
 
     log(f"{len(obj)} objects properly measured, {np.sum(obj['flags'] == 0)} unflagged")
@@ -1667,6 +1765,7 @@ def photometry_image(filename, config, verbose=True, show=False):
         target_obj,target_neighbours = measure_targets_photometry(
             target_obj, obj, image, config, psf=psf_model,
             mask=mask,
+            bg_err=bg_err,
             centroid_iter=5 if config.get('centroid_targets') else 0,
             verbose=verbose
         )

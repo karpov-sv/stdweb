@@ -287,6 +287,7 @@ These parameters are computed during processing and stored in the config for use
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `fwhm` | float | Measured PSF FWHM (pixels). |
+| `noise_excess` | float | Ratio of the actual noise of the photometry (measured in empty-sky apertures) to the one predicted from the background RMS, e.g. due to correlated noise of resampled images. Background noise of all photometry is scaled by it. Never below 0.9 (slightly below 1 is normal for aperture photometry). |
 | `pixscale` | float | Pixel scale (degrees/pixel). |
 | `field_ra` | float | Field center RA (degrees). |
 | `field_dec` | float | Field center Dec (degrees). |
