@@ -195,6 +195,7 @@ Used when `subtraction_method` is `hotpants`.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `hotpants_extra` | dict | `{'ko':0, 'bgo':0}` | Extra options passed straight through to the HOTPANTS command line (see below). |
+| `hotpants_check_stamps` | bool | true | After the run, compare the kernel sum with the median image to template flux ratio of isolated stars, and if they disagree, mask the stamp biasing it (typically a star saturated or non-linear in the template, e.g. in Pan-STARRS) in the template and re-run HOTPANTS, up to 3 times. Masked regions are invalid in the difference image. |
 
 `hotpants_extra` is a JSON object whose keys are HOTPANTS option names **without
 the leading dash** and whose values are the option arguments; bare flags take the

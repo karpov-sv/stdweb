@@ -425,6 +425,14 @@ class TaskSubtractionForm(forms.Form):
                                  required=False, label="Template")
     template_combine = forms.BooleanField(initial=True, required=False, label="Combine template bands")
     hotpants_extra = forms.JSONField(required=False, label="HOTPANTS extra params", widget=forms.TextInput)
+    hotpants_check_stamps = forms.BooleanField(
+        initial=True, required=False, label="Mask saturated template stars",
+        widget=forms.CheckboxInput(attrs={'title': (
+            "Re-run HOTPANTS with the stars biasing the kernel normalization (usually "
+            "saturated in the template, e.g. Pan-STARRS) masked. These regions become "
+            "invalid in the difference image."
+        )})
+    )
     sub_size = forms.IntegerField(min_value=0, required=False, label="Sub-image size")
     sub_overlap = forms.IntegerField(min_value=0, required=False, label="Sub-image overlap")
     sub_verbose = forms.BooleanField(required=False, label="Verbose")
@@ -495,6 +503,7 @@ class TaskSubtractionForm(forms.Form):
             Row(
                 Column(InlineRadios('subtraction_mode', template='crispy_radioselect_inline.html'), css_class='form-group col-md-auto'),
                 Column('template_combine', css_class="col-md-auto"),
+                Column('hotpants_check_stamps', css_class="col-md-auto", id='hotpants_check_col'),
                 Div(css_class="col-md"),
                 Column('sub_verbose', css_class="col-md-1"),
                 css_class='align-items-center'

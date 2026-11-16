@@ -836,6 +836,23 @@ def subtract_image(filename, config, verbose=True, show=False):
             ax.set_ylabel('Instrumental magnitude')
             ax.set_xlim(0, np.percentile(fwhm_values, 98))
 
+        # Objects to place the kernel stamps on. The ones near the targets are excluded, as
+        # a variable target would bias the kernel, and the stamp check could mask it
+        stamp_obj = obj1[obj1['flags']==0]
+        targets = list(config.get('targets') or [])
+        if config.get('target_ra') is not None and config.get('target_dec') is not None:
+            targets.append({'ra': config['target_ra'], 'dec': config['target_dec']})
+        targets = [_ for _ in targets if _.get('ra') is not None and _.get('dec') is not None]
+        if targets and len(stamp_obj):
+            tx,ty = wcs1.all_world2pix([_['ra'] for _ in targets], [_['dec'] for _ in targets], 0)
+            stamp_radius = 3*max(config.get('fwhm', 3.0), template_fwhm)
+            dist = np.hypot(np.asarray(stamp_obj['x'])[:,None] - np.atleast_1d(tx)[None,:],
+                            np.asarray(stamp_obj['y'])[:,None] - np.atleast_1d(ty)[None,:])
+            near = np.any(dist < stamp_radius, axis=1)
+            if np.any(near):
+                log(f"Excluding {np.sum(near)} objects within {stamp_radius:.1f} pixels of the targets from the kernel stamps")
+                stamp_obj = stamp_obj[~near]
+
         if subtraction_method == 'sfft':
             # SFFT
 
@@ -860,7 +877,7 @@ def subtract_image(filename, config, verbose=True, show=False):
                 bg_poly_order=config.get('sfft_bg_poly_order', 0),
                 flux_poly_order=config.get('sfft_flux_poly_order', 0),
                 err=True,
-                obj=obj1[obj1['flags']==0],
+                obj=stamp_obj,
                 get_convolved=True,
                 get_scaled=True,
                 get_noise=True,
@@ -920,7 +937,10 @@ def subtract_image(filename, config, verbose=True, show=False):
                 template_gain=template_gain,
                 err=True,
                 extra=config.get('hotpants_extra', {'ko':0, 'bgo':0}),
-                obj=obj1[obj1['flags']==0],
+                obj=stamp_obj,
+                # Re-run with the stamps biasing the kernel sum masked, e.g. stars
+                # saturated in the template that HOTPANTS keeps as their noise is large
+                check_stamps=config.get('hotpants_check_stamps', True),
                 _exe=settings.STDPIPE_HOTPANTS
             )
 
