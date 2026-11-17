@@ -595,6 +595,11 @@ def filter_vizier_blends(
             col_dec=obj_col_dec,
         )
 
+        if xcat is None:
+            # XMatch service failed, already reported as a warning
+            log("Cannot cross-match with", catname, ", skipping")
+            continue
+
         if fname is not None:
             # Find relevant magnitude and coordinate columns
             cat_col_mag,cat_col_mag_err = guess_catalogue_mag_columns(fname, xcat)
