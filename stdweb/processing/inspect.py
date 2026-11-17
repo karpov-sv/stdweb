@@ -81,6 +81,151 @@ def mask_cosmics(
         return cmask
 
 
+def measure_sky_skewness(image, mask=None, verbose=False):
+    """Pixel-independent skewness of the sky noise of the image.
+
+    The skewness is measured as sigma-clipped (mean - median)/rms of the
+    background-subtracted image binned by 1, 2 and 4 pixels. Skewness of
+    pixel-independent noise (EM gain, low photon counts) decreases as 1/sqrt(n) when n
+    pixels are averaged, while the one of the sources, correlated on PSF scales, does
+    not, which separates the two. For quantized (integer-valued) images the interpolated
+    median of grouped data is used, as the plain one is itself quantized, mimicking the
+    skewness.
+
+    Returns a dict with `skew` (values for the three binnings), `intrinsic` (the
+    pixel-independent part of the unbinned one), `gamma` (corresponding standard
+    skewness of the noise) and `rms` (sky noise rms), or None if there are too few
+    unmasked pixels.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    from astropy.stats import sigma_clipped_stats, sigma_clip
+    from stdpipe import photometry_measure
+
+    image = np.array(image, dtype=np.double)
+    mask = np.zeros(image.shape, dtype=bool) if mask is None else np.array(mask, dtype=bool)
+    mask |= ~np.isfinite(image)
+
+    if np.sum(~mask) < 10000:
+        log("Too few unmasked pixels to measure the sky noise skewness")
+        return None
+
+    # Grid step of integer-valued data, whose plain median is itself quantized and would
+    # be mistaken for the skewness - it is then replaced with interpolated median
+    q = photometry_measure._quantization_step(image, mask)
+
+    image[mask] = np.median(image[~mask])
+
+    # Fine mesh, so that the large-scale structure does not contribute to the skewness
+    bsize = int(min(64, image.shape[0]//4, image.shape[1]//4))
+    bg = sep.Background(image, mask=mask, bw=bsize, bh=bsize)
+    back = bg.back()
+    resid = image - back
+
+    def binned(x, b):
+        h, w = (x.shape[0]//b)*b, (x.shape[1]//b)*b
+        return x[:h, :w].reshape(h//b, b, w//b, b)
+
+    skew = []
+    for b in [1, 2, 4]:
+        m = binned(mask, b).any(axis=(1, 3))
+        a = binned(resid, b).mean(axis=(1, 3))[~m]
+        if q is None:
+            mean, median, std = sigma_clipped_stats(a, sigma=3, maxiters=5)
+        else:
+            # Averages of b x b grid values lie on the grid with q/b**2 step
+            good = ~sigma_clip(a, sigma=3, maxiters=5, masked=True).mask
+            raw = binned(image, b).mean(axis=(1, 3))[~m][good]
+            mean, std = np.mean(a[good]), np.std(a[good])
+            median = (photometry_measure._grouped_median(raw, q/b**2) -
+                      np.mean(binned(back, b).mean(axis=(1, 3))[~m][good]))
+        skew.append((mean - median)/std if std > 0 else 0)
+
+    # Pixel-independent part a contributes a/b at binning b, on top of the part of sources
+    # that does not decrease with binning. It is estimated from both binning steps, and
+    # bounded by the skewness itself at every binning, as the sources may only add to it -
+    # the smallest is conservative against sources fading with binning (undersampled
+    # images), and against negative large-scale structure (over-subtracted halos etc)
+    # growing with binning
+    intrinsic = max(0, min(2*(skew[0] - skew[1]), 4*(skew[1] - skew[2]),
+                           skew[0], 2*skew[1], 4*skew[2]))
+
+    log(f"Background skewness (mean - median)/rms (x1 / x2 / x4 binning): {skew[0]:.3f} / {skew[1]:.3f} / {skew[2]:.3f}")
+    log(f"Pixel-independent part: {intrinsic:.3f}")
+
+    return {
+        'skew': skew,
+        'intrinsic': intrinsic,
+        # For gamma-distributed noise, 3-sigma clipped (mean - median)/rms is close to
+        # 1/7.4 of its standard skewness over 0.1 < gamma < 4, within 10%
+        'gamma': 7.4*intrinsic,
+        'rms': float(np.median(bg.rms())),
+    }
+
+
+def guess_bg_estimator(image, mask=None, npix=100, max_bias=0.5, verbose=False, skewness=None):
+    """Guess the local background estimator suitable for aperture photometry of the image.
+
+    Aperture sums of empty sky are unbiased only with the mean sky level, while mode and
+    median are biased low when the noise itself is skewed (EM gain, low photon counts),
+    and are better only when the skewness comes from the sources (faint stars, wings,
+    nebulosity). The skewness of the noise is measured with :func:`measure_sky_skewness`,
+    or may be passed as its result in `skewness`.
+
+    Returns `('mean' or 'mode', bias)`, with `bias` being the expected bias of the
+    aperture of `npix` pixels with the mode estimator, in units of its noise. 'mean' is
+    suggested if it exceeds `max_bias`.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    if skewness is None:
+        skewness = measure_sky_skewness(image, mask, verbose=verbose)
+
+    if skewness is None:
+        log("Cannot guess the background estimator, using 'mode'")
+        return 'mode', np.nan
+
+    # Mode estimate (3 median - 2 mean, as in stdpipe) is below the mean by 3 (mean - median)
+    bias = 3*skewness['intrinsic']*np.sqrt(npix)
+
+    estimator = 'mean' if bias > max_bias else 'mode'
+    log(f"Mode local background bias: {bias:.2f} sigma in {npix} square pixel aperture")
+    log(f"Suggested local background estimator: '{estimator}'")
+
+    return estimator, bias
+
+
+def guess_amplified_gain(skewness, gain, min_gamma=0.3, max_gain=0.2, min_ratio=5, verbose=False):
+    """Effective gain of the image with amplified photon noise, e.g. EMCCD, from its skewness.
+
+    Photon counts amplified by a random factor J (ADU per photoelectron) have the
+    cumulant ratio kappa3/kappa2 = <J^3>/<J^2> = gamma*rms, while the effective gain
+    (photoelectrons per ADU, defining the Poisson variance as flux/gain) is <J>/<J^2>.
+    For the exponential amplification of EM register it gives gain = 1.5/(gamma*rms),
+    independent of the sky level or bias pedestal.
+
+    `skewness` is the result of :func:`measure_sky_skewness`. Returns the gain if the
+    noise is strongly skewed (`gamma` > `min_gamma`), amplified (gain < `max_gain`), and
+    the current `gain` is more than `min_ratio` times larger, otherwise None.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    if skewness is None or not skewness['gamma'] > min_gamma or not skewness['rms'] > 0:
+        return None
+
+    g = 1.5/(skewness['gamma']*skewness['rms'])
+    log(f"Sky noise skewness {skewness['gamma']:.2f} at rms {skewness['rms']:.2f} "
+        f"corresponds to amplified photon noise with effective gain {g:.3g}")
+
+    if g < max_gain and gain > min_ratio*g:
+        return g
+
+    return None
+
+
 def inspect_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -128,20 +273,6 @@ def inspect_image(filename, config, verbose=True, show=False):
     fix_header(header)
 
     # Guess some parameters from keywords
-    if not config.get('gain'):
-        config['gain'] = float(header.get(
-            'GAIN',
-            header.get('CCD_GAIN', 1)
-        ))
-        if config['gain'] == 0:
-            log("Header gain is zero, setting it to 1")
-            config['gain'] = 1
-
-        if config['gain'] == 1 and np.nanstd(image) <= 1:
-            log(f"Warning: Pixel values are significantly re-scaled, guessing gain from max value")
-            # Here we assume that original gain was 1 and original max value was 65535
-            config['gain'] = 65535./np.nanmax(image)
-    log(f"Gain is {config['gain']:.2f}")
 
     # Filter
     if not config.get('filter'):
@@ -209,6 +340,34 @@ def inspect_image(filename, config, verbose=True, show=False):
         log(f"Background mesh size set to {bg_size} x {bg_size} pixels")
         config['bg_size'] = bg_size
 
+    # Sky noise skewness, for the gain of amplified (EMCCD) images and the local
+    # background estimator. Measured before cosmics masking, that depends on the gain
+    skewness = None
+    if not config.get('gain') or not config.get('bg_estimator'):
+        skewness = measure_sky_skewness(image, mask, verbose=verbose)
+
+    if not config.get('gain'):
+        config['gain'] = float(header.get(
+            'GAIN',
+            header.get('CCD_GAIN', 1)
+        ))
+        if config['gain'] == 0:
+            log("Header gain is zero, setting it to 1")
+            config['gain'] = 1
+
+        if config['gain'] == 1 and np.nanstd(image) <= 1:
+            log(f"Warning: Pixel values are significantly re-scaled, guessing gain from max value")
+            # Here we assume that original gain was 1 and original max value was 65535
+            config['gain'] = 65535./np.nanmax(image)
+
+        # EM gain detection
+        em_gain = guess_amplified_gain(skewness, config['gain'], verbose=verbose)
+        if em_gain is not None:
+            log(f"Warning: sky noise is amplified much more than gain {config['gain']:.3g} implies - probably EM gain")
+            config['gain'] = em_gain
+
+    log(f"Gain is {config['gain']:.3g}")
+
     # Cosmics
     if config.get('mask_cosmics', True):
         cmask = mask_cosmics(
@@ -228,6 +387,17 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     fits_write(os.path.join(basepath, 'mask.fits'), mask.astype(np.uint8), compress=True)
     log("Mask written to file:mask.fits")
+
+    # Local background estimator, from the skewness of the sky noise
+    if not config.get('bg_estimator'):
+        config['bg_estimator'],_ = guess_bg_estimator(image, mask, verbose=verbose,
+                                                      skewness=skewness)
+
+        # Mode-like SExtractor background is biased low for such noise, inflating the
+        # sizes of fainter stars, that the pre-filtering then rejects as outliers
+        if config['bg_estimator'] == 'mean' and 'prefilter_detections' not in config:
+            log("Disabling pre-filtering of detections, as their shapes are biased by skewed sky noise")
+            config['prefilter_detections'] = False
 
     # WCS
     wcs = get_wcs(filename, header=header, verbose=verbose)

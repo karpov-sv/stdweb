@@ -25,7 +25,7 @@ Parameters used during the initial image inspection stage (`inspect_image()`).
 |-----------|------|---------|-------------|
 | `target` | str | None | Target name(s) or coordinates. Supports multiple newline-separated targets. Resolved via Sesame/Simbad. |
 | `time` | str | Auto | Observation time in ISO format. Auto-detected from FITS header (`DATE-OBS`, `MJD-OBS`, etc.). |
-| `gain` | float | Auto | Detector gain in e-/ADU. Auto-detected from FITS header (`GAIN`, `EGAIN`). |
+| `gain` | float | Auto | Detector gain in e-/ADU. Auto-detected from FITS header (`GAIN`, `EGAIN`). For images with amplified photon noise (EMCCD) the effective gain, much smaller than 1, is estimated at inspection from the skewness of the sky noise, 1.5/(skewness * rms), and replaces the header one if it is more than 5 times smaller. |
 | `saturation` | float | Auto | Saturation level in ADU. Estimated from image if not provided. |
 | `filter` | str | Auto | Photometric filter name. Auto-detected and normalized to canonical names (U, B, V, R, I, u, g, r, i, z, etc.). |
 
@@ -65,7 +65,7 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `adaptive_detection` | bool | False | Re-run detection with smoothing kernel matched to the measured FWHM and threshold set to `sn` in units of filtered image noise. Improves detection of faint objects with wide PSF. The same detection parameters are used for transient detection in the difference image, as its pre-filtering classifier is trained on the photometry detections. |
 | `bg_size` | int | Auto | Background mesh size for SExtractor (pixels). Auto-calculated if not set. |
 | `fwhm_override` | float | None | Override auto-measured FWHM with fixed value (pixels). |
-| `prefilter_detections` | bool | True | Apply isolation forest outlier detection to filter spurious detections. |
+| `prefilter_detections` | bool | True | Apply isolation forest outlier detection to filter spurious detections. If not set, disabled at inspection together with guessing `mean` for `bg_estimator`, as the shapes of fainter stars are then biased by skewed sky noise and they would be rejected as outliers. |
 
 ### Object Photometry
 
@@ -74,7 +74,7 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `rel_aper` | float | 1.0 | Photometry aperture radius in FWHM units. |
 | `rel_bg1` | float | 5.0 | Inner background annulus radius in FWHM units. |
 | `rel_bg2` | float | 7.0 | Outer background annulus radius in FWHM units. |
-| `bg_estimator` | str | `mode` | Local background estimator in the annulus: `mode` is robust to contamination by neighbours, but biased low for skewed noise of low sky levels (up to half an electron per pixel, multiplied by the aperture area), making faint objects too bright. `mean` uses 5-sigma clipped mean that is unbiased for such noise, and is better suited for uncrowded low-flux images with large apertures. `median` is in between, with about three times smaller bias than `mode`. |
+| `bg_estimator` | str | `mode` | Local background estimator in the annulus: `mode` is robust to contamination by neighbours, but biased low for skewed noise of low sky levels (up to half an electron per pixel, multiplied by the aperture area), making faint objects too bright. `mean` uses 5-sigma clipped mean that is unbiased for such noise, and is better suited for uncrowded low-flux images with large apertures. `median` is in between, with about three times smaller bias than `mode`. If not set, guessed at inspection: `mean` if the sky noise itself is skewed (its skewness decreases as 1/sqrt(n) when n pixels are binned, unlike the one of the sources) enough to bias 100-pixel aperture with `mode` by more than 0.5 sigma, `mode` otherwise. |
 | `photometry_method` | str | `aperture` | Photometry method used for all measurements calibrated with the photometric solution - objects and targets in the image, and targets and candidates in the difference image: `aperture` for plain aperture sums, `optimal` for optimal (PSF-weighted) extraction with Gaussian PSF, improving S/N for faint sources, or `psf` for PSF fitting at fixed positions with the empirical PSF model built from the image stars. |
 | `psf_degree` | int | None | Polynomial degree of the spatial variations of the PSF model for `psf` photometry method. 0 = constant PSF. None or `auto` = selected automatically, up to 3, by spatial cross-validation. Explicit value is reduced if there are fewer than 5 stars per polynomial coefficient. |
 | `psf_fit_radius` | float | None | Radius, in FWHM units, of the region used for PSF fitting. None = same as `rel_aper`. |

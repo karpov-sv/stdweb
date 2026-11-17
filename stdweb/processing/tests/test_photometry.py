@@ -479,5 +479,22 @@ def test_noise_excess_floor(monkeypatch):
 
     for value,expected in [(0.93, 0.93), (0.5, 0.9), (1.2, 1.2), (np.nan, 1.0)]:
         monkeypatch.setattr(photometry_background, 'estimate_noise_excess',
-                            lambda *args, **kwargs: value)
+                            lambda *args, **kwargs: (value, {'median': 0.0}))
         assert get_noise_excess(image, config) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize('estimator,median,warned', [
+    ('mode', 4.8, True), ('median', 1.5, True), ('mean', 4.8, False), ('mode', 0.3, False),
+])
+def test_noise_excess_warns_on_biased_background(monkeypatch, estimator, median, warned):
+    """Positive empty sky photometry with mode or median annulus background is reported"""
+    from stdpipe import photometry_background
+
+    image = np.zeros((64, 64))
+    config = {'fwhm': 3.0, 'photometry_method': 'aperture', 'rel_bg1': 5, 'rel_bg2': 7,
+              'bg_estimator': estimator}
+    monkeypatch.setattr(photometry_background, 'estimate_noise_excess',
+                        lambda *args, **kwargs: (1.0, {'median': median}))
+    messages = []
+    get_noise_excess(image, config, verbose=lambda *args: messages.append(' '.join(map(str, args))))
+    assert any('biased low' in _ for _ in messages) == warned

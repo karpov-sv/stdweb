@@ -614,11 +614,20 @@ def get_noise_excess(image, config, noise_mask=None, psf=None, verbose=False, **
         # No S/N cut, so that all the positions are kept
         return measure_photometry(obj, image, config, psf=psf, **(kwargs | {'sn': 0, 'verbose': False}))
 
-    excess = photometry_background.estimate_noise_excess(
+    excess, stats = photometry_background.estimate_noise_excess(
         image, mask=noise_mask, aper=aper, fwhm=fwhm,
         measure=measure, spacing=spacing,
-        verbose=verbose,
+        verbose=verbose, get_stats=True,
     )
+
+    # Empty sky should have zero flux on average. Mode or median of the annulus are
+    # biased low for skewed noise (EM gain, low photon counts), making every flux positive
+    estimator = kwargs.get('bg_estimator', config.get('bg_estimator') or 'mode')
+    if (config.get('rel_bg1') and config.get('rel_bg2') and estimator != 'mean' and
+        np.isfinite(stats['median']) and stats['median'] > 1):
+        log(f"Warning: median S/N of empty sky photometry is {stats['median']:.2f}, "
+            f"'{estimator}' local background is probably biased low for skewed noise, "
+            f"consider using 'mean' instead")
 
     if not np.isfinite(excess):
         log("Cannot estimate the noise excess, assuming no excess")
