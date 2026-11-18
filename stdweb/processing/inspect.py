@@ -78,7 +78,8 @@ def mask_cosmics(
         satlevel=satlevel * gain,
         sigclip=sigclip,
         cleantype=kwargs.pop('cleantype', 'meanmask'),
-        verbose=verbose,
+        # Its own progress output goes directly to stdout, flooding the logs
+        verbose=False,
         **kwargs
     )
 
