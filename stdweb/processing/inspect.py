@@ -3,6 +3,7 @@ Image inspection and initial parameter extraction.
 """
 
 import os
+import warnings
 
 import numpy as np
 
@@ -226,6 +227,128 @@ def guess_amplified_gain(skewness, gain, min_gamma=0.3, max_gain=0.2, min_ratio=
     return None
 
 
+def _block_noise(image, mask, size):
+    """Noise of the background mesh estimates of size x size pixels, from the third
+    differences of adjacent meshes, so that smooth large-scale structure (up to
+    quadratic over four meshes, like vignetting) cancels out, while the noise, even
+    correlated on smaller scales, does not.
+
+    The mesh values are taken from SEP itself (sigma-clipped mode-like estimate, without
+    median filtering), so that they respond to object wings and quantization the same
+    way as the meshes being compared. Only full meshes with less than half of the pixels
+    masked are used, as SEP replaces the others with interpolated values. NaN if there
+    are too few of them.
+    """
+    from astropy.stats import mad_std
+
+    ny, nx = image.shape[0]//size, image.shape[1]//size
+    bg = sep.Background(image, mask=mask, bw=size, bh=size, fw=1, fh=1)
+    back = bg.back()
+    # Bicubic spline passes through the mesh values at the mesh centres
+    c = size//2
+    if size % 2:
+        nodes = back[c:ny*size:size, c:nx*size:size]
+    else:
+        nodes = 0.25*(back[c-1:ny*size:size, c-1:nx*size:size] + back[c:ny*size:size, c-1:nx*size:size] +
+                      back[c-1:ny*size:size, c:nx*size:size] + back[c:ny*size:size, c:nx*size:size])
+    nodes = np.array(nodes[:ny, :nx], dtype=np.double)
+    masked = mask[:ny*size, :nx*size].reshape(ny, size, nx, size).mean(axis=(1, 3))
+    nodes[masked > 0.5] = np.nan
+
+    # Third differences, with variance 20 times the one of independent meshes
+    def diff3(m):
+        return m[:, 3:] - 3*m[:, 2:-1] + 3*m[:, 1:-2] - m[:, :-3]
+
+    d = np.concatenate([diff3(nodes).ravel(), diff3(nodes.T).ravel()])
+    d = d[np.isfinite(d)]
+
+    return mad_std(d)/np.sqrt(20) if d.size >= 10 else np.nan
+
+
+def guess_bg_size(image, mask=None, min_size=64, max_size=None, tolerance=0.03,
+                  noise_factor=1.25, max_structure=0.1, verbose=False):
+    """Largest background mesh size still following the large-scale sky structure.
+
+    The mesh is doubled from `min_size` up to `max_size` (quarter of the smaller image
+    dimension by default) while it changes the background, estimated with detected
+    objects masked, by less than max(`noise_factor` x its own noise, `tolerance`) of the
+    sky rms per pixel, measured as Gaussian-equivalent 90th percentile of the change over
+    the sky pixels. The noise is the one of the unfiltered mesh, while the compared
+    backgrounds are median filtered, so the change of pure noise is ~0.4 of it (0.35-0.47
+    on flat star fields). The default factor of 1.25 is chosen empirically, so that the
+    resulting mesh minimizes the residual background error for synthetic vignetting,
+    while flat fields still get the largest mesh. The noise of the mesh is measured from the third differences of adjacent
+    blocks, so that correlated noise (fixed pattern, resampling) is not mistaken for
+    the structure. Large-scale gradients (vignetting etc) are then followed, while flat images
+    get large meshes, less affected by the noise and the wings of the objects.
+
+    If already the first doubling changes the background by more than `max_structure`,
+    it is dominated by extended emission (nebulae, galaxies, halos of bright stars)
+    rather than by the sky, and smaller mesh would absorb its flux, so None is returned.
+    """
+    # Simple wrapper around print for logging in verbose mode only
+    log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
+
+    from scipy.ndimage import binary_dilation
+
+    if max_size is None:
+        max_size = min(image.shape) // 4
+    if max_size <= min_size:
+        return int(max_size)
+
+    image = np.array(image, dtype=np.double)
+    mask = np.zeros(image.shape, dtype=bool) if mask is None else np.array(mask, dtype=bool)
+    mask |= ~np.isfinite(image)
+    if np.sum(~mask) < 10000:
+        return None
+    image[mask] = np.median(image[~mask])
+
+    # Conservative mask of the objects, so that they do not drive the background
+    bg = sep.Background(image, mask=mask, bw=min_size, bh=min_size)
+    rms = bg.globalrms
+    pixstack = sep.get_extract_pixstack()
+    try:
+        sep.set_extract_pixstack(max(pixstack, image.size))
+        _,segm = sep.extract(image - bg.back(), 3.0, err=rms, mask=mask,
+                             minarea=10, segmentation_map=True)
+    except Exception as e:
+        log(f"Cannot detect objects to estimate background mesh size: {e}")
+        return None
+    finally:
+        sep.set_extract_pixstack(pixstack)
+
+    mask_bg = mask | binary_dilation(segm > 0, iterations=8)
+    sky = ~mask_bg
+
+    size = min_size
+    back = sep.Background(image, mask=mask_bg, bw=size, bh=size).back()
+    while 2*size <= max_size:
+        back2 = sep.Background(image, mask=mask_bg, bw=2*size, bh=2*size).back()
+        # 90th percentile of the absolute change, in units of Gaussian sigma, so that
+        # very local differences around bright stars, extended objects and masked
+        # regions (few % of the image) do not dominate, while structure covering
+        # larger areas, like vignetting in the corners, is still accounted for
+        diff = (back2 - back)[sky]
+        change = np.percentile(np.abs(diff - np.median(diff)), 90)/1.645/rms
+        # Noise of the mode-like estimate over size x size pixels, per pixel sky rms -
+        # at least the one of independent pixels, sqrt(2.5^2 pi/2 + 1.5^2 - 2*2.5*1.5)
+        # = 2.14 for 2.5 median - 1.5 mean, or the measured one for correlated noise
+        # (fixed pattern, resampling etc)
+        noise = np.fmax(2.14/size, _block_noise(image, mask_bg, size)/rms)
+        log(f"Background mesh {size} -> {2*size}: change {change:.3f} sigma, noise {noise:.3f}")
+
+        if change > max(noise_factor*noise, tolerance):
+            if size == min_size and change > max_structure:
+                log("Background is dominated by extended emission, keeping default mesh size")
+                return None
+            break
+
+        size *= 2
+        back = back2
+
+    return int(size)
+
+
 def inspect_image(filename, config, verbose=True, show=False):
     # Simple wrapper around print for logging in verbose mode only
     log = (verbose if callable(verbose) else print) if verbose else lambda *args,**kwargs: None
@@ -334,9 +457,10 @@ def inspect_image(filename, config, verbose=True, show=False):
 
     # Background size
     if not config.get('bg_size'):
-        bg_size = 256
-        if bg_size > 0.5*image.shape[0] or bg_size > 0.5*image.shape[1]:
-            bg_size = int(min(image.shape[0]/2, image.shape[1]/2))
+        # Largest mesh still following the sky gradients, up to quarter of the image
+        bg_size = guess_bg_size(image, mask, verbose=verbose)
+        if bg_size is None:
+            bg_size = int(min(256, min(image.shape)//4))
         log(f"Background mesh size set to {bg_size} x {bg_size} pixels")
         config['bg_size'] = bg_size
 

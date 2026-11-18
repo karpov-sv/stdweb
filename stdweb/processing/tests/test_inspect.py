@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from stdweb.processing.inspect import guess_bg_estimator, measure_sky_skewness, guess_amplified_gain
+from stdweb.processing.inspect import guess_bg_estimator, measure_sky_skewness, guess_amplified_gain, guess_bg_size
 
 
 def _add_stars(image, n, flux, fwhm, rng):
@@ -122,3 +122,73 @@ def test_inspect_disables_prefilter_for_skewed_noise(tmp_path, kind, preset, exp
 
     assert config['bg_estimator'] == ('mean' if kind == 'gamma' else 'mode')
     assert config.get('prefilter_detections') == expected
+
+
+def _sky_with_stars(shape, rng, nstars=300):
+    image = 1000 + 30*rng.normal(size=shape)
+    _add_stars(image, nstars, 20000, 4.0, rng)
+    return image
+
+
+@pytest.mark.parametrize('kind,expected', [
+    # Flat sky - largest mesh, quarter of the image
+    ('flat', 256),
+    # Vignetting towards the corners - the deeper it is, the smaller the mesh
+    ('vignetting_1', 128),
+    ('vignetting_2', 64),
+    # Vignetting 8 sigma deep is not distinguished from extended emission (known limitation)
+    ('vignetting_8', None),
+    # Bright extended blob covering much of the image - keeps the default
+    ('nebula', None),
+])
+def test_guess_bg_size(kind, expected):
+    rng = np.random.default_rng(5)
+    shape = (1024, 1024)
+    image = _sky_with_stars(shape, rng)
+    yy, xx = np.mgrid[:shape[0], :shape[1]]
+    r = np.hypot(xx - shape[1]/2, yy - shape[0]/2)/(shape[0]/2)
+
+    if kind.startswith('vignetting'):
+        # Depth in the corners, in units of the sky rms
+        depth = 30*float(kind.split('_')[1])
+        image -= depth*np.clip(r - 0.6, 0, None)**2/(np.sqrt(2) - 0.6)**2
+    elif kind == 'nebula':
+        for _ in range(20):
+            x0, y0, s = rng.uniform(0, 1024), rng.uniform(0, 1024), rng.uniform(20, 60)
+            image += 60*np.exp(-((xx - x0)**2 + (yy - y0)**2)/2/s**2)
+
+    assert guess_bg_size(image) == expected
+
+
+def test_guess_bg_size_small_image():
+    """Images smaller than four minimal meshes use quarter of their size"""
+    rng = np.random.default_rng(6)
+    assert guess_bg_size(1000 + rng.normal(size=(200, 300))) == 50
+
+
+def test_guess_bg_size_correlated_noise():
+    """Noise correlated on scales below the mesh, e.g. fixed pattern, is not mistaken for
+    the sky structure"""
+    from scipy.ndimage import zoom
+
+    rng = np.random.default_rng(7)
+    image = _sky_with_stars((1024, 1024), rng)
+    # Random pattern of 0.27 sigma, correlated over ~32 pixels
+    image += 8*zoom(rng.normal(size=(32, 32)), 32, order=1)
+    assert guess_bg_size(image) == 256
+
+
+@pytest.mark.parametrize('seed', range(5))
+def test_block_noise_star_field(seed):
+    """Mesh noise measured on a star field with uncorrelated noise is close to the one
+    of the mode-like estimate of independent pixels"""
+    import sep_x as sep
+    from scipy.ndimage import binary_dilation
+    from stdweb.processing.inspect import _block_noise
+
+    image = _sky_with_stars((1024, 1024), np.random.default_rng(seed))
+    bg = sep.Background(image, bw=64, bh=64)
+    _, segm = sep.extract(image - bg.back(), 3.0, err=bg.globalrms, minarea=10,
+                          segmentation_map=True)
+    noise = _block_noise(image, binary_dilation(segm > 0, iterations=8), 64)
+    assert noise/bg.globalrms == pytest.approx(2.14/64, rel=0.15)

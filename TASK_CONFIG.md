@@ -63,7 +63,7 @@ Parameters used during photometric calibration (`photometry_image()`).
 | `initial_r0` | float | 0 | Gaussian smoothing kernel radius for detection (pixels). 0 = no smoothing. |
 | `minarea` | int | 5 | Minimum connected pixel area for detection. |
 | `adaptive_detection` | bool | False | Re-run detection with smoothing kernel matched to the measured FWHM and threshold set to `sn` in units of filtered image noise. Improves detection of faint objects with wide PSF. The same detection parameters are used for transient detection in the difference image, as its pre-filtering classifier is trained on the photometry detections. |
-| `bg_size` | int | Auto | Background mesh size for SExtractor (pixels). Auto-calculated if not set. |
+| `bg_size` | int | Auto | Background mesh size for SExtractor (pixels). If not set, guessed at inspection as the largest mesh, doubling from 64 pixels up to quarter of the image size, that still follows the large-scale sky structure (vignetting etc), i.e. doubling it changes the background by less than max(1.25 x its noise, 0.03) of the sky rms, with the noise of the mesh measured from the differences of adjacent meshes, so that correlated noise is not mistaken for the structure. If the structure is dominated by extended emission already at 64 pixels, min(256, quarter of the image size) is used. |
 | `fwhm_override` | float | None | Override auto-measured FWHM with fixed value (pixels). |
 | `prefilter_detections` | bool | True | Apply isolation forest outlier detection to filter spurious detections. If not set, disabled at inspection together with guessing `mean` for `bg_estimator`, as the shapes of fainter stars are then biased by skewed sky noise and they would be rejected as outliers. |
 
