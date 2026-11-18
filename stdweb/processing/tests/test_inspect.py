@@ -192,3 +192,44 @@ def test_block_noise_star_field(seed):
                           segmentation_map=True)
     noise = _block_noise(image, binary_dilation(segm > 0, iterations=8), 64)
     assert noise/bg.globalrms == pytest.approx(2.14/64, rel=0.15)
+
+
+def test_mask_cosmics_sigclip():
+    """Higher threshold leaves moderate warm pixels unmasked, while keeping bright hits"""
+    from stdweb.processing.inspect import mask_cosmics
+
+    rng = np.random.default_rng(9)
+    image = 1000 + 30*rng.normal(size=(512, 512))
+    warm = rng.choice(image.size, 500, replace=False)
+    image.flat[warm] += 30*6
+    hits = rng.choice(image.size, 50, replace=False)
+    image.flat[hits] += 30*100
+    mask = np.zeros(image.shape, dtype=bool)
+
+    low = mask_cosmics(image, mask, sigclip=4.5)
+    high = mask_cosmics(image, mask, sigclip=10)
+    assert np.mean(low.flat[warm]) > 0.5
+    assert np.mean(high.flat[warm]) < 0.1
+    assert np.mean(high.flat[hits]) > 0.9
+
+
+def test_mask_cosmics_passes_kwargs(monkeypatch):
+    """Extra arguments reach astroscrappy, and take precedence over the FWHM-derived ones"""
+    import astroscrappy
+    from stdweb.processing.inspect import mask_cosmics
+
+    calls = []
+    def fake(image, **kwargs):
+        calls.append(kwargs)
+        return np.zeros(image.shape, dtype=bool), image
+    monkeypatch.setattr(astroscrappy, 'detect_cosmics', fake)
+
+    image = 1000 + 30*np.random.default_rng(10).normal(size=(64, 64))
+    mask = np.zeros(image.shape, dtype=bool)
+    mask_cosmics(image, mask, cleantype='medmask', fwhm=3.0, fsmode='median')
+    assert calls[-1]['cleantype'] == 'medmask'
+    assert calls[-1]['fsmode'] == 'median'
+    assert calls[-1]['psffwhm'] == 3.0
+
+    mask_cosmics(image, mask)
+    assert calls[-1]['cleantype'] == 'meanmask'

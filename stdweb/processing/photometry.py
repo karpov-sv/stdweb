@@ -1578,7 +1578,9 @@ def photometry_image(filename, config, verbose=True, show=False):
         bg_order=config.get('bg_order', None),
         nonlin=config.get('nonlin', False),
         robust=True, scale_noise=True,
-        accept_flags=0x02, max_intrinsic_rms=0.01,
+        # Deblended objects, and the ones with masked pixels in the detection footprint
+        # (0x100) - those losing significant flux to them in the aperture have 0x200
+        accept_flags=0x02 | 0x100, max_intrinsic_rms=0.01,
         verbose=verbose
     )
 
@@ -1692,7 +1694,7 @@ def photometry_image(filename, config, verbose=True, show=False):
                 use_color=True,
                 order=config.get('spatial_order', 0),
                 robust=True, scale_noise=True,
-                accept_flags=0x02, max_intrinsic_rms=0.01,
+                accept_flags=0x02 | 0x100, max_intrinsic_rms=0.01,
                 verbose=False)
 
             if m1 is not None:

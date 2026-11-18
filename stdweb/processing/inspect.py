@@ -28,6 +28,7 @@ def mask_cosmics(
     gain=1, satlevel=np.inf,
     negative_threshold=-10,
     fwhm=None,
+    sigclip=4.5,
     get_clean=False,
     verbose=False,
     **kwargs
@@ -45,6 +46,8 @@ def mask_cosmics(
     # Mask negative outliers that confuse lacosmic
     mask_neg = diff < negative_threshold * rms
 
+    # Extra arguments for astroscrappy, explicitly passed ones take precedence
+    user_kwargs = kwargs
     kwargs = {}
 
     if fwhm is not None:
@@ -65,12 +68,15 @@ def mask_cosmics(
 
         log(f"Using convolve with gaussian kernel, fwhm {fwhm:.1f} pix")
 
+    kwargs.update(user_kwargs)
+
     cmask, cimage = astroscrappy.detect_cosmics(
         image,
         inmask=mask | mask_neg,
         invar=var.astype(np.float32),
         gain=gain,
         satlevel=satlevel * gain,
+        sigclip=sigclip,
         cleantype=kwargs.pop('cleantype', 'meanmask'),
         verbose=verbose,
         **kwargs
@@ -499,6 +505,7 @@ def inspect_image(filename, config, verbose=True, show=False):
             gain=config.get('gain', 1),
             fwhm=config.get('fwhm', None),
             satlevel=config.get('saturation'),
+            sigclip=config.get('cosmics_sigclip') or 4.5,
             verbose=verbose,
         )
         log(f"Done masking cosmics, {np.sum(cmask)} ({100*np.sum(cmask)/cmask.shape[0]/cmask.shape[1]:.1f}%) pixels masked")

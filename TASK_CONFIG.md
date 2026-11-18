@@ -34,6 +34,7 @@ Parameters used during the initial image inspection stage (`inspect_image()`).
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `mask_cosmics` | bool | True | Enable cosmic ray detection and masking using astroscrappy. |
+| `cosmics_sigclip` | float | 4.5 | Detection threshold of astroscrappy cosmics masking, in sigma. |
 
 ### Catalog Selection
 
